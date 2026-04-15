@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['C:\\Automation_Test_Program_Hornbill-1\\src\\GUI.py'],
+    ['C:\\Users\\shamlee3\\OneDrive - Keysight Technologies\\Desktop\\Automation_Test_Program_Hornbill\\src\\GUI.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:\\Automation_Test_Program_Hornbill-1\\csv', 'csv'), ('C:\\Automation_Test_Program_Hornbill-1\\Instrument_Config_Files', 'Instrument_Config_Files'), ('C:\\Automation_Test_Program_Hornbill-1\\setup_images', 'setup_images'), ('C:\\Automation_Test_Program_Hornbill-1\\SCPI_Library', 'SCPI_Library'), ('C:\\Automation_Test_Program_Hornbill-1\\External_Auxiliary_Equipment', 'External_Auxiliary_Equipment')],
+    datas=[],
     hiddenimports=['numpy.core._dtype_ctypes', 'numpy._globals'],
     hookspath=[],
     hooksconfig={},
@@ -19,21 +19,27 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='Test_Automation_Program',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['C:\\Automation_Test_Program_Hornbill-1\\TestingTools.ico'],
+    icon=['C:\\Users\\shamlee3\\OneDrive - Keysight Technologies\\Desktop\\Automation_Test_Program_Hornbill\\TestingTools.ico'],
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='Test_Automation_Program',
 )

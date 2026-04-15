@@ -1,11 +1,11 @@
 Parameter,Value
-savedir,C:/Users/weijsee6/Downloads
+savedir,C:/Users/shamlee3/Downloads/Test subjects
 V_Rating,32
 I_Rating,10
 P_Rating,160
 power,160
 estimatetime,0
-updatedelay,1.0
+updatedelay,3.0
 readbackvoltage,0
 readbackcurrent,0
 noofloop,1
@@ -17,16 +17,16 @@ Readback_Error_Offset,0.005
 unit,VOLTAGE
 minCurrent,1
 maxCurrent,10
-current_step_size,6
+current_step_size,1
 minVoltage,1
 maxVoltage,32
-voltage_step_size,6
+voltage_step_size,1
 selected_DUT,Dolphin
-PSU,USB0::0x2A8D::0xCC04::CN10000023::0::INSTR
-DMM,USB0::0x2A8D::0x0201::MY57702177::0::INSTR
-ELoad,USB0::0x2A8D::0x3702::MY60260104::0::INSTR
+PSU,USB0::0x2A8D::0xCC04::CN10000021::0::INSTR
+DMM,USB0::0x2A8D::0x1601::MY60008516::0::INSTR
+ELoad,USB0::0x2A8D::0x5C02::MY62100043::0::INSTR
 ELoad_Channel,1
-PSU_Channel,2
+PSU_Channel,1
 VoltageSense,EXT
 VoltageRes,SLOW
 setFunction,Current

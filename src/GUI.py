@@ -5,6 +5,14 @@ import  shutil
 import traceback
 import os
 import pyvisa
+
+import time #Shamman changes
+import csv  #Shamman changes
+import ipaddress #Shamman changes
+
+import datetime
+
+import pyqtgraph as pg
 from io import StringIO
 from PIL import Image, ImageDraw, ImageFont
 from pathlib import Path
@@ -17,32 +25,16 @@ from time import sleep
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore  import *
+from path import config_folder, csv_folder, IMAGE_DIR, IMAGE_PATH, IMAGE_PATH_2
 
 #Add this to point to project folder -> To read the Library folder files inside DUT_Test.py, data.py...
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from DUT_Test_Scripts.DUT_Test import (
-    dictGenerator,
-    VisaResourceManager,
-    LoadRegulation,
-    RiseFallTime,
-    PowerMeasurement,
-    OVP_Test,
-    NewVoltageMeasurement,
-    NewCurrentMeasurement,
-    NewLoadRegulation,
-    LineRegulation,
-    ProgrammingResponse,
-    OCP_Activation_Time,
-    OCP_Accuracy,
-    ActivateAC,
-    RESET,
-)
+from DUT_Test_Scripts.DUT_Test import *
 
 from DUT_Test_Scripts.DUT_screenshot import ScreenShotDialog
 
 
-from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
-    HornbillVoltageMeasurementwithELoad,)
+from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import *
 
 from DUT_Test_Scripts.Hornbill_DUT_Test_No_ELoad import (
     HornbillVoltageMeasurementNoELoad,)
@@ -65,8 +57,21 @@ from xlreportpower import*
 
 from External_Auxiliary_Equipment.Relay_Control import *
 
+
+x=0
 desp_font = QFont("Times New Roman", 14, QFont.Bold) 
 AdvancedSettingsList = []
+
+
+def run_tabulated_excel_file(output_file, state, wb=None):
+ 
+    if state == "open":
+        wb = load_workbook(output_file)
+        ws = wb["Data"]
+   
+        return wb,ws
+    elif state == "close":
+        wb.save(output_file)
 
 #############################################################################
 def show_error_dialog(parent, e, traceback_str=None):
@@ -249,7 +254,8 @@ def GetVisaSCPIResources():
             continue
 
     return available_visa_ids, available_names, instrument_roles
-def NewGetVisaSCPIResources():
+
+'''def NewGetVisaSCPIResources():  #Keep first
     """Use to auto sort the Visa Address to PSU, ELoad... when it match the name in model_role_map"""
     # Initialize VISA resource manager
     rm = pyvisa.ResourceManager()
@@ -285,7 +291,163 @@ def NewGetVisaSCPIResources():
             #print(f"Error with resource {res}: {e}")
             continue  # Continue checking the next resource if there's an error
 
-    return availableVisaIdList, availableNameList, instrument_roles
+    return availableVisaIdList, availableNameList, instrument_roles'''
+
+def GetVisaTCPIPResources():  #Shamman changes
+    """Return TCPIP (IP-based) VISA instruments and map them to roles using the existing role map."""
+    rm = pyvisa.ResourceManager()
+    resource_list = rm.list_resources()
+
+    available_visa_ids = []
+    available_names = []
+    instrument_roles = {}
+
+    # Use your existing role map function
+    model_role_map = load_model_role_map()  # no changes here
+
+    for resource in resource_list:
+        # Step 1: Must start with TCPIP
+        if not resource.startswith("TCPIP"):
+            continue
+
+        # Step 2: Extract address
+        try:
+            address = resource.split("::")[1]
+        except IndexError:
+            continue  # malformed string
+
+        # Step 3: Only keep true IP addresses, skip hostnames
+        try:
+            ipaddress.ip_address(address)
+        except ValueError:
+            continue  # skip hostname or malformed resource
+
+        # Step 4: Open resource and query IDN
+        try:
+            instrument = rm.open_resource(resource)
+            instrument.timeout = 2000
+
+            idn = instrument.query("*IDN?").strip().upper()
+
+            if idn and "," in idn:
+                available_visa_ids.append(resource)
+                available_names.append(idn)
+
+                # Assign role using your existing role map
+                for model, role in model_role_map.items():
+                    if model in idn:
+                        instrument_roles[role] = resource
+                        break
+
+                print(f"[TCPIP-IP] {resource} → {idn}")
+
+        except pyvisa.errors.VisaIOError as e:
+            if e.error_code in (-1073807343, -1073807339, -1073807298):
+                continue
+            else:
+                print(f"VISA I/O Error ({e.error_code}) on {resource}: {e}")
+        except Exception as e:
+            print(f"Unexpected error on {resource}: {e}")
+
+    return available_visa_ids, available_names, instrument_roles
+
+def GetVisaHostnameResources():   #Shamman changes
+    """Return TCPIP VISA instruments that use hostnames (not raw IP addresses)."""
+
+    rm = pyvisa.ResourceManager()
+    resource_list = rm.list_resources()
+
+    available_visa_ids = []
+    available_names = []
+    instrument_roles = {}
+
+    model_role_map = load_model_role_map()
+
+    for resource in resource_list:
+        # Only TCPIP instruments
+        if not resource.startswith("TCPIP"):
+            continue
+
+        try:
+            address = resource.split("::")[1]
+        except IndexError:
+            continue  # malformed VISA string
+
+        # Skip pure IP-based addresses
+        try:
+            ipaddress.ip_address(address)
+            continue  # valid IP → not hostname
+        except ValueError:
+            pass  # hostname → OK
+
+        try:
+            inst = rm.open_resource(resource)
+            inst.timeout = 3000
+
+            idn = inst.query("*IDN?").strip().upper()
+
+            if idn and "," in idn:
+                available_visa_ids.append(resource)
+                available_names.append(idn)
+
+                # Match model to role
+                for model, role in model_role_map.items():
+                    if model in idn:
+                        instrument_roles[role] = resource
+                        break
+
+                print(f"[HOSTNAME] {resource} → {idn}")
+
+        except pyvisa.errors.VisaIOError as e:
+            # Ignore common VISA timeouts / disconnects
+            if e.error_code in (-1073807343, -1073807339, -1073807298):
+                continue
+            print(f"VISA error on {resource}: {e}")
+
+        except Exception as e:
+            print(f"Unexpected error on {resource}: {e}")
+
+    return available_visa_ids, available_names, instrument_roles
+
+def ScanSelectedVisaResources(self):
+    visa_ids = []
+    names = []
+    roles = {}
+
+    if self.QCheckBox_USB_Widget.isChecked():
+        ids, nms, rls = GetVisaSCPIResources()
+        visa_ids += ids
+        names += nms
+        roles.update(rls)
+
+    if self.QCheckBox_IP_Widget.isChecked():
+        ids, nms, rls = GetVisaTCPIPResources()
+        visa_ids += ids
+        names += nms
+        roles.update(rls)
+
+    if self.QCheckBox_Hostname_Widget.isChecked():
+        ids, nms, rls = GetVisaHostnameResources()
+        visa_ids += ids
+        names += nms
+        roles.update(rls)
+
+    return visa_ids, names, roles
+
+def classify_visa_resource(visa_id):   #Shamman changes (makes program slower due to scanning)
+    if visa_id.startswith("USB"):
+        return "USB"
+
+    if visa_id.startswith("TCPIP"):
+        address = visa_id.split("::")[1]
+        try:
+            import ipaddress
+            ipaddress.ip_address(address)
+            return "TCPIP_IP"
+        except ValueError:
+            return "TCPIP_HOSTNAME"
+
+    return "OTHER"
 
 # Scroll Area
 def scroll_area(self,layout):
@@ -343,7 +505,9 @@ class MainWindow(QMainWindow):
             ("Power Measurement", "Comprehensive power measurement dialog"),
             ("Bundle Measurement - Voltage", "Specialized bundle voltage measurement"),
             ("Bundle Measurement - Current/Power", "Bundle current and power measurement"),
-            ("AC Source Settings", "Simple Configuration of AC Source")
+            ("AC Source Settings", "Simple Configuration of AC Source"),
+            ("Voltage Calibration", "Voltage Calibration Dialog"),
+            ("MultiThreading - Voltage Measurement", "Precise voltage measurement dialog"),
         ]
 
         #Add qdialog to be opened when test list selected
@@ -358,7 +522,9 @@ class MainWindow(QMainWindow):
             "Power Measurement Dialog",
             "Bundle Measurement Voltage Dialog",
             "Bundle Measurement Current/Power Dialog",
-            "AC Source Setting Dialog"
+            "AC Source Setting Dialog",
+            "Voltage Calibration Dialog",
+            "MultiThreading - Voltage Measurement"
         ]
         
         #Show the tab on the Main Window
@@ -420,7 +586,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.tab_TestList, "Test Selection")
 
         # Set larger font for tab labels
-        tab_font = QFont("Arial", 14)
+        tab_font = QFont("Arial", 16)
         self.tab_widget.setFont(tab_font)
 
         # Initialize UI for each tab
@@ -492,13 +658,13 @@ class MainWindow(QMainWindow):
         
         # Description label
         desc_label = QLabel("Select from the list below to open different test dialogs:")
-        desc_label.setFont(QFont("Arial", 12))
+        desc_label.setFont(QFont("Arial", 16))
         desc_label.setAlignment(Qt.AlignCenter)
         desc_label.setStyleSheet("color: #34495e; margin: 5px;")
         
         # Create list widget
         self.test_list = QListWidget()
-        self.test_list.setFont(QFont("Arial", 11))
+        self.test_list.setFont(QFont("Arial", 16))
         self.test_list.setStyleSheet("""
             QListWidget {
                 border: 2px solid #bdc3c7;
@@ -530,7 +696,7 @@ class MainWindow(QMainWindow):
         
         # Add select button
         select_btn = QPushButton("Open Selected Test")
-        select_btn.setFont(QFont("Arial", 12, QFont.Bold))
+        select_btn.setFont(QFont("Arial", 16, QFont.Bold))
         select_btn.setStyleSheet("""
             QPushButton {
                 background-color: #3498db;
@@ -595,7 +761,7 @@ class MainWindow(QMainWindow):
     def open_test_by_index(self, index):
         """Open dialog based on index - placeholder for actual dialog implementations"""
 
-        if 0 <= index < 13:
+        if 0 <= index < 15:
 
             # Handle different dialog types based on index
             if index == 0:  # Bundle Test
@@ -637,6 +803,12 @@ class MainWindow(QMainWindow):
             elif index == 12:  # AC Source Dialog
                 self.ac_source_dialog = ACSourceSetting(self.params)
                 self.ac_source_dialog.show()
+            elif index == 13:  # Voltage Calibration Dialog
+                self.voltage_calibration_dialog = VoltageCalibrationDialog()
+                self.voltage_calibration_dialog.show()
+            elif index == 14:
+                self.multithread_voltage_dialog = MultiThreadVoltageMeasurementDialog()
+                self.multithread_voltage_dialog.show()
         else:
             print(f"Invalid dialog index: {index}")
 
@@ -661,8 +833,7 @@ class VoltageMeasurementDialog(QDialog):
         self.IMAGE_PATH = "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/images/Chart.png"
         self.ERROR_CSV_PATH = "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Executable/GUI/error.csv"
         self.image_dialog = None
-        
-
+    
         self.Power_Rating = "6000"
         self.Current_Rating = "24"
         self.Voltage_Rating = "800"
@@ -710,7 +881,7 @@ class VoltageMeasurementDialog(QDialog):
         self.checkbox_test_TransientRecovery = 2
 
         self.Range = "Auto"
-        self.Aperture = "0.2"
+        self.Aperture = "MAX"
         self.AutoZero = "ON"
         self.inputZ = "ON"
         self.UpTime = "50"
@@ -729,13 +900,24 @@ class VoltageMeasurementDialog(QDialog):
         self.Probe_Setting = "X10"
         self.Acq_Type = "AVERage"
 
+        self.simulation_mode = 0
+        self.output_file = r"C:\Users\shamlee3\OneDrive - Keysight Technologies\Wei Jing See's files - Shamman Xian Jun Lee\Test Data\Monk3.xlsx"  
+        self.selected_text  = "Hornbill"
+        self.stop_requested = False
+
         self.checkbox_SpecialCase = 2
         self.checkbox_NormalCase = 2
+
+        self.checkbox_Voltage_Accuracy_Voltage_Mode = 2
+        self.checkbox_Voltage_Accuracy_Current_Mode = 0
         
         #Create Voltage Window
         self.setWindowTitle("Voltage Measurement")
         self.image_window = None
         self.setWindowFlags(Qt.Window)
+        font = QFont()
+        font.setPointSize(16)   # Adjust size here
+        self.setFont(font)
 
         #Create find button 
         QPushButton_Widget0 = QPushButton()
@@ -748,6 +930,8 @@ class VoltageMeasurementDialog(QDialog):
         QPushButton_Widget3.setText("Estimate Data Collection Time")
         QPushButton_Widget4 = QPushButton()
         QPushButton_Widget4.setText("Find Instruments")
+        QPushButton_Widget5 = QPushButton()
+        QPushButton_Widget5.setText("Stop Test")
         self.QCheckBox_Report_Widget = QCheckBox()
         self.QCheckBox_Report_Widget.setText("Generate Excel Report")
         self.QCheckBox_Report_Widget.setCheckState(Qt.Checked)
@@ -756,6 +940,19 @@ class VoltageMeasurementDialog(QDialog):
         self.QCheckBox_Image_Widget.setCheckState(Qt.Checked)
         QCheckBox_Lock_Widget = QCheckBox()
         QCheckBox_Lock_Widget.setText("Lock Widget")
+
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget = QCheckBox()
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.setText("Current Static (Voltage Change)")
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.setCheckState(Qt.Checked)
+        
+        self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget = QCheckBox()
+        self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setText("Current Change(Load Change)")
+        self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setCheckState(Qt.Unchecked)
+
+        self.QCheckbox_Simulation_Mode = QCheckBox()
+        self.QCheckbox_Simulation_Mode.setText("Simulation Mode")
+        self.QCheckbox_Simulation_Mode.setCheckState(Qt.Unchecked)
+        
 
         #Output Display
         self.OutputBox = QTextBrowser()
@@ -798,6 +995,16 @@ class VoltageMeasurementDialog(QDialog):
         QLabel_Save_Path.setFont(desp_font)
         QLabel_Save_Path.setText("Drive Location/Output Wndow:")
 
+        #Voltage Accuracy Mode
+        QLabel_Voltage_Accuracy_Mode = QLabel()
+        QLabel_Voltage_Accuracy_Mode.setFont(desp_font)
+        QLabel_Voltage_Accuracy_Mode.setText("Voltage Accuracy Test Mode Selection:")
+
+        #Simulation Mode
+        QLabel_Simulation_Mode =QLabel()    
+        QLabel_Simulation_Mode.setFont(desp_font)
+        QLabel_Simulation_Mode.setText("Enable Simulation Mode (No Instruments Connected):")
+
         # Connections section
         QLabel_PSU_VisaAddress = QLabel()
         QLabel_DMM_VisaAddress = QLabel()
@@ -808,7 +1015,7 @@ class VoltageMeasurementDialog(QDialog):
         QLabel_DMM_VisaAddress.setText("Visa Address (DMM):")
         QLabel_ELoad_VisaAddress.setText("Visa Address (ELoad):")
         QLabel_DMM_Instrument.setText("Instrument Type (DMM):")
-        QLabel_DUT.setText("DUT:")
+        QLabel_DUT.setText("DUT Test Profile:")
 
         self.QLineEdit_PSU_VisaAddress = QComboBox()
         self.QLineEdit_DMM_VisaAddress = QComboBox()
@@ -868,7 +1075,7 @@ class VoltageMeasurementDialog(QDialog):
             ]
         )
         self.QComboBox_set_Function.setEnabled(False)
-        self.QComboBox_set_PSU_Channel.addItems(["1", "2", "3", "4"])
+        self.QComboBox_set_PSU_Channel.addItems(["None", "1", "2", "3", "4"])
         self.QComboBox_set_PSU_Channel.setEnabled(True)
         self.QComboBox_set_ELoad_Channel.addItems(["None", "1", "2"])
         self.QComboBox_set_ELoad_Channel.setEnabled(True)
@@ -933,7 +1140,8 @@ class VoltageMeasurementDialog(QDialog):
 
         exec_layout.addRow(QPushButton_Widget3)
         exec_layout.addRow(QPushButton_Widget2)
-        exec_layout.addRow(QPushButton_Widget1)   
+        exec_layout.addRow(QPushButton_Widget1)
+        exec_layout.addRow(QPushButton_Widget5)   
 
         exec_layout_box.addLayout(exec_layout)
  
@@ -945,8 +1153,12 @@ class VoltageMeasurementDialog(QDialog):
         setting_layout = QFormLayout()
 
         setting_layout.addRow(Desp1)
-        setting_layout.addRow(QPushButton_Widget4)
+        setting_layout.addRow(self.QCheckbox_Simulation_Mode)
         setting_layout.addRow(QLabel_DUT, self.QComboBox_DUT)
+        setting_layout.addRow(QLabel_Voltage_Accuracy_Mode)
+        setting_layout.addRow(self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget)
+        setting_layout.addRow(self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget)
+        setting_layout.addRow(QPushButton_Widget4)
         setting_layout.addRow(QLabel_PSU_VisaAddress, self.QLineEdit_PSU_VisaAddress)
         setting_layout.addRow(QLabel_DMM_VisaAddress, self.QLineEdit_DMM_VisaAddress)
         setting_layout.addRow(QLabel_ELoad_VisaAddress, self.QLineEdit_ELoad_VisaAddress)
@@ -985,9 +1197,14 @@ class VoltageMeasurementDialog(QDialog):
         self.setLayout(Main_Layout)
         scroll_area(self,Main_Layout)
 
+        self.QCheckbox_Simulation_Mode.stateChanged.connect(self.simulation_mode_changed)   
+
         self.QLineEdit_PSU_VisaAddress.currentTextChanged.connect(self.PSU_VisaAddress_changed)
         self.QLineEdit_DMM_VisaAddress.currentTextChanged.connect(self.DMM_VisaAddress_changed)
         self.QLineEdit_ELoad_VisaAddress.currentTextChanged.connect(self.ELoad_VisaAddress_changed)
+
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.stateChanged.connect(self.checkbox_state_Voltage_Accuracy_Voltage_Mode)
+        self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.stateChanged.connect(self.checkbox_state_Voltage_Accuracy_Current_Mode)
         
         self.QComboBox_DUT.currentTextChanged.connect(self.DUT_changed)
         self.QLineEdit_Programming_Error_Gain.textEdited.connect(self.Programming_Error_Gain_changed)
@@ -1032,6 +1249,24 @@ class VoltageMeasurementDialog(QDialog):
         AdvancedSettingsList.append(self.inputZ)
         AdvancedSettingsList.append(self.UpTime)
         AdvancedSettingsList.append(self.DownTime)
+    
+    def simulation_mode_changed(self, state):
+        if state == Qt.Checked:
+            self.simulation_mode = 2
+        else:
+            self.simulation_mode = 0
+    
+    def checkbox_state_Voltage_Accuracy_Voltage_Mode(self, state):
+        if state == Qt.Checked:
+            self.checkbox_Voltage_Accuracy_Voltage_Mode = 2
+        else:
+            self.checkbox_Voltage_Accuracy_Voltage_Mode = 0
+
+    def checkbox_state_Voltage_Accuracy_Current_Mode(self, state):
+        if state == Qt.Checked:
+            self.checkbox_Voltage_Accuracy_Current_Mode = 2
+        else:
+            self.checkbox_Voltage_Accuracy_Current_Mode = 0
 
     def External_Auxiliary_Equipment_changed(self, s):
         if s == "None":
@@ -1057,6 +1292,9 @@ class VoltageMeasurementDialog(QDialog):
         self.QLineEdit_maxCurrent.setText(self.maxCurrent)
         self.QLineEdit_current_stepsize.setText(self.current_step_size)
 
+        channel_str = str(self.PSU_Channel)
+        index = self.QComboBox_set_PSU_Channel.findText(channel_str)
+        self.QComboBox_set_PSU_Channel.setCurrentIndex(index)
         self.QComboBox_set_PSU_Channel.setCurrentIndex(int(self.PSU_Channel))
         self.QComboBox_set_ELoad_Channel.setCurrentIndex(int(self.ELoad_Channel))
         self.QComboBox_Voltage_Sense.setCurrentText("4 Wire" if self.VoltageSense == "EXT" else "2 Wire")
@@ -1068,8 +1306,8 @@ class VoltageMeasurementDialog(QDialog):
         self.selected_text = selected_text
         self.load_data()
 
-    def load_data(self):
-        """Reads configuration file and returns a dictionary of key-value pairs."""
+    """def load_data(self):
+        Reads configuration file and returns a dictionary of key-value pairs.
         config_data = {}
         if self.selected_text =="Excavator":
             self.config_file = os.path.join(config_folder,"config_Excavator.txt")
@@ -1082,7 +1320,6 @@ class VoltageMeasurementDialog(QDialog):
         
         elif self.selected_text =="Hornbill":
             self.config_file = os.path.join(config_folder,"config_Hornbill.txt")
-
         else:
             self.config_file = os.path.join(config_folder,"config_Others.txt")
 
@@ -1110,7 +1347,110 @@ class VoltageMeasurementDialog(QDialog):
         except FileNotFoundError:
             print("Config file not found. Using default values.")
 
+        return config_data"""
+    
+
+    """def load_data(self):
+        Reads configuration file and returns a dictionary of key-value pairs.
+        config_data = {}
+
+        # Determine base folder for configs
+        if getattr(sys, "frozen", False):
+            # Running as PyInstaller exe
+            exe_folder = Path(sys.executable).parent
+            # Configs should be in Executable/Instrument_Config_Files
+            config_base = exe_folder / "Instrument_Config_Files"
+        else:
+            # Running as normal Python script
+            project_root = Path(__file__).resolve().parent.parent  # <-- go up one level from src
+            config_base = project_root / "Instrument_Config_Files"
+
+        # Map selected_text to config filename
+        file_map = {
+            "Excavator": "config_Excavator.txt",
+            "Dolphin": "config_Dolphin.txt",
+            "SMU": "config_SMU.txt",
+            "Hornbill": "config_Hornbill.txt"
+        }
+        config_filename = file_map.get(self.selected_text, "config_Others.txt")
+        self.config_file = config_base / config_filename
+
+        try:
+            with open(self.config_file, "r") as file:
+                for line in file:
+                    line = line.strip()
+                    if not line or line.startswith("#") or line.startswith("//"):
+                        continue
+                    if "=" in line:
+                        key, value = line.split("=", 1)
+                        config_data[key.strip()] = value.strip()
+
+            for key, value in config_data.items():
+                if key == "savelocation":
+                    if self.savelocation and self.savelocation != "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Test Data/File Export Testing":
+                        continue
+                    else:
+                        setattr(self, key, value)
+                else:
+                    setattr(self, key, value)
+
+        except FileNotFoundError:
+            print(f"⚠️ Config file not found: {self.config_file}. Using default values.")
+
+        return config_data"""
+    
+    def load_data(self):
+        """Reads configuration file and returns a dictionary of key-value pairs."""
+        config_data = {}
+
+        config_map = {
+            "Excavator": "config_Excavator.txt",
+            "Dolphin": "config_Dolphin.txt",
+            "SMU": "config_SMU.txt",
+            "Hornbill": "config_Hornbill.txt",
+        }
+
+        filename = config_map.get(self.selected_text, "config_Others.txt")
+
+        # Ensure path is a string, avoids crashes
+        self.config_file = str(config_folder / filename)
+
+        if not os.path.exists(self.config_file):
+            print(f"⚠ Config file not found: {self.config_file}")
+            return {}
+
+        try:
+            with open(self.config_file, "r", encoding="utf-8-sig") as file:
+                for line in file:
+                    line = line.strip()
+
+                    if not line or line.startswith("#") or line.startswith("//"):
+                        continue
+
+                    if "=" not in line:
+                        print("⚠ Skipping invalid line:", repr(line))
+                        continue
+
+                    key, value = line.split("=", 1)
+                    config_data[key.strip()] = value.strip()
+
+
+            for key, value in config_data.items():
+                if key == "savelocation":
+                    if getattr(self, "savelocation", None) and \
+                    self.savelocation != "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Test Data/File Export Testing":
+                        continue
+                    setattr(self, key, value)
+                else:
+                    setattr(self, key, value)
+
+        except Exception as e:
+            print(f"ERROR reading config: {e}")
+
         return config_data
+
+
+
     def Power_changed(self, value):
         self.Power = value
 
@@ -1120,18 +1460,31 @@ class VoltageMeasurementDialog(QDialog):
             self.QLineEdit_DMM_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
             
-            self.visaIdList, self.nameList = GetVisaSCPIResources()
+            self.visaIdList, self.nameList, instrument_roles = NewGetVisaSCPIResources()
             
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
                 self.QLineEdit_PSU_VisaAddress.addItems([str(self.visaIdList[i])])
                 self.QLineEdit_DMM_VisaAddress.addItems([str(self.visaIdList[i])])
                 self.QLineEdit_ELoad_VisaAddress.addItems([str(self.visaIdList[i])])
+
+            if 'PSU' in instrument_roles:
+                psu_index = self.visaIdList.index(instrument_roles['PSU'])
+                self.QLineEdit_PSU_VisaAddress.setCurrentIndex(psu_index)
+
+            if 'ELOAD' in instrument_roles:
+                eload_index = self.visaIdList.index(instrument_roles['ELOAD'])
+                self.QLineEdit_ELoad_VisaAddress.setCurrentIndex(eload_index)
+
+            if 'DMM' in instrument_roles:
+                dmm_index = self.visaIdList.index(instrument_roles['DMM'])
+                self.QLineEdit_DMM_VisaAddress.setCurrentIndex(dmm_index)
             
             # Add "None" option at the end
-            self.QLineEdit_PSU_VisaAddress.addItem("None")
+            self.QLineEdit_PSU_VisaAddress.addItem("TCPIP0::141.183.188.184::5025::SOCKET")
             self.QLineEdit_DMM_VisaAddress.addItem("None")
             self.QLineEdit_ELoad_VisaAddress.addItem("None")
+            self.QLineEdit_PSU_VisaAddress.addItem("TCPIP0::141.183.188.184::inst0::INSTR")
                     
         except:
             self.OutputBox.append("No Devices Found!!!")
@@ -1292,20 +1645,22 @@ class VoltageMeasurementDialog(QDialog):
     def executeTest(self):
         global globalvv
         try:
-            for x in range (int(self.noofloop)):
+        
+            """The method begins by compiling all the parameters in a dictionary for ease of storage and calling,
+            then the parameters are looped through to check if any of them are empty or return NULL, a warning dialogue
+            will appear if the statement is true, and the users have to troubleshoot the issue. After so, the tests will
+            begin right after another warning dialogue prompting the user that the tests will begin very soon. When test
+            begins, the VISA_Addresses of the Instruments are passed through the VISA Resource Manager to make sure there
+            are connected. Then the actual DUT Tests will commence. Depending on the users selection, the method can
+            optionally export all the details into a CSV file or display a graph after the test is completed.
 
-                """The method begins by compiling all the parameters in a dictionary for ease of storage and calling,
-                then the parameters are looped through to check if any of them are empty or return NULL, a warning dialogue
-                will appear if the statement is true, and the users have to troubleshoot the issue. After so, the tests will
-                begin right after another warning dialogue prompting the user that the tests will begin very soon. When test
-                begins, the VISA_Addresses of the Instruments are passed through the VISA Resource Manager to make sure there
-                are connected. Then the actual DUT Tests will commence. Depending on the users selection, the method can
-                optionally export all the details into a CSV file or display a graph after the test is completed.
-
-                """
+            """
+            
             self.infoList = []
             self.dataList = []
             self.dataList2 = []
+            self.ProgrammingV_percent_error_list = []
+            self.ReadbackV_percent_error_list = []
             self.setEnabled(False)
 
             dict = dictGenerator.input(
@@ -1354,164 +1709,183 @@ class VoltageMeasurementDialog(QDialog):
                 print(f"The following parameters are missing or empty: {missing}")
                 return
 
-            """# Visa Address Check & Run Test
-            A = VisaResourceManager()
-
-            # Collect only valid addresses
-            addresses = [addr for addr in [self.ELoad, self.PSU, self.DMM] if addr not in (None, "None")]
-
-            # Optional: keep only USB addresses
-            addresses = [addr for addr in addresses if str(addr).upper().startswith("USB")]
-
-            if not addresses:
-                self.OutputBox.append("No valid VISA addresses selected.")
-                return
-
-            flag, args = A.openRM(*addresses)
-            if flag == 0:
-                string = ", ".join(map(str, args))
-                QMessageBox.warning(self, "VISA IO ERROR", string)
-                return
-            """
-            QMessageBox.warning(
-            self,
-            "In Progress",
-            "Measurement will start now , please do not close the main window until test is completed",
-                                )
-            # globalvv = dict["estimatetime"]
-            # loading_thread = threading.Thread(target=self.tkinter_loading_screen, args=(globalvv,))
-            # loading_thread.start()
-
-            #Execute Voltage Measurement
-            relay_voltage = RelayController_Voltage()
-            if self.relay_voltage == "RELAY":
+            if self.simulation_mode == 2:
+                QMessageBox.information(
+                    self,
+                    "Simulation Mode",
+                    "Simulation Mode is enabled. No instruments are connected.",
+                )
                 
-                relay_voltage.relay_on()
+                wb = load_workbook(self.output_file)
+                ws = wb["Data"]  # get the worksheet
+
+                graph_plot = Graph_Plotting(
+                    wb,        # workbook
+                    ws,        # sheet
+                    self.output_file,
+                    "Voltage",
+                    1,
+                    [8],       # graph_start_rows
+                )
+                graph_plot.execute_plot()
+
+                wb.save(self.output_file)  # save the charts back
+                sleep(10)
+                
             else:
-                relay_voltage.relay_off()
+                QMessageBox.warning(
+                self,
+                "In Progress",
+                "Measurement will start now , please do not close the main window until test is completed",
+                                    )
+                
+                """if self.relay_voltage == "RELAY":
+                    relay_voltage = RelayController_Voltage()
+                    relay_voltage.relay_on()"""
+                for x in range (int(self.noofloop)):
+                    if self.DMM_Instrument == "Keysight":
 
-            if self.DMM_Instrument == "Keysight":
-
-                if self.selected_text == "Dolphin":
-                    if self.ELoad != "None" and self.DMM != "None":
-                        print("ELoad connected and DMM connected") #All connected
-                        try:(
-                            self.infoList,
-                            self.dataList,
-                            self.dataList2
-                            ) = DolphinNewVoltageMeasurementwithELoad.Execute_Voltage_Accuracy(self, dict, self.PSU_Channel)
-                    
-                        except Exception as e:
-                            QMessageBox.warning(self, "Error", str(e))
-                            return
-
-                    elif self.ELoad == "None" and self.DMM != "None":
-                        print("No ELoad connected and DMM connected") #No Eload connected but DMM connected
-                        try:(
-                            self.infoList,
-                            self.dataList,
-                            self.dataList2
-                            ) = DolphinNewVoltageMeasurementNoELoadWithDMM.Execute_Voltage_Accuracy(self, dict, self.PSU_Channel)
-                          
-                        except Exception as e:
-                            QMessageBox.warning(self, "Error", str(e))
-                            return
-                    
-                    elif self.ELoad != "None" and self.DMM == "None":
-                        print("ELoad connected and No DMM connected") #Eload connected but no DMM connected
-                        try:(
-                            self.infoList,
-                            self.dataList,
-                            self.dataList2
-                            ) = DolphinNewVoltageMeasurementwithELoadNoDMM.Execute_Voltage_Accuracy(self, dict, self.PSU_Channel)
-                        except Exception as e:
-                            QMessageBox.warning(self, "Error", str(e))
-                            return
-                    else :
-                        print("No ELoad connected and No DMM connected") #No Eload connected and
-                        try:(
-                            self.infoList,
-                            self.dataList,
-                            self.dataList2
-                            ) = DolphinNewVoltageMeasurementNoELoadNoDMM.Execute_Voltage_Accuracy(self, dict, self.PSU_Channel)
-                        except Exception as e:
-                            QMessageBox.warning(self, "Error", str(e))
-                            return
-                                            
-                if self.selected_text == "EDU36311A":
-                    try:(
-                        infoList,
-                        dataList,
-                        dataList2  
-                    ) = EDU36311AVoltageMeasurementNoELoad.Execute_Voltage_Accuracy(self, dict)
-                  
-                    except Exception as e:
-                        QMessageBox.warning(self, "Error", str(e))
-                        return
-                    
-                        """   elif self.selected_text == "Excavator":
+                        if self.selected_text == "Dolphin":
+                            if self.ELoad != "None" and self.DMM != "None":
+                                print("ELoad connected and DMM connected") #All connected
                                 try:(
-                                    infoList,
-                                    dataList,
-                                    dataList2
-                                ) = ExcavatorVoltageMeasurement.Execute_Voltage_Accuracy(self, dict)
-
+                                    self.infoList,
+                                    self.dataList,
+                                    self.dataList2
+                                    ) = DolphinNewVoltageMeasurementwithELoad.Execute_Voltage_Accuracy(self, dict, self.PSU_Channel)
+                            
                                 except Exception as e:
                                     QMessageBox.warning(self, "Error", str(e))
                                     return
-                            elif self.selected_text == "SMU":
+
+                            elif self.ELoad == "None" and self.DMM != "None":
+                                print("No ELoad connected and DMM connected") #No Eload connected but DMM connected
                                 try:(
-                                    infoList, 
-                                    dataList,
-                                    dataList2
-                                ) = SMUVoltageMeasurement.Execute_Voltage_Accuracy(self, dict)
+                                    self.infoList,
+                                    self.dataList,
+                                    self.dataList2
+                                    ) = DolphinNewVoltageMeasurementNoELoadWithDMM.Execute_Voltage_Accuracy(self, dict, self.PSU_Channel)
+                                    
                                 except Exception as e:
-                                    QMessageBox.warning(self, "Error", str(e))  
-                                    return"""
-                
-                elif self.selected_text == "Hornbill":
-                    if self.ELoad != "None":
-                        try:(
-                            infoList,   
-                            dataList,
-                            dataList2
-                        ) = HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy(self, dict)
-                        except Exception as e:
-                            QMessageBox.warning(self, "Error", str(e))
-                            return
-                    else:
-                        try:(
-                            infoList,   
-                            dataList,
-                            dataList2
-                        ) = HornbillVoltageMeasurementNoELoad.Execute_Voltage_Accuracy(self, dict)
-                        except Exception as e:
-                            QMessageBox.warning(self, "Error", str(e))
-                            return
+                                    QMessageBox.warning(self, "Error", str(e))
+                                    return
+                            
+                            elif self.ELoad != "None" and self.DMM == "None":
+                                print("ELoad connected and No DMM connected") #Eload connected but no DMM connected
+                                try:(
+                                    self.infoList,
+                                    self.dataList,
+                                    self.dataList2
+                                    ) = DolphinNewVoltageMeasurementwithELoadNoDMM.Execute_Voltage_Accuracy(self, dict, self.PSU_Channel)
+                                except Exception as e:
+                                    QMessageBox.warning(self, "Error", str(e))
+                                    return
+                            else :
+                                print("No ELoad connected and No DMM connected") #No Eload connected and no DMM connected
+                                try:(
+                                    self.infoList,
+                                    self.dataList,
+                                    self.dataList2
+                                    ) = DolphinNewVoltageMeasurementNoELoadNoDMM.Execute_Voltage_Accuracy(self, dict, self.PSU_Channel)
+                                except Exception as e:
+                                    QMessageBox.warning(self, "Error", str(e))
+                                    return
+                                                    
+                        if self.selected_text == "EDU36311A":
+                            try:(
+                                infoList,
+                                dataList,
+                                dataList2  
+                            ) = EDU36311AVoltageMeasurementNoELoad.Execute_Voltage_Accuracy(self, dict)
+                            
+                            except Exception as e:
+                                QMessageBox.warning(self, "Error", str(e))
+                                return
+                            
+                                """   elif self.selected_text == "Excavator":
+                                        try:(
+                                            infoList,
+                                            dataList,
+                                            dataList2
+                                        ) = ExcavatorVoltageMeasurement.Execute_Voltage_Accuracy(self, dict)
 
-            relay_voltage.relay_off()
-        
-            #Measurement Completion
-            if x == (int(self.noofloop) - 1):   
-                self.OutputBox.append("Measurement is complete !")
-        
-                #Export Data to CSV
-                if self.QCheckBox_Report_Widget.isChecked():
-                    instrumentData(self.PSU, self.DMM, self.ELoad)
-                    datatoCSV_Accuracy(self.infoList, self.dataList, self.dataList2)
-                    datatoGraph(self.infoList, self.dataList, self.dataList2)
-                    datatoGraph.scatterCompareVoltage(self, float(self.Programming_Error_Gain), float(self.Programming_Error_Offset), float(self.Readback_Error_Gain), float(self.Readback_Error_Offset), str(self.unit), float(self.Voltage_Rating))
-
-                    A = xlreport(save_directory=self.savelocation, file_name=str(self.unit))
-                    A.run()
-                    df = pd.DataFrame.from_dict(dict, orient="index")
-                    df.to_csv(os.path.join(csv_folder,"config.csv"))
+                                        except Exception as e:
+                                            QMessageBox.warning(self, "Error", str(e))
+                                            return
+                                    elif self.selected_text == "SMU":
+                                        try:(
+                                            infoList, 
+                                            dataList,
+                                            dataList2
+                                        ) = SMUVoltageMeasurement.Execute_Voltage_Accuracy(self, dict)
+                                        except Exception as e:
+                                            QMessageBox.warning(self, "Error", str(e))  
+                                            return"""
+                        
+                        elif self.selected_text == "Hornbill":                                          #referring
+                            if self.ELoad != "None" and self.DMM != "None":
+                                if self.checkbox_Voltage_Accuracy_Voltage_Mode == 2:
+                                    print("ELoad connected and DMM connected") #All connected
+                                    try:(
+                                        self.infoList,   
+                                        self.dataList,
+                                        self.dataList2
+                                    ) = HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Static(self, dict, self.PSU_Channel)
+                                    except Exception as e:
+                                        QMessageBox.warning(self, "Error", str(e))
+                                        return
+                                elif self.checkbox_Voltage_Accuracy_Current_Mode == 2:
+                                    print("ELoad connected and DMM connected") #All connected
+                                    try:(
+                                        self.infoList,
+                                        self.dataList,
+                                        self.dataList2
+                                    ) = HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change(self, dict, self.PSU_Channel)
+                                    except Exception as e:
+                                        QMessageBox.warning(self, "Error", str(e))
+                                        return
+                            else:
+                                print("No ELoad connected and DMM connected") #No Eload connected but DMM connected
+                                
+                    """if self.relay_voltage == "RELAY":
+                        relay_voltage.relay_off()
+                    """
                 
-                #Show Graph Image
-                if self.QCheckBox_Image_Widget.isChecked():
-                    self.image_dialog = image_Window()
-                    self.image_dialog.setModal(True)
-                    self.image_dialog.show()
+                    #Export Data to CSV
+                    if self.QCheckBox_Report_Widget.isChecked():
+                        if self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.isChecked():
+                            instrumentData(self.PSU, self.DMM, self.ELoad)
+                            datatoCSV_Accuracy(self.infoList, self.dataList, self.dataList2)
+                            datatoGraph(self.infoList, self.dataList, self.dataList2)
+                            datatoGraph.scatterCompareVoltage(self, float(self.Programming_Error_Gain), float(self.Programming_Error_Offset), float(self.Readback_Error_Gain), float(self.Readback_Error_Offset), str(self.unit), float(self.Voltage_Rating))
+
+                            
+                            df = pd.DataFrame.from_dict(dict, orient="index")
+                            df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                            A = xlreport(save_directory=self.savelocation, file_name=str(self.unit))
+                            self.output_file = A.run()
+
+                        elif self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.isChecked():
+                            instrumentData(self.PSU, self.DMM, self.ELoad)
+                            datatoCSV_Accuracy(self.infoList, self.dataList, self.dataList2)
+                            datatoGraph(self.infoList, self.dataList, self.dataList2)
+                            datatoGraph.scatterCompareVoltage_Current_Change(self, float(self.Programming_Error_Gain), float(self.Programming_Error_Offset), float(self.Readback_Error_Gain), float(self.Readback_Error_Offset), str(self.unit), float(self.Voltage_Rating))
+
+                            df = pd.DataFrame.from_dict(dict, orient="index")
+                            df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                            A = xlreport(save_directory=self.savelocation, file_name=str(self.unit))
+                            A.run()
+                    
+                    #Measurement Completion
+                    if x == (int(self.noofloop) - 1):   
+                        self.OutputBox.append("Measurement is complete !")
+                        #Show Graph Image
+                        if self.QCheckBox_Image_Widget.isChecked():
+                            self.image_dialog = image_Window()
+                            self.image_dialog.setModal(True)
+                            self.image_dialog.show()
 
 
         except Exception as e:
@@ -1520,6 +1894,9 @@ class VoltageMeasurementDialog(QDialog):
             return
         finally:
             self.setEnabled(True)
+
+    def stop_execution(self):
+        self.stop_requested = True
 
 class CurrentMeasurementDialog(QDialog):
     """Class for configuring the current measurement DUT Tests Dialog.
@@ -1605,11 +1982,21 @@ class CurrentMeasurementDialog(QDialog):
         self.checkbox_test_PowerAccuracy = 2
 
         self.Range = "Auto"
-        self.Aperture = "0.2"
+        self.Aperture = "MAX"  #Im thinking it need 100 NPLC
         self.AutoZero = "ON"
         self.inputZ = "ON"
         self.UpTime = "50"
         self.DownTime = "50"
+
+        self.simulation_mode = 0
+        self.output_file = r"C:\Users\shamlee3\OneDrive - Keysight Technologies\Wei Jing See's files - Shamman Xian Jun Lee\Test Data\Monk2.xlsx"  
+        self.selected_text  = "Hornbill"
+        self.stop_requested = False
+
+        self.checkbox_Current_Accuracy_FULL = 2
+        self.checkbox_Current_Accuracy_200uA = 0
+        self.checkbox_Current_Accuracy_2mA = 0
+        
         
         # Ensure DATA_CSV_PATH is defined before use
         if not hasattr(self, 'DATA_CSV_PATH') or not self.DATA_CSV_PATH:
@@ -1622,6 +2009,9 @@ class CurrentMeasurementDialog(QDialog):
         self.setWindowTitle("Current Measurement")
         self.image_window = None
         self.setWindowFlags(Qt.Window)
+        font = QFont()
+        font.setPointSize(16)   # Adjust size here
+        self.setFont(font)
 
         #Create find button 
         QPushButton_Widget0 = QPushButton()
@@ -1642,6 +2032,23 @@ class CurrentMeasurementDialog(QDialog):
         self.QCheckBox_Image_Widget.setCheckState(Qt.Checked)
         QCheckBox_Lock_Widget = QCheckBox()
         QCheckBox_Lock_Widget.setText("Lock Widget")
+
+        #Shamman changes
+        self.QCheckBox_Current_Accuracy_FULL_Widget = QCheckBox()
+        self.QCheckBox_Current_Accuracy_FULL_Widget.setText("Current at full")
+        self.QCheckBox_Current_Accuracy_FULL_Widget.setCheckState(Qt.Checked)
+        
+        self.QCheckBox_Current_Accuracy_200uA_Widget = QCheckBox()
+        self.QCheckBox_Current_Accuracy_200uA_Widget.setText("Current at 200uA")
+        self.QCheckBox_Current_Accuracy_200uA_Widget.setCheckState(Qt.Unchecked)
+
+        self.QCheckBox_Current_Accuracy_2mA_Widget = QCheckBox()
+        self.QCheckBox_Current_Accuracy_2mA_Widget.setText("Current at 200uA")
+        self.QCheckBox_Current_Accuracy_2mA_Widget.setCheckState(Qt.Unchecked)
+
+        self.QCheckbox_Simulation_Mode = QCheckBox()
+        self.QCheckbox_Simulation_Mode.setText("Simulation Mode")
+        self.QCheckbox_Simulation_Mode.setCheckState(Qt.Unchecked)
 
         #Output Display
         self.OutputBox = QTextBrowser()
@@ -1683,6 +2090,16 @@ class CurrentMeasurementDialog(QDialog):
         QLabel_Save_Path = QLabel()
         QLabel_Save_Path.setFont(desp_font)
         QLabel_Save_Path.setText("Drive Location/Output Wndow:")
+
+        #Voltage Accuracy Mode
+        QLabel_Voltage_Accuracy_Mode = QLabel()
+        QLabel_Voltage_Accuracy_Mode.setFont(desp_font)
+        QLabel_Voltage_Accuracy_Mode.setText("Voltage Accuracy Test Mode Selection:")
+
+        #Simulation Mode
+        QLabel_Simulation_Mode =QLabel()    
+        QLabel_Simulation_Mode.setFont(desp_font)
+        QLabel_Simulation_Mode.setText("Enable Simulation Mode (No Instruments Connected):")
 
         # Connections section
         QLabel_PSU_VisaAddress = QLabel()
@@ -1826,6 +2243,7 @@ class CurrentMeasurementDialog(QDialog):
         exec_layout.addRow(QPushButton_Widget2)
         exec_layout.addRow(QPushButton_Widget1)   
 
+
         exec_layout_box.addLayout(exec_layout)
  
         Right_container.addLayout(save_path_layout)
@@ -1836,6 +2254,12 @@ class CurrentMeasurementDialog(QDialog):
         setting_layout = QFormLayout()
 
         setting_layout.addRow(Desp1)
+        setting_layout.addRow(self.QCheckbox_Simulation_Mode)
+        setting_layout.addRow(QLabel_DUT, self.QComboBox_DUT)
+        setting_layout.addRow(QLabel_Voltage_Accuracy_Mode)
+        setting_layout.addRow(self.QCheckBox_Current_Accuracy_FULL_Widget)
+        setting_layout.addRow(self.QCheckBox_Current_Accuracy_200uA_Widget)
+        setting_layout.addRow(self.QCheckBox_Current_Accuracy_2mA_Widget)
         setting_layout.addRow(QPushButton_Widget4)
         setting_layout.addRow(QLabel_DUT, self.QComboBox_DUT)
         setting_layout.addRow(QLabel_PSU_VisaAddress, self.QLineEdit_PSU_VisaAddress)
@@ -1877,10 +2301,16 @@ class CurrentMeasurementDialog(QDialog):
         self.setLayout(Main_Layout)
         scroll_area(self,Main_Layout)
 
+        self.QCheckbox_Simulation_Mode.stateChanged.connect(self.simulation_mode_changed)   
+
         self.QLineEdit_PSU_VisaAddress.currentTextChanged.connect(self.PSU_VisaAddress_changed)
         self.QLineEdit_DMM_VisaAddress.currentTextChanged.connect(self.DMM_VisaAddress_changed)
         self.QLineEdit_ELoad_VisaAddress.currentTextChanged.connect(self.ELoad_VisaAddress_changed)
-        
+
+        self.QCheckBox_Current_Accuracy_FULL_Widget.stateChanged.connect(self.checkbox_state_Current_Accuracy_FULL)
+        self.QCheckBox_Current_Accuracy_200uA_Widget.stateChanged.connect(self.checkbox_state_Current_Accuracy_200uA)
+        self.QCheckBox_Current_Accuracy_2mA_Widget.stateChanged.connect(self.checkbox_state_Current_Accuracy_2mA)
+
         self.QComboBox_DUT.currentTextChanged.connect(self.DUT_changed)
         self.QLineEdit_Programming_Error_Gain.textEdited.connect(self.Programming_Error_Gain_changed)
         self.QLineEdit_Programming_Error_Offset.textEdited.connect(self.Programming_Error_Offset_changed)
@@ -1925,6 +2355,30 @@ class CurrentMeasurementDialog(QDialog):
         AdvancedSettingsList.append(self.inputZ)
         AdvancedSettingsList.append(self.UpTime)
         AdvancedSettingsList.append(self.DownTime)
+    
+    def simulation_mode_changed(self, state):
+        if state == Qt.Checked:
+            self.simulation_mode = 2
+        else:
+            self.simulation_mode = 0
+
+    def checkbox_state_Current_Accuracy_FULL(self, state):  #Shamman changes
+        if state == Qt.Checked:
+            self.checkbox_Current_Accuracy_FULL = 2
+        else:
+            self.checkbox_Current_Accuracy_FULL = 0
+        
+    def checkbox_state_Current_Accuracy_200uA(self, state):  #Shamman changes
+        if state == Qt.Checked:
+            self.checkbox_Current_Accuracy_200uA = 2
+        else:
+            self.checkbox_Current_Accuracy_200uA = 0
+
+    def checkbox_state_Current_Accuracy_2mA(self, state):  #Shamman changes
+        if state == Qt.Checked:
+            self.checkbox_Current_Accuracy_2mA = 2
+        else:
+            self.checkbox_Current_Accuracy_2mA = 0
 
     def External_Auxiliary_Equipment_changed(self, s):
         if s == "None":
@@ -2248,95 +2702,151 @@ class CurrentMeasurementDialog(QDialog):
 
                 QMessageBox.warning(self, "VISA IO ERROR", string)
                 return"""
-            
-            QMessageBox.warning(
-            self,
-            "In Progress",
-            "Measurement will start now , please do not close the main window until test is completed",
-                                )
-            # globalvv = dict["estimatetime"]
-            # loading_thread = threading.Thread(target=self.tkinter_loading_screen, args=(globalvv,))
-            # loading_thread.start()
+            if self.simulation_mode == 2:
+                    QMessageBox.information(
+                        self,
+                        "Simulation Mode",
+                        "Simulation Mode is enabled. No instruments are connected.",
+                    )
+                    
+                    wb = load_workbook(self.output_file)
+                    ws = wb["Data"]  # get the worksheet
 
-            #Execute Voltage Measurement
-            relay_current = RelayController_Current()
-            if self.relay_current == "RELAY":
+                    graph_plot = Graph_Plotting(
+                        wb,        # workbook
+                        ws,        # sheet
+                        self.output_file,
+                        "Voltage",
+                        1,
+                        [8],       # graph_start_rows
+                    )
+                    graph_plot.execute_plot()
 
-                relay_current.relay_on()
+                    wb.save(self.output_file)  # save the charts back
+                    sleep(2)
+
             else:
-                relay_current.relay_off()
+                QMessageBox.warning(
+                self,
+                "In Progress",
+                "Measurement will start now , please do not close the main window until test is completed",
+                                    )
+        
+                #Execute Voltage Measurement
+                """relay_current = RelayController_Current()
+                if self.relay_current == "RELAY":
 
-            if self.DMM_Instrument == "Keysight":
+                    relay_current.relay_on()
+                else:
+                    relay_current.relay_off()"""
 
-                if self.selected_text == "Dolphin":
-                    if self.ELoad != "None" and self.DMM2 != "None":
-                        print("ELoad connected and DMM connected") #All connected
-                        try:(
-                            self.infoList,
-                            self.dataList,
-                            self.dataList2
-                            ) = DolphinNewCurrentMeasurementwithELoad.executeCurrentMeasurementA(self, dict, self.PSU_Channel)
-                    
-                        except Exception as e:
-                            QMessageBox.warning(self, "Error", str(e))
-                            return
+                if self.DMM_Instrument == "Keysight":
 
-                    elif self.ELoad == "None" and self.DMM2 != "None":
-                        print("No ELoad connected and DMM connected") #No Eload connected but DMM connected
-                        try:(
-                            self.infoList,
-                            self.dataList,
-                            self.dataList2
-                            ) = DolphinNewCurrentMeasurementNoELoadWithDMM.executeCurrentMeasurementA(self, dict, self.PSU_Channel)
-                          
-                        except Exception as e:
-                            QMessageBox.warning(self, "Error", str(e))
-                            return
-                    
-                    elif self.ELoad != "None" and self.DMM2 == "None":
-                        print("ELoad connected and No DMM connected") #Eload connected but no DMM connected
-                        try:(
-                            self.infoList,
-                            self.dataList,
-                            self.dataList2
-                            ) = DolphinNewCurrentMeasurementwithELoadNoDMM.executeCurrentMeasurementA(self, dict, self.PSU_Channel)
-                        except Exception as e:
-                            QMessageBox.warning(self, "Error", str(e))
-                            return
-                    else :
-                        print("No ELoad connected and No DMM connected") #No Eload connected and
-                        try:(
-                            self.infoList,
-                            self.dataList,
-                            self.dataList2
-                            ) = DolphinNewCurrentMeasurementNoELoadNoDMM.executeCurrentMeasurementA(self, dict, self.PSU_Channel)
-                        except Exception as e:
-                            QMessageBox.warning(self, "Error", str(e))
-                            return
+                    if self.selected_text == "Dolphin":
+                        if self.ELoad != "None" and self.DMM2 != "None":
+                            print("ELoad connected and DMM connected") #All connected
+                            try:(
+                                self.infoList,
+                                self.dataList,
+                                self.dataList2
+                                ) = DolphinNewCurrentMeasurementwithELoad.executeCurrentMeasurementA(self, dict, self.PSU_Channel)
                         
-            relay_current.relay_off()
+                            except Exception as e:
+                                QMessageBox.warning(self, "Error", str(e))
+                                return
+
+                        elif self.ELoad == "None" and self.DMM2 != "None":
+                            print("No ELoad connected and DMM connected") #No Eload connected but DMM connected
+                            try:(
+                                self.infoList,
+                                self.dataList,
+                                self.dataList2
+                                ) = DolphinNewCurrentMeasurementNoELoadWithDMM.executeCurrentMeasurementA(self, dict, self.PSU_Channel)
+                            
+                            except Exception as e:
+                                QMessageBox.warning(self, "Error", str(e))
+                                return
                         
-            if x == (int(self.noofloop) - 1):   
-                self.OutputBox.append(my_result.getvalue())
-                self.OutputBox.append("Measurement is complete !")
+                        elif self.ELoad != "None" and self.DMM2 == "None":
+                            print("ELoad connected and No DMM connected") #Eload connected but no DMM connected
+                            try:(
+                                self.infoList,
+                                self.dataList,
+                                self.dataList2
+                                ) = DolphinNewCurrentMeasurementwithELoadNoDMM.executeCurrentMeasurementA(self, dict, self.PSU_Channel)
+                            except Exception as e:
+                                QMessageBox.warning(self, "Error", str(e))
+                                return
+                        else :
+                            print("No ELoad connected and No DMM connected") #No Eload connected and
+                            try:(
+                                self.infoList,
+                                self.dataList,
+                                self.dataList2
+                                ) = DolphinNewCurrentMeasurementNoELoadNoDMM.executeCurrentMeasurementA(self, dict, self.PSU_Channel)
+                            except Exception as e:
+                                QMessageBox.warning(self, "Error", str(e))
+                                return
+                            
+                    elif self.selected_text == "Hornbill":
+                        if self.ELoad != "None" and self.DMM != "None":
+                            if self.checkbox_Current_Accuracy_FULL == 2:
+                                print("ELoad connected and DMM connected") #All connected
+                                try:(
+                                    self.infoList,   
+                                    self.dataList,
+                                    self.dataList2
+                                ) = HornbillCurrentMeasurementwithELoad_IMON_FULL.Execute_Current_Accuracy_Current_Static(self, dict, self.PSU_Channel)
+                                except Exception as e:
+                                    QMessageBox.warning(self, "Error", str(e))
+                                    return
+                            if self.checkbox_Current_Accuracy_200uA == 2:
+                                print("ELoad connected and DMM connected") #All connected
+                                try:(
+                                    self.infoList,   
+                                    self.dataList,
+                                    self.dataList2
+                                ) = HornbillCurrentMeasurementwithELoad_IMON_200uA.Execute_Current_Accuracy_Current_Static(self, dict, self.PSU_Channel)
+                                except Exception as e:
+                                    QMessageBox.warning(self, "Error", str(e))
+                                    return   
+                            if self.checkbox_Current_Accuracy_2mA == 2:
+                                print("ELoad connected and DMM connected") #All connected
+                                try:(
+                                    self.infoList,   
+                                    self.dataList,
+                                    self.dataList2
+                                ) = HornbillCurrentMeasurementwithELoad_IMON_2mA.Execute_Current_Accuracy_Current_Static(self, dict, self.PSU_Channel)
+                                except Exception as e:
+                                    QMessageBox.warning(self, "Error", str(e))
+                                    return 
+                            
+                        else:
+                            print("No ELoad connected and DMM connected") #No Eload connected but DMM connected
+                            
+                #relay_current.relay_off()
+                            
+                if x == (int(self.noofloop) - 1):   
+                    self.OutputBox.append(my_result.getvalue())
+                    self.OutputBox.append("Measurement is complete !")
 
 
-                if self.checkbox_data_Report == 2:
-                    instrumentData(self.PSU, self.DMM2, self.ELoad)
-                    datatoCSV_Accuracy(self.infoList, self.dataList, self.dataList2)
-                    datatoGraph2(self.infoList, self.dataList, self.dataList2)
-                    datatoGraph2.scatterCompareCurrent2(self, float(self.Programming_Error_Gain), float(self.Programming_Error_Offset), float(self.Readback_Error_Gain), float(self.Readback_Error_Offset), str(self.unit), float(self.Current_Rating))
+                    if self.checkbox_data_Report == 2:
+                        instrumentData(self.PSU, self.DMM2, self.ELoad)
+                        datatoCSV_Accuracy(self.infoList, self.dataList, self.dataList2)
+                        datatoGraph2(self.infoList, self.dataList, self.dataList2)
+                        datatoGraph2.scatterCompareCurrent2(self, float(self.Programming_Error_Gain), float(self.Programming_Error_Offset), float(self.Readback_Error_Gain), float(self.Readback_Error_Offset), str(self.unit), float(self.Current_Rating))
 
-                    A = xlreport(save_directory=self.savelocation, file_name=str(self.unit))
-                    A.run()
-                    df = pd.DataFrame.from_dict(dict, orient="index")
-                    df.to_csv(os.path.join(csv_folder,"config.csv"))
+                        A = xlreport(save_directory=self.savelocation, file_name=str(self.unit))
+                        A.run()
+                        df = pd.DataFrame.from_dict(dict, orient="index")
+                        df.to_csv(os.path.join(csv_folder,"config.csv"))
 
-           
-                if self.checkbox_data_Image == 2:
-                    self.image_dialog = image_Window()
-                    self.image_dialog.setModal(True)
-                    self.image_dialog.show()    
+            
+                    if self.checkbox_data_Image == 2:
+                        self.image_dialog = image_Window()
+                        self.image_dialog.setModal(True)
+                        self.image_dialog.show()    
 
 
 
@@ -5719,7 +6229,6 @@ class ProgrammingSpeed(QDialog):
         self.OutputBox.append(my_result.getvalue())
         self.OutputBox.append("Measurement is complete !")
 
-
 class PowerMeasurementDialog(QDialog):
     """Class for configuring the voltage measurement DUT Tests Dialog.
     A widget is declared for each parameter that can be customized by the user. These widgets can come in
@@ -8465,7 +8974,1246 @@ class BundleMeasurementCurrentandPowerDialog(QDialog):
                             self.image_dialog.setModal(True)
                             self.image_dialog.show()
                         
-  
+class VoltageCalibrationDialog(QDialog):
+    """Class for configuring the voltage calibration DUT Tests Dialog."""
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("PSU Voltage Calibration GUI")
+        self.resize(800, 520)
+
+        # Form inputs
+        form = QFormLayout()
+        self.psu_input = QLineEdit("TCPIP0::141.183.191.52::inst0::INSTR")
+        form.addRow("PSU Address:", self.psu_input)
+
+        self.dmm_input = QLineEdit("USB0::0x2A8D::0x0201::MY57700532::0::INSTR")
+        form.addRow("DMM Address:", self.dmm_input)
+
+        self.pw_input = QLineEdit("PP8000A")
+        form.addRow("Calibration Password:", self.pw_input)
+
+        self.channel_input = QSpinBox()
+        self.channel_input.setRange(1, 16)
+        self.channel_input.setValue(1)
+        form.addRow("Channel:", self.channel_input)
+
+        self.points_input = QLineEdit("P1,P2")
+        form.addRow("Calibration Points (csv):", self.points_input)
+
+        # Buttons
+        self.start_btn = QPushButton("Start Calibration")
+        self.start_btn.clicked.connect(self.on_start)
+        self.stop_btn = QPushButton("Stop")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(self.on_stop)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(self.start_btn)
+        btn_layout.addWidget(self.stop_btn)
+
+        # Log
+        self.log = QTextEdit()
+        self.log.setReadOnly(True)
+
+        # Layout
+        layout = QVBoxLayout()
+        layout.addLayout(form)
+        layout.addLayout(btn_layout)
+        layout.addWidget(QLabel("Log:"))
+        layout.addWidget(self.log)
+        self.setLayout(layout)
+
+        self.worker = None
+
+    def append_log(self, text):
+        self.log.append(text)
+        self.log.moveCursor(self.log.textCursor().End)
+
+    def on_start(self):
+        psu_addr = self.psu_input.text().strip()
+        dmm_addr = self.dmm_input.text().strip()
+        pw = self.pw_input.text().strip()
+        ch = self.channel_input.value()
+        points = [p.strip() for p in self.points_input.text().split(',') if p.strip()]
+
+        if not psu_addr or not dmm_addr:
+            QMessageBox.warning(self, "Missing", "Please provide both PSU and DMM VISA addresses.")
+            return
+
+        self.start_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
+        self.log.clear()
+        self.append_log("Starting calibration thread...")
+
+        self.worker = CalWorker(psu_addr, dmm_addr, pw, ch, points)
+        self.worker.log.connect(self.append_log)
+        self.worker.finished.connect(self.on_finished)
+        self.worker.error.connect(self.on_error)
+
+        '''# Create crash-safe CSV
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  #Shamman changes
+        self.live_csv_path = os.path.join(
+            self.params.savelocation,
+            f"live_voltage_data_{timestamp}.csv"
+        )
+
+        self.csv_file = open(self.live_csv_path, "w", newline="")
+        self.csv_writer = csv.writer(self.csv_file)
+
+        # Write header
+        self.csv_writer.writerow([
+            "Index",
+            "Timestamp",
+            "Programming_V",
+            "Readback_V"
+        ])
+        self.csv_file.flush()
+
+        self.worker.start()'''
+
+    def on_stop(self):
+        if self.worker:
+            self.append_log("Stop requested...")
+            self.worker.stop()
+            self.stop_btn.setEnabled(False)
+
+    def on_finished(self):
+        self.append_log("Calibration finished")
+        self.start_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self.worker = None
+
+    def on_error(self, msg):
+        QMessageBox.critical(self, "Error", f"Calibration error:\n{msg}")
+
+class CalWorker(QThread):
+    log = pyqtSignal(str)
+    finished = pyqtSignal()
+    error = pyqtSignal(str)
+
+    def __init__(self, psu_addr, dmm_addr, password, channel, cal_points):
+        super().__init__()
+        self.psu_addr = psu_addr
+        self.dmm_addr = dmm_addr
+        self.password = password
+        self.channel = int(channel)
+        self.cal_points = cal_points
+        self._stop_requested = False
+
+    def stop(self):
+        self._stop_requested = True
+
+    def scpi(self, inst, cmd, delay=0.2):
+        inst.write(cmd)
+        time.sleep(delay)
+
+    def check_error(self, psu):
+        try:
+            err = psu.query("SYST:ERR?")
+            if not err.startswith("0"):
+                self.log.emit(f"⚠ PSU ERROR: {err}")
+            return err
+        except Exception as e:
+            self.log.emit(f"Error querying SYST:ERR?: {e}")
+            return None
+
+    """def run(self):
+        try:
+            self.log.emit("Opening VISA resources...")
+            rm = pyvisa.ResourceManager()
+            psu = None
+            dmm = None
+            try:
+                psu = rm.open_resource(self.psu_addr)
+                psu.timeout = 60000
+                dmm = rm.open_resource(self.dmm_addr)
+                dmm.timeout = 10000
+            except Exception as e:
+                raise RuntimeError(f"Failed to open instruments: {e}")
+
+            # Step 1: CAL:STAT ON
+            self.scpi(psu, 'OUTPUT:STATe ON, (@1)')  # Ensure output is ON"')
+            time.sleep(2)
+            self.log.emit('Step 1: CAL:STAT ON, "PP8000A"')
+            self.scpi(psu, 'CAL:STAT ON,"PP8000A"')
+            time.sleep(2)
+            self.check_error(psu)
+            if self._stop_requested:
+                raise RuntimeError("Stopped by user")
+
+            # Step 2: CAL:VOLT 60, (@1)
+            self.log.emit(f"Step 2: CAL:VOLT 60, (@{self.channel})")
+            self.scpi(psu, f"CAL:VOLT 60,(@{self.channel})")
+            time.sleep(2)
+            self.check_error(psu)
+            if self._stop_requested:
+                raise RuntimeError("Stopped by user")
+
+            # Configure DMM
+            self.log.emit("Configuring DMM...")
+            dmm.write(":CONFigure:VOLTage:DC AUTO,MAXimum")
+            dmm.write("TRIG:SOUR IMM")
+            dmm.write("SAMP:COUN 1")
+            time.sleep(2)
+
+            # Steps 3-6: Loop through cal points
+            for point in self.cal_points:
+                if self._stop_requested:
+                    raise RuntimeError("Stopped by user")
+
+                self.log.emit(f"Step 3/5: CAL:LEV {point}")
+                self.scpi(psu, f"CAL:LEV {point}")
+                time.sleep(2)
+                self.check_error(psu)
+                time.sleep(30)
+
+                self.log.emit("Measuring DMM...")
+                val = dmm.query("MEAS:VOLT:DC?").strip()
+                self.log.emit(f"DMM reading = {val}")
+
+                self.log.emit(f"Step 4/6: CAL:DATA {val}")
+                self.scpi(psu, f"CAL:DATA {val}")
+                time.sleep(2)
+                self.check_error(psu)
+                time.sleep(2)
+
+            # Step 7: CAL:SAVE
+            self.log.emit("Step 7: CAL:SAVE")
+            self.scpi(psu, "CAL:SAVE")
+            time.sleep(2)
+            self.check_error(psu)
+            time.sleep(2.0)
+
+            # Step 8: CAL:STAT OFF
+            self.log.emit("Step 8: CAL:STAT OFF")
+            self.scpi(psu, "CAL:STAT OFF")
+            time.sleep(2)
+            self.check_error(psu)
+
+            self.log.emit("=== CALIBRATION COMPLETE ✅ ===")
+
+        except Exception as e:
+            tb = traceback.format_exc()
+            self.log.emit(f"ERROR: {e}\n{tb}")
+            self.error.emit(str(e))
+        finally:
+            try:
+                if 'psu' in locals() and psu is not None:
+                    psu.close()
+                if 'dmm' in locals() and dmm is not None:
+                    dmm.close()
+            except Exception:
+                pass
+            self.finished.emit()"""
+    def run2(self):
+        dict = dictGenerator.input(
+            PSU=self.psu_addr,
+            DMM=self.dmm_addr,
+            password=self.password,
+            channel=self.channel,
+            cal_points=self.cal_points,
+        )
+        try:
+            HornbillVoltageCalibration.Execute_Voltage_Calibration(self, dict)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e)) 
+        
+        self.finished.emit()
+########-----------------------MultiTreading Features--------------------------------#####################
+class TestWorker123(QThread):
+    finished = pyqtSignal()          # Signal emitted when test is done
+    progress = pyqtSignal(str)       # Signal to update OutputBox
+    error = pyqtSignal(str)          # Signal to show errors via QMessageBox
+    new_data = pyqtSignal(float, float)  # Programming V, Readback V
+
+    def __init__(self, dialog_instance, params):
+        super().__init__()
+        self.dialog = dialog_instance
+        self.params = params
+        self.stop_requested = False
+
+    def request_stop(self):
+        self.stop_requested = True
+
+    def run(self):
+        try:
+            #self.dialog.setEnabled(False)
+            self.progress.emit("Starting Test...")
+
+            measurement = DolphinNewVoltageMeasurementwithELoad()
+
+            for x in range(int(self.params['noofloop'])):
+                self.progress.emit(
+                    f"Running loop {x+1}/{self.params['noofloop']}..."
+                )
+
+                try:
+                    (
+                        self.infoList,
+                        self.dataList,
+                        self.dataList2,
+                    ) = measurement.Execute_Voltage_Accuracy(
+                        self.params,
+                        self.dialog.PSU_Channel,
+                        worker=self
+              
+                    )
+
+                    self.progress.emit(f"Loop {x+1} complete.")
+
+
+                except Exception as e:
+                    self.error.emit(str(e))
+                    return  # STOP on failure
+
+            self.progress.emit("Measurement complete!")
+
+        finally:
+            self.dialog.setEnabled(True)
+            self.finished.emit()
+
+class MultiThreadVoltageMeasurementDialog(QDialog):
+    """Class for configuring the voltage measurement DUT Tests Dialog.
+    A widget is declared for each parameter that can be customized by the user. These widgets can come in
+    the form of QLineEdit, or QComboBox where user can select their preferred parameters. When the widgets
+    detect changes, a signal will be transmitted to a designated slot which is a method in this class
+    (e.g. [paramter_name]_changed). The parameter values will then be updated. At runtime execution of the
+    DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
+    into the test methods and execute the DUT Tests accordingly.
+
+    For more details regarding the arguements, please refer to DUT_Test.py
+
+
+    """
+    def __init__(self):
+        """Method where Widgets, Signals and Slots are defined in the GUI for Voltage Measurement"""
+        super().__init__()
+        self.DATA_CSV_PATH = "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Executable/GUI/data.csv"  # or use a dynamic path if needed
+        self.IMAGE_PATH = "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/images/Chart.png"
+        self.ERROR_CSV_PATH = "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Executable/GUI/error.csv"
+        self.image_dialog = None
+        
+
+        self.Power_Rating = "6000"
+        self.Current_Rating = "24"
+        self.Voltage_Rating = "800"
+        self.Power = "2000"
+        self.currloop = "1"
+        self.voltloop = "1"
+        self.estimatetime = "0"
+        self.readbackvoltage = "0"
+        self.readbackcurrent = "0"
+        self.savelocation = "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Test Data/File Export Testing"
+        self.noofloop = "1"
+        self.updatedelay = "3.0"
+        self.unit = "VOLTAGE"
+        self.Programming_Error_Offset = "0.0003"
+        self.Programming_Error_Gain = "0.0003"
+        self.Readback_Error_Offset = "0.0003"
+        self.Readback_Error_Gain = "0.0003"
+        self.minCurrent = "0"
+        self.maxCurrent = "24"
+        self.current_step_size = "1"
+        self.minVoltage = "0"
+        self.maxVoltage = "800"
+        self.voltage_step_size = "80"
+        self.PSU = "USB0::0x2A8D::0xDA04::CN24350097::0::INSTR"
+        self.OSC = "USB0::0x0957::0x17B0::MY52060151::0::INSTR"
+        self.DMM = "USB0::0x2A8D::0x1601::MY60094787::0::INSTR"
+        self.ELoad = "USB0::0x2A8D::0xDA04::CN24350105::0::INSTR"
+        self.OSC_Channel = "1"
+        self.DMM_Instrument = "Keysight"
+        self.DUT = "Others"
+
+        self.PSU_Channel = "1"
+        self.ELoad_Channel = "1"
+        self.setFunction = "Current" #Set Eload in CC Mode
+        self.VoltageRes = "DEF"
+        self.VoltageSense = "INT"
+        self.SPOperationMode = "Independent"
+
+        self.relay_voltage = "None"
+
+        self.checkbox_data_Report = 2
+        self.checkbox_data_Image = 2
+        self.checkbox_test_VoltageAccuracy = 2
+        self.checkbox_test_VoltageLoadRegulation = 2
+        self.checkbox_test_TransientRecovery = 2
+
+        self.Range = "Auto"
+        self.Aperture = "MAX"
+        self.AutoZero = "ON"
+        self.inputZ = "ON"
+        self.UpTime = "50"
+        self.DownTime = "50"
+
+        self.Channel_CouplingMode = "AC"
+        self.Trigger_CouplingMode = "DC"
+        self.Trigger_Mode = "EDGE"
+        self.Trigger_SweepMode = "NORMAL"
+        self.Trigger_SlopeMode = "EITHer"
+        self.TimeScale = "0.01"
+        self.VerticalScale = "0.00001"
+        self.I_Step = ""
+        self.V_Settling_Band = "0.8"
+        self.T_Settling_Band = "0.001"
+        self.Probe_Setting = "X10"
+        self.Acq_Type = "AVERage"
+
+        self.simulation_mode = 0
+        self.output_file = r"C:\Users\shamlee3\OneDrive - Keysight Technologies\Wei Jing See's files - Shamman Xian Jun Lee\Test Data\Monk3.xlsx"  
+        self.selected_text  = "Hornbill"
+        self.stop_requested = False
+
+        
+       
+        self.plot_widget = pg.PlotWidget(title="Voltage Accuracy")
+        #Two Curves : Programing V(red), Readback V(blue)
+        self.programming_curve = self.plot_widget.plot(pen=pg.mkPen(color='r', width=5), name="Programming Voltage")
+        self.readback_curve = self.plot_widget.plot(pen=pg.mkPen(color='b', width=5), name="Readback Voltage")
+        self.prog_up_bound = self.plot_widget.plot(pen=pg.mkPen(color='y', width=5), name="Upper Boundary Limit")
+        self.prog_low_bound = self.plot_widget.plot(pen=pg.mkPen(color='y', width=5), name="Lower Boundary Limit")
+
+        self.x_data = []
+        self.prog_data = []
+        self.read_data = []
+        self.counter = 0
+
+        self.checkbox_SpecialCase = 2
+        self.checkbox_NormalCase = 2
+
+        self.checkbox_Voltage_Accuracy_Voltage_Mode = 2
+        self.checkbox_Voltage_Accuracy_Current_Mode = 0
+        
+        #Create Voltage Window
+        self.setWindowTitle("Voltage Measurement")
+        self.image_window = None
+        self.setWindowFlags(Qt.Window)
+        font = QFont()
+        font.setPointSize(16)   # Adjust size here
+        self.setFont(font)
+
+        #Create find button 
+        QPushButton_Widget0 = QPushButton()
+        QPushButton_Widget0.setText("Save Path")
+        QPushButton_Widget1 = QPushButton()
+        QPushButton_Widget1.setText("Execute Test")
+        QPushButton_Widget2 = QPushButton()
+        QPushButton_Widget2.setText("Advanced Settings")
+        QPushButton_Widget3 = QPushButton()
+        QPushButton_Widget3.setText("Estimate Data Collection Time")
+        QPushButton_Widget4 = QPushButton()
+        QPushButton_Widget4.setText("Find Instruments")
+        QPushButton_Widget5 = QPushButton()
+        QPushButton_Widget5.setText("Stop Test")
+        self.QCheckBox_Report_Widget = QCheckBox()
+        self.QCheckBox_Report_Widget.setText("Generate Excel Report")
+        self.QCheckBox_Report_Widget.setCheckState(Qt.Checked)
+        self.QCheckBox_Image_Widget = QCheckBox()
+        self.QCheckBox_Image_Widget.setText("Show Graph")
+        self.QCheckBox_Image_Widget.setCheckState(Qt.Checked)
+        QCheckBox_Lock_Widget = QCheckBox()
+        QCheckBox_Lock_Widget.setText("Lock Widget")
+
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget = QCheckBox()
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.setText("Current Static (Voltage Change)")
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.setCheckState(Qt.Checked)
+        
+        self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget = QCheckBox()
+        self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setText("Current Change(Load Change)")
+        self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setCheckState(Qt.Unchecked)
+
+        self.QCheckbox_Simulation_Mode = QCheckBox()
+        self.QCheckbox_Simulation_Mode.setText("Simulation Mode")
+        self.QCheckbox_Simulation_Mode.setCheckState(Qt.Unchecked)
+        
+
+        #Output Display
+        self.OutputBox = QTextBrowser()
+        self.OutputBox.append(f"{my_result.getvalue()}")
+        self.OutputBox.append("")  # Empty line after each append
+
+        #Description 1-7
+        Desp0 = QLabel()
+        Desp1 = QLabel()
+        Desp2 = QLabel()
+        Desp3 = QLabel()
+        Desp4 = QLabel()
+        Desp5 = QLabel()
+        Desp6 = QLabel()
+        Desp7 = QLabel()
+        Desp8 = QLabel()
+
+        Desp0.setFont(desp_font)
+        Desp1.setFont(desp_font)
+        Desp2.setFont(desp_font)
+        Desp3.setFont(desp_font)
+        Desp4.setFont(desp_font)
+        Desp5.setFont(desp_font)
+        Desp6.setFont(desp_font)
+        Desp7.setFont(desp_font)
+        Desp8.setFont(desp_font)
+
+        Desp0.setText("Save Path:")
+        Desp1.setText("Connections:")
+        Desp2.setText("General Settings:")
+        Desp3.setText("Voltage Sweep:")
+        Desp4.setText("Current Sweep:")
+        Desp5.setText("No. of Collection:")
+        Desp6.setText("Rated Power [W]")
+        Desp7.setText("Maximum Current")
+        Desp8.setText("External Auxiliary Equipment:")
+
+        #Save Path
+        QLabel_Save_Path = QLabel()
+        QLabel_Save_Path.setFont(desp_font)
+        QLabel_Save_Path.setText("Drive Location/Output Wndow:")
+
+        #Voltage Accuracy Mode
+        QLabel_Voltage_Accuracy_Mode = QLabel()
+        QLabel_Voltage_Accuracy_Mode.setFont(desp_font)
+        QLabel_Voltage_Accuracy_Mode.setText("Voltage Accuracy Test Mode Selection:")
+
+        #Simulation Mode
+        QLabel_Simulation_Mode =QLabel()    
+        QLabel_Simulation_Mode.setFont(desp_font)
+        QLabel_Simulation_Mode.setText("Enable Simulation Mode (No Instruments Connected):")
+
+        # Connections section
+        QLabel_PSU_VisaAddress = QLabel()
+        QLabel_DMM_VisaAddress = QLabel()
+        QLabel_ELoad_VisaAddress = QLabel()
+        QLabel_DMM_Instrument = QLabel()
+        QLabel_DUT = QLabel()
+        QLabel_PSU_VisaAddress.setText("Visa Address (PSU):")
+        QLabel_DMM_VisaAddress.setText("Visa Address (DMM):")
+        QLabel_ELoad_VisaAddress.setText("Visa Address (ELoad):")
+        QLabel_DMM_Instrument.setText("Instrument Type (DMM):")
+        QLabel_DUT.setText("DUT Test Profile:")
+
+        self.QLineEdit_PSU_VisaAddress = QComboBox()
+        self.QLineEdit_DMM_VisaAddress = QComboBox()
+        self.QLineEdit_ELoad_VisaAddress = QComboBox()
+        self.QComboBox_DMM_Instrument = QComboBox()
+        self.QComboBox_DUT = QComboBox()
+
+        # General Settings
+        QLabel_Voltage_Res = QLabel()
+        QLabel_set_PSU_Channel = QLabel()
+        QLabel_set_ELoad_Channel = QLabel()
+        QLabel_set_Function = QLabel()
+        QLabel_Voltage_Sense = QLabel()
+        QLabel_Programming_Error_Gain = QLabel()
+        QLabel_Programming_Error_Offset = QLabel()
+        QLabel_Readback_Error_Gain = QLabel()
+        QLabel_Readback_Error_Offset = QLabel()
+
+        QLabel_Voltage_Res.setText("Voltage Resolution (DMM):")
+        QLabel_set_PSU_Channel.setText("Set PSU Channel:")
+        QLabel_set_ELoad_Channel.setText("Set Eload Channel:")
+        QLabel_set_Function.setText("Mode(Eload):")
+        QLabel_Voltage_Sense.setText("Voltage Sense:")
+        QLabel_Programming_Error_Gain.setText("Programming Desired Specification (Gain):")
+        QLabel_Programming_Error_Offset.setText("Programming Desired Specification (Offset):")
+        QLabel_Readback_Error_Gain.setText("Readback Desired Specification (Gain):")
+        QLabel_Readback_Error_Offset.setText("Readback Desired Specification (Offset):")
+
+        # External Auxiliary Equipment section
+        QLabel_External_Auxiliary_Equipment = QLabel()
+        QLabel_External_Auxiliary_Equipment.setText("Relay")
+        self.QComboBox_External_Auxiliary_Equipment = QComboBox()
+        self.QComboBox_External_Auxiliary_Equipment.addItems(["None", "RELAY"])
+
+        self.QComboBox_Voltage_Res = QComboBox()
+        self.QComboBox_set_PSU_Channel = QComboBox()
+        self.QComboBox_set_ELoad_Channel = QComboBox()
+        self.QComboBox_set_Function = QComboBox()
+        self.QComboBox_Voltage_Sense = QComboBox()
+        self.QLineEdit_Programming_Error_Gain = QLineEdit()
+        self.QLineEdit_Programming_Error_Offset = QLineEdit()
+        self.QLineEdit_Readback_Error_Gain = QLineEdit()
+        self.QLineEdit_Readback_Error_Offset = QLineEdit()
+
+        self.QLineEdit_PSU_VisaAddress.addItems(["USB0::0x2A8D::0xDA04::CN24350097::0::INSTR"])
+        self.QLineEdit_DMM_VisaAddress.addItems(["USB0::0x2A8D::0x1601::MY60094787::0::INSTR"])
+        self.QLineEdit_ELoad_VisaAddress.addItems(["USB0::0x2A8D::0xDA04::CN24350105::0::INSTR"])
+        self.QComboBox_DUT.addItems(["Others", "Excavator", "EDU36311A", "Dolphin", "Hornbill", "SMU"])
+
+        self.QComboBox_DMM_Instrument.addItems(["Keysight", "Keithley"])
+        self.QComboBox_Voltage_Res.addItems(["SLOW", "MEDIUM", "FAST"])
+        self.QComboBox_set_Function.addItems(
+            [
+                "Current Priority",
+                "Voltage Priority",
+                "Resistance Priority",
+            ]
+        )
+        self.QComboBox_set_Function.setEnabled(False)
+        self.QComboBox_set_PSU_Channel.addItems(["None", "1", "2", "3", "4"])
+        self.QComboBox_set_PSU_Channel.setEnabled(True)
+        self.QComboBox_set_ELoad_Channel.addItems(["None", "1", "2"])
+        self.QComboBox_set_ELoad_Channel.setEnabled(True)
+        self.QComboBox_Voltage_Sense.addItems(["2 Wire", "4 Wire"])
+        self.QComboBox_Voltage_Sense.setEnabled(True)
+
+        #Power
+        QLabel_Power = QLabel()
+        QLabel_Power.setText("Rated Power (W):")
+        self.QLineEdit_Power = QLineEdit()
+
+        # Current Sweep
+        QLabel_minCurrent = QLabel()
+        QLabel_maxCurrent = QLabel()
+        QLabel_current_step_size = QLabel()
+        QLabel_minCurrent.setText("Initial Current (A):")
+        QLabel_maxCurrent.setText("Final Current (A):")
+        QLabel_current_step_size.setText("Step Size:")
+        self.QLineEdit_minCurrent = QLineEdit()
+        self.QLineEdit_maxCurrent = QLineEdit()
+        self.QLineEdit_current_stepsize = QLineEdit()
+
+        # Voltage Sweep
+        QLabel_minVoltage = QLabel()
+        QLabel_maxVoltage = QLabel()
+        QLabel_voltage_step_size = QLabel()
+        QLabel_minVoltage.setText("Initial Voltage (V):")
+        QLabel_maxVoltage.setText("Final Voltage (V):")
+        QLabel_voltage_step_size.setText("Step Size:")
+
+        self.QLineEdit_minVoltage = QLineEdit()
+        self.QLineEdit_maxVoltage = QLineEdit()
+        self.QLineEdit_voltage_stepsize = QLineEdit()
+
+        #Loop & Delay
+        QLabel_noofloop = QLabel()
+        QLabel_noofloop.setText("No. of Data Collection:")
+        self.QComboBox_noofloop = QComboBox()
+        self.QComboBox_noofloop.addItems(["1","2","3","4","5","6","7","8","9","10"])
+
+        QLabel_updatedelay = QLabel()
+        QLabel_updatedelay.setText("Delay Time (second) :(Default=50ms)")
+        self.QComboBox_updatedelay = QComboBox()
+        self.QComboBox_updatedelay.addItems(["0.0","0.8","1.0","2.0","3.0", "4.0"])
+        
+        #Create a horizontal layout for the "Save Path" and checkboxes
+        save_path_layout = QVBoxLayout()
+        save_path_layout.addWidget(QLabel_Save_Path)  # QLabel for "Save Path"
+        #save_path_layout.addWidget(QLineEdit_Save_Path)  # QLineEdit for the path
+        save_path_layout.addWidget(self.QCheckBox_Report_Widget)  # Checkbox for "Generate Excel Report"
+        save_path_layout.addWidget(self.QCheckBox_Image_Widget)  # Checkbox for "Show Graph"
+        save_path_layout.addWidget(QCheckBox_Lock_Widget)  # Checkbox for "Show Graph"
+
+        #Execute Layout + Outputbox in Right Container
+        Right_container = QVBoxLayout()
+        exec_layout_box = QHBoxLayout()
+        exec_layout = QFormLayout()
+
+        #exec_layout.addRow(Desp0)
+        exec_layout.addWidget(self.OutputBox)
+        exec_layout.addRow(QPushButton_Widget0)
+
+        exec_layout.addRow(QPushButton_Widget3)
+        exec_layout.addRow(QPushButton_Widget2)
+        exec_layout.addRow(QPushButton_Widget1)
+        exec_layout.addRow(QPushButton_Widget5)   
+
+        exec_layout_box.addLayout(exec_layout)
+ 
+        Right_container.addLayout(save_path_layout)
+        Right_container.addLayout(exec_layout_box)
+        Right_container.addWidget(self.plot_widget)
+
+        #Setting Form Layout with Left Container
+        Left_container = QHBoxLayout()
+        setting_layout = QFormLayout()
+
+        setting_layout.addRow(Desp1)
+        setting_layout.addRow(self.QCheckbox_Simulation_Mode)
+        setting_layout.addRow(QLabel_DUT, self.QComboBox_DUT)
+        setting_layout.addRow(QLabel_Voltage_Accuracy_Mode)
+        setting_layout.addRow(self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget)
+        setting_layout.addRow(self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget)
+        setting_layout.addRow(QPushButton_Widget4)
+        setting_layout.addRow(QLabel_PSU_VisaAddress, self.QLineEdit_PSU_VisaAddress)
+        setting_layout.addRow(QLabel_DMM_VisaAddress, self.QLineEdit_DMM_VisaAddress)
+        setting_layout.addRow(QLabel_ELoad_VisaAddress, self.QLineEdit_ELoad_VisaAddress)
+        setting_layout.addRow(QLabel_DMM_Instrument, self.QComboBox_DMM_Instrument)
+        setting_layout.addRow(Desp2)
+        setting_layout.addRow(QLabel_set_PSU_Channel, self.QComboBox_set_PSU_Channel)
+        setting_layout.addRow(QLabel_set_ELoad_Channel, self.QComboBox_set_ELoad_Channel)
+        setting_layout.addRow(QLabel_set_Function, self.QComboBox_set_Function)
+        setting_layout.addRow(QLabel_Voltage_Sense, self.QComboBox_Voltage_Sense)
+        setting_layout.addRow(QLabel_Programming_Error_Gain, self.QLineEdit_Programming_Error_Gain)
+        setting_layout.addRow(QLabel_Programming_Error_Offset, self.QLineEdit_Programming_Error_Offset)
+        setting_layout.addRow(QLabel_Readback_Error_Gain, self.QLineEdit_Readback_Error_Gain)
+        setting_layout.addRow(QLabel_Readback_Error_Offset, self.QLineEdit_Readback_Error_Offset)
+        setting_layout.addRow(Desp8)
+        setting_layout.addRow(QLabel_External_Auxiliary_Equipment, self.QComboBox_External_Auxiliary_Equipment)
+        setting_layout.addRow(Desp6)
+        setting_layout.addRow(QLabel_Power, self.QLineEdit_Power)
+        setting_layout.addRow(Desp3)
+        setting_layout.addRow(QLabel_minVoltage, self.QLineEdit_minVoltage)
+        setting_layout.addRow(QLabel_maxVoltage, self.QLineEdit_maxVoltage)
+        setting_layout.addRow(QLabel_voltage_step_size, self.QLineEdit_voltage_stepsize)
+        setting_layout.addRow(Desp4)
+        setting_layout.addRow(QLabel_minCurrent, self.QLineEdit_minCurrent)
+        setting_layout.addRow(QLabel_maxCurrent, self.QLineEdit_maxCurrent)
+        setting_layout.addRow(QLabel_current_step_size, self.QLineEdit_current_stepsize)
+        setting_layout.addRow(Desp5)
+        setting_layout.addRow(QLabel_noofloop, self.QComboBox_noofloop)
+        setting_layout.addRow(QLabel_updatedelay, self.QComboBox_updatedelay)
+
+        Left_container.addLayout(setting_layout)
+
+        #Main Layout
+        Main_Layout = QHBoxLayout()
+        Main_Layout.addLayout(Left_container,stretch= 2)
+        Main_Layout.addLayout(Right_container,stretch = 1)
+        self.setLayout(Main_Layout)
+        scroll_area(self,Main_Layout)
+
+        self.QCheckbox_Simulation_Mode.stateChanged.connect(self.simulation_mode_changed)   
+
+        self.QLineEdit_PSU_VisaAddress.currentTextChanged.connect(self.PSU_VisaAddress_changed)
+        self.QLineEdit_DMM_VisaAddress.currentTextChanged.connect(self.DMM_VisaAddress_changed)
+        self.QLineEdit_ELoad_VisaAddress.currentTextChanged.connect(self.ELoad_VisaAddress_changed)
+
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.stateChanged.connect(self.checkbox_state_Voltage_Accuracy_Voltage_Mode)
+        self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.stateChanged.connect(self.checkbox_state_Voltage_Accuracy_Current_Mode)
+        
+        self.QComboBox_DUT.currentTextChanged.connect(self.DUT_changed)
+        self.QLineEdit_Programming_Error_Gain.textEdited.connect(self.Programming_Error_Gain_changed)
+        self.QLineEdit_Programming_Error_Offset.textEdited.connect(self.Programming_Error_Offset_changed)
+        self.QLineEdit_Readback_Error_Gain.textEdited.connect(self.Readback_Error_Gain_changed)
+        self.QLineEdit_Readback_Error_Offset.textEdited.connect(self.Readback_Error_Offset_changed)
+
+        self.QComboBox_External_Auxiliary_Equipment.currentTextChanged.connect(self.External_Auxiliary_Equipment_changed)
+
+        self.QLineEdit_Power.textEdited.connect(self.Power_changed)
+        self.QComboBox_DUT.currentIndexChanged.connect(self.on_current_index_changed)
+
+        self.QLineEdit_minVoltage.textEdited.connect(self.minVoltage_changed)
+        self.QLineEdit_maxVoltage.textEdited.connect(self.maxVoltage_changed)
+        self.QLineEdit_minCurrent.textEdited.connect(self.minCurrent_changed)
+        self.QLineEdit_maxCurrent.textEdited.connect(self.maxCurrent_changed)
+        self.QLineEdit_voltage_stepsize.textEdited.connect(self.voltage_step_size_changed)
+        self.QLineEdit_current_stepsize.textEdited.connect(self.current_step_size_changed)
+        self.QComboBox_set_Function.currentTextChanged.connect(self.set_Function_changed)
+        self.QComboBox_set_PSU_Channel.currentTextChanged.connect(self.PSU_Channel_changed)
+        self.QComboBox_set_ELoad_Channel.currentTextChanged.connect(self.ELoad_Channel_changed)
+        self.QComboBox_Voltage_Res.currentTextChanged.connect(self.set_VoltageRes_changed)
+        self.QComboBox_Voltage_Sense.currentTextChanged.connect(self.set_VoltageSense_changed)
+
+        self.QComboBox_noofloop.currentTextChanged.connect(self.noofloop_changed)
+        self.QComboBox_updatedelay.currentTextChanged.connect(self.updatedelay_changed)
+
+        self.QComboBox_DMM_Instrument.currentTextChanged.connect(self.DMM_Instrument_changed)
+        self.QCheckBox_Report_Widget.stateChanged.connect(self.checkbox_state_Report)
+        self.QCheckBox_Image_Widget.stateChanged.connect(self.checkbox_state_Image)
+        QCheckBox_Lock_Widget.stateChanged.connect(self.checkbox_state_lock)
+
+        QPushButton_Widget0.clicked.connect(self.savepath)
+        QPushButton_Widget1.clicked.connect(self.executeTest)
+        QPushButton_Widget2.clicked.connect(self.openDialog)
+        QPushButton_Widget3.clicked.connect(self.estimateTime)
+        QPushButton_Widget4.clicked.connect(self.doFind)
+        QPushButton_Widget5.clicked.connect(self.stop_worker)
+
+        AdvancedSettingsList.append(self.Range)
+        AdvancedSettingsList.append(self.Aperture)
+        AdvancedSettingsList.append(self.AutoZero)
+        AdvancedSettingsList.append(self.inputZ)
+        AdvancedSettingsList.append(self.UpTime)
+        AdvancedSettingsList.append(self.DownTime)
+    
+    def stop_worker(self):
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            self.worker.request_stop()
+            self.OutputBox.append("Stop requested, waiting for worker to finish...")
+    
+    def update_plot(self, programming_v, readback_v):
+        self.counter += 1
+        self.x_data.append(self.counter)
+        self.prog_data.append(programming_v)
+        self.read_data.append(readback_v)
+
+        #keep only the latest 100 points for better performance
+        if len(self.x_data) > 100:
+            self.x_data = self.x_data[-100:]
+            self.prog_data = self.prog_data[-100:]
+            self.read_data = self.read_data[-100:]
+        
+        self.programming_curve.setData(self.x_data, self.prog_data)
+        self.readback_curve.setData(self.x_data, self.read_data)
+    
+    def update_status(self, message):
+        self.OutputBox.append(message)
+    
+    def show_error(self, error_message):
+        QMessageBox.critical(self, "Error", error_message)
+
+    def simulation_mode_changed(self, state):
+        if state == Qt.Checked:
+            self.simulation_mode = 2
+        else:
+            self.simulation_mode = 0
+    
+    def checkbox_state_Voltage_Accuracy_Voltage_Mode(self, state):
+        if state == Qt.Checked:
+            self.checkbox_Voltage_Accuracy_Voltage_Mode = 2
+        else:
+            self.checkbox_Voltage_Accuracy_Voltage_Mode = 0
+
+    def checkbox_state_Voltage_Accuracy_Current_Mode(self, state):
+        if state == Qt.Checked:
+            self.checkbox_Voltage_Accuracy_Current_Mode = 2
+        else:
+            self.checkbox_Voltage_Accuracy_Current_Mode = 0
+
+    def External_Auxiliary_Equipment_changed(self, s):
+        if s == "None":
+            self.relay_voltage = "None"
+        else:
+            self.relay_voltage = "RELAY"
+
+    def on_current_index_changed(self):
+        selected_text = self.QComboBox_DUT.currentText()
+        self.update_selection(selected_text)
+ 
+        self.QLineEdit_Programming_Error_Gain.setText(self.Programming_Error_Gain)
+        self.QLineEdit_Programming_Error_Gain.setText(self.Programming_Error_Gain)
+        self.QLineEdit_Programming_Error_Offset.setText(self.Programming_Error_Offset)
+        self.QLineEdit_Readback_Error_Gain.setText(self.Readback_Error_Gain)
+        self.QLineEdit_Readback_Error_Offset.setText(self.Readback_Error_Offset)
+        self.QLineEdit_Power.setText(self.Power)
+        """self.QLineEdit_rshunt.setText(self.rshunt)"""
+        self.QLineEdit_minVoltage.setText(self.minVoltage)
+        self.QLineEdit_maxVoltage.setText(self.maxVoltage)
+        self.QLineEdit_voltage_stepsize.setText(self.voltage_step_size)
+        self.QLineEdit_minCurrent.setText(self.minCurrent)
+        self.QLineEdit_maxCurrent.setText(self.maxCurrent)
+        self.QLineEdit_current_stepsize.setText(self.current_step_size)
+
+        channel_str = str(self.PSU_Channel)
+        index = self.QComboBox_set_PSU_Channel.findText(channel_str)
+        self.QComboBox_set_PSU_Channel.setCurrentIndex(index)
+        self.QComboBox_set_PSU_Channel.setCurrentIndex(int(self.PSU_Channel))
+        self.QComboBox_set_ELoad_Channel.setCurrentIndex(int(self.ELoad_Channel))
+        self.QComboBox_Voltage_Sense.setCurrentText("4 Wire" if self.VoltageSense == "EXT" else "2 Wire")
+        self.QComboBox_noofloop.setCurrentText(self.noofloop)
+        self.QComboBox_updatedelay.setCurrentText(self.updatedelay)
+
+    def update_selection(self, selected_text):
+        """Update selected text and reload config file"""
+        self.selected_text = selected_text
+        self.load_data()
+
+    """def load_data(self):
+        Reads configuration file and returns a dictionary of key-value pairs.
+        config_data = {}
+        if self.selected_text =="Excavator":
+            self.config_file = os.path.join(config_folder,"config_Excavator.txt")
+            
+        elif self.selected_text =="Dolphin":
+            self.config_file = os.path.join(config_folder,"config_Dolphin.txt")
+            
+        elif self.selected_text =="SMU":
+            self.config_file = os.path.join(config_folder,"config_SMU.txt")
+        
+        elif self.selected_text =="Hornbill":
+            self.config_file = os.path.join(config_folder,"config_Hornbill.txt")
+        else:
+            self.config_file = os.path.join(config_folder,"config_Others.txt")
+
+        try:
+            with open(self.config_file, "r") as file: 
+                for line in file:
+
+                    if not line or line.startswith("#") or line.startswith("//"):
+                        continue 
+
+                    if "=" in line:
+                        key, value = line.strip().split("=")
+                        config_data[key.strip()] = value.strip()
+
+            for key, value in config_data.items():
+                if key == "savelocation":
+                    # If savelocation has a valid value, do not overwrite it
+                    if self.savelocation and self.savelocation != "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Test Data/File Export Testing":
+                        continue 
+                    else:
+                        setattr(self, key, value)
+                else:
+                    setattr(self, key, value)
+
+        except FileNotFoundError:
+            print("Config file not found. Using default values.")
+
+        return config_data"""
+    
+
+    """def load_data(self):
+        Reads configuration file and returns a dictionary of key-value pairs.
+        config_data = {}
+
+        # Determine base folder for configs
+        if getattr(sys, "frozen", False):
+            # Running as PyInstaller exe
+            exe_folder = Path(sys.executable).parent
+            # Configs should be in Executable/Instrument_Config_Files
+            config_base = exe_folder / "Instrument_Config_Files"
+        else:
+            # Running as normal Python script
+            project_root = Path(__file__).resolve().parent.parent  # <-- go up one level from src
+            config_base = project_root / "Instrument_Config_Files"
+
+        # Map selected_text to config filename
+        file_map = {
+            "Excavator": "config_Excavator.txt",
+            "Dolphin": "config_Dolphin.txt",
+            "SMU": "config_SMU.txt",
+            "Hornbill": "config_Hornbill.txt"
+        }
+        config_filename = file_map.get(self.selected_text, "config_Others.txt")
+        self.config_file = config_base / config_filename
+
+        try:
+            with open(self.config_file, "r") as file:
+                for line in file:
+                    line = line.strip()
+                    if not line or line.startswith("#") or line.startswith("//"):
+                        continue
+                    if "=" in line:
+                        key, value = line.split("=", 1)
+                        config_data[key.strip()] = value.strip()
+
+            for key, value in config_data.items():
+                if key == "savelocation":
+                    if self.savelocation and self.savelocation != "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Test Data/File Export Testing":
+                        continue
+                    else:
+                        setattr(self, key, value)
+                else:
+                    setattr(self, key, value)
+
+        except FileNotFoundError:
+            print(f"⚠️ Config file not found: {self.config_file}. Using default values.")
+
+        return config_data"""
+    
+    def load_data(self):
+        """Reads configuration file and returns a dictionary of key-value pairs."""
+        config_data = {}
+
+        config_map = {
+            "Excavator": "config_Excavator.txt",
+            "Dolphin": "config_Dolphin.txt",
+            "SMU": "config_SMU.txt",
+            "Hornbill": "config_Hornbill.txt",
+        }
+
+        filename = config_map.get(self.selected_text, "config_Others.txt")
+
+        # Ensure path is a string, avoids crashes
+        self.config_file = str(config_folder / filename)
+
+        if not os.path.exists(self.config_file):
+            print(f"⚠ Config file not found: {self.config_file}")
+            return {}
+
+        try:
+            with open(self.config_file, "r", encoding="utf-8-sig") as file:
+                for line in file:
+                    line = line.strip()
+
+                    if not line or line.startswith("#") or line.startswith("//"):
+                        continue
+
+                    if "=" not in line:
+                        print("⚠ Skipping invalid line:", repr(line))
+                        continue
+
+                    key, value = line.split("=", 1)
+                    config_data[key.strip()] = value.strip()
+
+
+            for key, value in config_data.items():
+                if key == "savelocation":
+                    if getattr(self, "savelocation", None) and \
+                    self.savelocation != "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Test Data/File Export Testing":
+                        continue
+                    setattr(self, key, value)
+                else:
+                    setattr(self, key, value)
+
+        except Exception as e:
+            print(f"ERROR reading config: {e}")
+
+        return config_data
+
+
+
+    def Power_changed(self, value):
+        self.Power = value
+
+    def doFind(self):
+        try:
+            self.QLineEdit_PSU_VisaAddress.clear()
+            self.QLineEdit_DMM_VisaAddress.clear()
+            self.QLineEdit_ELoad_VisaAddress.clear()
+            
+            self.visaIdList, self.nameList, instrument_roles = NewGetVisaSCPIResources()
+            
+            for i in range(len(self.nameList)):
+                self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
+                self.QLineEdit_PSU_VisaAddress.addItems([str(self.visaIdList[i])])
+                self.QLineEdit_DMM_VisaAddress.addItems([str(self.visaIdList[i])])
+                self.QLineEdit_ELoad_VisaAddress.addItems([str(self.visaIdList[i])])
+
+            if 'PSU' in instrument_roles:
+                psu_index = self.visaIdList.index(instrument_roles['PSU'])
+                self.QLineEdit_PSU_VisaAddress.setCurrentIndex(psu_index)
+
+            if 'ELOAD' in instrument_roles:
+                eload_index = self.visaIdList.index(instrument_roles['ELOAD'])
+                self.QLineEdit_ELoad_VisaAddress.setCurrentIndex(eload_index)
+
+            if 'DMM' in instrument_roles:
+                dmm_index = self.visaIdList.index(instrument_roles['DMM'])
+                self.QLineEdit_DMM_VisaAddress.setCurrentIndex(dmm_index)
+            
+            # Add "None" option at the end
+            self.QLineEdit_PSU_VisaAddress.addItem("TCPIP0::141.183.188.184::5025::SOCKET")
+            self.QLineEdit_DMM_VisaAddress.addItem("None")
+            self.QLineEdit_ELoad_VisaAddress.addItem("None")
+            self.QLineEdit_PSU_VisaAddress.addItem("TCPIP0::141.183.188.184::inst0::INSTR")
+                    
+        except:
+            self.OutputBox.append("No Devices Found!!!")
+        return   
+
+
+    def updatedelay_changed(self, value):
+        self.updatedelay = value
+        #self.OutputBox.append(str(self.updatedelay))
+
+    def noofloop_changed(self, value):
+        self.noofloop = value
+        #self.OutputBox.append(str(self.noofloop))
+
+    def DMM_Instrument_changed(self, s):
+        self.DMM_Instrument = s
+
+    def PSU_VisaAddress_changed(self, s):
+        self.PSU = s    
+
+    def DMM_VisaAddress_changed(self, s):
+        self.DMM = s
+
+    def ELoad_VisaAddress_changed(self, s):
+        self.ELoad = s
+
+    def DUT_changed(self, s):
+        self.DUT = s
+
+    def ELoad_Channel_changed(self, s):
+       self.ELoad_Channel = s
+
+    def PSU_Channel_changed(self, s):
+       self.PSU_Channel = s
+
+    def Programming_Error_Gain_changed(self, s):
+        self.Programming_Error_Gain = s
+
+    def Programming_Error_Offset_changed(self, s):
+        self.Programming_Error_Offset = s
+
+    def Readback_Error_Gain_changed(self, s):
+        self.Readback_Error_Gain = s
+
+    def Readback_Error_Offset_changed(self, s):
+        self.Readback_Error_Offset = s
+
+    def minVoltage_changed(self, s):
+        self.minVoltage = s
+
+    def maxVoltage_changed(self, s):
+        self.maxVoltage = s
+
+    def minCurrent_changed(self, s):
+        self.minCurrent = s
+
+    def maxCurrent_changed(self, s):
+        self.maxCurrent = s
+
+    def voltage_step_size_changed(self, s):
+        self.voltage_step_size = s
+
+    def current_step_size_changed(self, s):
+        self.current_step_size = s
+
+    def set_Function_changed(self, s):
+        if s == "Voltage Priority":
+            self.setFunction = "Voltage"
+
+        elif s == "Current Priority":
+            self.setFunction = "Current"
+
+        elif s == "Resistance Priority":
+            self.setFunction = "Resistance"
+
+    def set_VoltageRes_changed(self, s):
+        self.VoltageRes = s
+
+    def set_VoltageSense_changed(self, s):
+        if s == "2 Wire":
+            self.VoltageSense = "INT"
+        elif s == "4 Wire":
+            self.VoltageSense = "EXT"
+
+    def setRange(self, value):
+        AdvancedSettingsList[0] = value
+
+    def setAperture(self, value):
+        AdvancedSettingsList[1] = value
+
+    def setAutoZero(self, value):
+        AdvancedSettingsList[2] = value
+
+    def setInputZ(self, value):
+        AdvancedSettingsList[3] = value
+
+    def checkbox_state_Report(self, s):
+        self.checkbox_data_Report = s
+
+    def checkbox_state_Image(self, s):
+        self.checkbox_data_Image = s
+
+    def checkbox_state_lock(self, state):
+        lockable_widgets = (QPushButton, QLineEdit, QTextEdit, QComboBox)
+
+        for widget in self.findChildren(lockable_widgets):
+            widget.setDisabled(state == 2)  # Disable if checkbox is checked
+
+    def setUpTime(self, value):
+        AdvancedSettingsList[4] = value
+
+    def setDownTime(self, value):
+        AdvancedSettingsList[5] = value
+
+    def openDialog(self):
+        dlg = AdvancedSetting_Voltage()
+        dlg.exec()
+
+    def estimateTime(self):
+        
+        #self.OutputBox.append(str(self.updatedelay))
+        try:
+            self.currloop = ((float(self.maxCurrent) - float(self.minCurrent))/ float(self.current_step_size)) + 1
+            self.voltloop = ((float(self.maxVoltage) - float(self.minVoltage))/ float(self.voltage_step_size)) + 1
+
+            if self.updatedelay == 0.0:
+                constant = 0
+                    
+            else:
+                constant = 1
+
+            self.estimatetime = (self.currloop * self.voltloop *(0.2 + 0.8 + (float(self.updatedelay) * constant) )) * float(self.noofloop)
+            self.OutputBox.append(f"{self.estimatetime} seconds")
+            self.OutputBox.append("") 
+        except Exception as e:
+            QMessageBox.warning(self, "Warning", "Input cannot be empty!")
+            return
+
+    def savepath(self):  
+        # Create a Tkinter root window
+        root = Tk()
+        root.withdraw()  # Hide the root window
+
+        # Open a directory dialog and return the selected directory path
+        directory = filedialog.askdirectory()
+        self.savelocation = directory
+        self.OutputBox.append(str(self.savelocation))
+
+    def check_missing_params(self, param_dict):
+        """Check which parameters are None or empty and return them."""
+        missing = []
+        for key, value in param_dict.items():
+            # Check for None or empty string
+            if value is None or (isinstance(value, str) and value.strip() == ""):
+                missing.append(key)
+        return missing
+
+    def executeTest(self):
+        try:
+            # Generate your parameters dictionary as before
+            dict_params = dictGenerator.input(
+                V_Rating=self.Voltage_Rating,
+                power=self.Power,
+                estimatetime=self.estimatetime,
+                updatedelay=self.updatedelay,
+                readbackvoltage=self.readbackvoltage,
+                readbackcurrent=self.readbackcurrent,
+                noofloop=self.noofloop,
+                Instrument=self.DMM_Instrument,
+                Programming_Error_Gain=self.Programming_Error_Gain,
+                Programming_Error_Offset=self.Programming_Error_Offset,
+                Readback_Error_Gain=self.Readback_Error_Gain,
+                Readback_Error_Offset=self.Readback_Error_Offset,
+                relay_voltage=self.relay_voltage,
+                unit=self.unit,
+                minCurrent=self.minCurrent,
+                maxCurrent=self.maxCurrent,
+                current_step_size=self.current_step_size,
+                minVoltage=self.minVoltage,
+                maxVoltage=self.maxVoltage,
+                voltage_step_size=self.voltage_step_size,
+                selected_DUT=self.selected_text,
+                PSU=self.PSU,
+                OperationMode=self.SPOperationMode,
+                OSC=self.OSC,
+                DMM=self.DMM,
+                ELoad=self.ELoad,
+                ELoad_Channel=self.ELoad_Channel,
+                PSU_Channel=self.PSU_Channel,
+                VoltageSense=self.VoltageSense,
+                VoltageRes=self.VoltageRes,
+                setFunction=self.setFunction,
+                Range=AdvancedSettingsList[0],
+                Aperture=AdvancedSettingsList[1],
+                AutoZero=AdvancedSettingsList[2],
+                InputZ=AdvancedSettingsList[3],
+                UpTime=AdvancedSettingsList[4],
+                DownTime=AdvancedSettingsList[5],
+            )
+
+            # Check for missing parameters
+            missing = self.check_missing_params(dict_params)
+            if missing:
+                QMessageBox.warning(self, "Missing Params", f"The following parameters are missing: {missing}")
+                return
+
+            # Create the worker
+            self.worker = TestWorker123(self, dict_params)
+            self.worker.progress.connect(lambda msg: self.OutputBox.append(msg))
+            self.worker.error.connect(lambda err: QMessageBox.warning(self, "Error", err))
+            self.worker.finished.connect(lambda: self.OutputBox.append("Worker finished."))
+            self.worker.new_data.connect(self.update_plot)
+            self.worker.progress.connect(self.update_status)
+            self.worker.error.connect(self.show_error)
+            # Start the worker thread
+            self.worker.start()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+
+
+    def stopTest(self):
+        if hasattr(self, "worker") and self.worker.isRunning():
+            self.worker.stop_requested = True
+            self.OutputBox.append("Stop requested... waiting for current loop to finish.")
+
+
 ########----------------------- Advanced Setting for Standalone Code ----------------#####################
 class AdvancedSetting_Voltage(QDialog):
     """This class is to configure the Advanced Settings when conducting voltage measurements,
@@ -8692,30 +10440,88 @@ class AdvancedSetting_Current(QDialog):
 
 
 #########----------------------- Image Graph Display ---------------------------------####################
-class image_Window(QDialog):
-    """Class to display graph of DUT Test results"""
+"""class image_Window(QDialog):
+    Class to display graph of DUT Test results
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Image")
         self.im = QPixmap(IMAGE_PATH)
+        self.im2 = QPixmap(IMAGE_PATH_2)
         
         # Check if the image loaded successfully
         if self.im.isNull():
             QMessageBox.warning(self, "Error", "Failed to load image.")
             self.close()  # Close the window
             return
+        if self.im2.isNull():
+            QMessageBox.warning(self, "Error", "Failed to load image.")
+            self.close()  # Close the window
+            return
         
         self.label = QLabel()
         self.label.setPixmap(self.im)
+
+        self.label2 = QLabel()
+        self.label2.setPixmap(self.im2)
         
         self.grid = QGridLayout()
         self.grid.addWidget(self.label, 1, 1)
+        self.grid.addWidget(self.label2, 1, 2)
+
         self.setLayout(self.grid)
+
         self.setWindowFlags(Qt.Window)
         self.setModal(False)  # Set the dialog to be non-modal
         self.show()
         # Ensure standard window behavior
+        self.setWindowFlags(Qt.Window | Qt.WindowCloseButtonHint)
+
+    def close_window(self):
+        self.close()"""
+
+class image_Window(QDialog):
+    """Class to display graph of DUT Test results"""
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Image")
+
+        # Convert Path objects to str
+        image_path_1 = str(IMAGE_PATH)
+        image_path_2 = str(IMAGE_PATH_2)
+
+        self.im = QPixmap(image_path_1)
+        self.im2 = QPixmap(image_path_2)
+        
+        # Check if the image loaded successfully
+        if self.im.isNull():
+            QMessageBox.warning(self, "Error", f"Failed to load image: {image_path_1}")
+            self.close()
+            return
+
+        if self.im2.isNull():
+            QMessageBox.warning(self, "Error", f"Failed to load image: {image_path_2}")
+            self.close()
+            return
+        
+        self.label = QLabel()
+        self.label.setPixmap(self.im)
+
+        self.label2 = QLabel()
+        self.label2.setPixmap(self.im2)
+        
+        self.grid = QGridLayout()
+        self.grid.addWidget(self.label, 1, 1)
+        self.grid.addWidget(self.label2, 1, 2)
+
+        self.setLayout(self.grid)
+
+        self.setWindowFlags(Qt.Window)
+        self.setModal(False)
+        self.show()
+
+        # Standard window flags
         self.setWindowFlags(Qt.Window | Qt.WindowCloseButtonHint)
 
     def close_window(self):
@@ -8873,12 +10679,22 @@ class Parameters:
         self.Probe_Setting = None
         self.Acq_Type = None
 
+        self.checkbox_SpecialCase = None
+        self.checkbox_NormalCase = None
+
         self.ACSource= None
         self.AC_CurrentLimit= 10
         self.AC_VoltageOutput= 230
         self.Frequency= 50
         self.AC_Supply_Type= "Plug"
         self.Line_Reg_Range= [100,115,230]
+
+        self.x_data = []
+        self.prog_data = []
+        self.read_data = []
+        self.up_data = []
+        self.low_data = []
+        self.counter = 0
 
         self.load_data()
 
@@ -8914,6 +10730,9 @@ class Parameters:
             
         elif self.selected_text =="SMU":
             self.config_file = os.path.join(config_folder,"config_SMU.txt")
+
+        elif self.selected_text =="Hornbill":
+            self.config_file = os.path.join(config_folder,"config_Hornbill.txt")
 
         else:
             self.config_file = os.path.join(config_folder,"config_Others.txt")
@@ -8961,6 +10780,20 @@ class AllTestMeasurement(QDialog):
     def __init__(self):
         super().__init__()
         self.params = Parameters()
+        #Shamman changes    #Can be used for current 
+        self.plot_widget = pg.PlotWidget(title="Voltage Accuracy")
+        self.plot_widget.enableAutoRange(axis = 'x', enable = True)
+        self.plot_widget.enableAutoRange(axis = 'y', enable = True)
+        self.plot_widget.setAutoVisible(y=True)
+        #Two Curves : Programing V(red), Readback V(blue)
+        self.programming_curve = self.plot_widget.plot(pen=pg.mkPen(color='r', width=5), name="Programming Voltage")
+        self.readback_curve = self.plot_widget.plot(pen=pg.mkPen(color='b', width=5), name="Readback Voltage")
+        self.prog_up_bound = self.plot_widget.plot(pen=pg.mkPen(color='y', width=5), name="Upper Boundary Limit")
+        self.prog_low_bound = self.plot_widget.plot(pen=pg.mkPen(color='y', width=5), name="Lower Boundary Limit")
+        self.last_Iset = None               #Shamman changes
+        self.fail_prompt_active = False
+        self._paused = False
+        self._running = True
 
         #Create find button 
         self.QPushButton_Widget0 = QPushButton()
@@ -8975,6 +10808,7 @@ class AllTestMeasurement(QDialog):
         QPushButton_Widget4.setText("Find Instruments")
         QPushButton_Widget5 = QPushButton()
         QPushButton_Widget5.setText("Return Home")
+        
         
         self.QPushButton_Voltage_Widget = QPushButton()
         self.QPushButton_Voltage_Widget.setText("Voltage")
@@ -8999,6 +10833,13 @@ class AllTestMeasurement(QDialog):
         self.QCheckBox_NormalCase_Widget.setCheckState(Qt.Checked)
         QCheckBox_Lock_Widget = QCheckBox()
         QCheckBox_Lock_Widget.setText("🔒Lock Widget")
+        self.QCheckBox_USB_Widget = QCheckBox()
+        self.QCheckBox_USB_Widget.setText("USB")
+        self.QCheckBox_IP_Widget = QCheckBox()
+        self.QCheckBox_IP_Widget.setText("IP address")
+        self.QCheckBox_Hostname_Widget = QCheckBox()
+        self.QCheckBox_Hostname_Widget.setText("Host name")
+
 
         #Test Selection checkbox
         self.QCheckBox_VoltageAccuracy_Widget = QCheckBox()
@@ -9035,14 +10876,26 @@ class AllTestMeasurement(QDialog):
         self.QCheckBox_OCP_Test_Widget = QCheckBox()
         self.QCheckBox_OCP_Test_Widget.setText("OCP Test / Activation")
         self.QCheckBox_OCP_Test_Widget.setCheckState(Qt.Unchecked)
+        
+        #Create Bundle test view
+        self.setWindowTitle("BUNDLE TEST")
+        self.image_window = None
+        self.setWindowFlags(Qt.Window)
+        font = QFont()
+        font.setPointSize(12)   # Adjust size here
+        self.setFont(font)
 
         # Abort button
         self.abort_button = QPushButton("Abort")
         self.abort_button.clicked.connect(self.abort_test)
         self.abort_button.setVisible(False)
         self.abort_button.setEnabled(False)
+        self.show_plot_button = QPushButton("Show Plot")        #Shamman changes 
+        self.show_plot_button.clicked.connect(self.show_popup_plot)
+        self.show_plot_button.setVisible(False)
+        self.show_plot_button.setEnabled(False)
 
-        # Progress bar
+        # Progress bar NEEDS FIXING!
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -9109,6 +10962,7 @@ class AllTestMeasurement(QDialog):
 
         # Connections section
         self.image_label = QLabel()
+        QLabel_Connection_Selection = QLabel()
         QLabel_PSU_VisaAddress = QLabel()
         QLabel_DMM_VisaAddressforVoltage = QLabel()
         self.QLabel_DMM_VisaAddressforCurrent = QLabel()
@@ -9118,8 +10972,9 @@ class AllTestMeasurement(QDialog):
         QLabel_DUT = QLabel()
         QLabel_AC_Supply_Type = QLabel()
 
+        QLabel_Connection_Selection.setText("Connection Selection:")
         QLabel_PSU_VisaAddress.setText("Visa Address (PSU):")
-        QLabel_DMM_VisaAddressforVoltage.setText("Visa Address (DMM-Voltage):")
+        QLabel_DMM_VisaAddressforVoltage.setText("Visa Address (DMM):")
         self.QLabel_DMM_VisaAddressforCurrent.setText("Visa Address (DMM-Current Shunt):")
         self.QLabel_OSC_VisaAddress.setText("Visa Address (OSC):")
         QLabel_ELoad_VisaAddress.setText("Visa Address (ELoad):")
@@ -9135,8 +10990,7 @@ class AllTestMeasurement(QDialog):
         self.QComboBox_DMM_Instrument = QComboBox()
         self.QComboBox_DUT = QComboBox()
         self.QComboBox_AC_Supply_Type = QComboBox()
-
-        # General Settings
+        # General Setting
         QLabel_Voltage_Res = QLabel()
         QLabel_set_PSU_Channel = QLabel()
         QLabel_set_ELoad_Channel = QLabel()
@@ -9147,7 +11001,6 @@ class AllTestMeasurement(QDialog):
         QLabel_OCP_Activation_Time = QLabel()
         QLabel_SPOperationMode = QLabel()
         QLabel_Line_Reg_Range = QLabel()
-
         #Programming Error
         QLabel_Programming_Error_Gain = QLabel()
         QLabel_Programming_Error_Offset = QLabel()
@@ -9223,7 +11076,7 @@ class AllTestMeasurement(QDialog):
         self.QLineEdit_OVP_Error_Gain = QLineEdit()
         self.QLineEdit_OVP_Error_Offset = QLineEdit()
 
-        self.QComboBox_DUT.addItems(["Others", "Excavator", "Dolphin", "SMU"])
+        self.QComboBox_DUT.addItems(["Others", "Excavator", "Dolphin", "SMU", "Hornbill"])
         self.QComboBox_AC_Supply_Type.addItems(["Plug", "AC Source"])
         self.QComboBox_DMM_Instrument.addItems(["Keysight", "Keithley"])
         self.QComboBox_Voltage_Res.addItems(["SLOW", "MEDIUM", "FAST"])
@@ -9393,7 +11246,12 @@ class AllTestMeasurement(QDialog):
         #Connections Layout
         self.Connection_group = QGroupBox()
         Connection_layout = QFormLayout(self.Connection_group)
+        Checkbox_row = QHBoxLayout(self.Connection_group)
         Connection_layout.addRow(QPushButton_Widget4)
+        Checkbox_row.addWidget(self.QCheckBox_USB_Widget)
+        Checkbox_row.addWidget(self.QCheckBox_IP_Widget)
+        Checkbox_row.addWidget(self.QCheckBox_Hostname_Widget)
+        Connection_layout.addRow(QLabel_Connection_Selection, Checkbox_row)
         Connection_layout.addRow(QLabel_DUT, self.QComboBox_DUT)
         Connection_layout.addRow(QLabel_AC_Supply_Type, self.QComboBox_AC_Supply_Type)
         Connection_layout.addRow(QLabel_PSU_VisaAddress, self.QLineEdit_PSU_VisaAddress)
@@ -9497,13 +11355,16 @@ class AllTestMeasurement(QDialog):
         self.oscilloscope_form.addRow(QLabel_Trigger_SlopeMode, self.QComboBox_Trigger_SlopeMode)
         self.oscilloscope_form.addRow(QLabel_TimeScale, self.QLineEdit_TimeScale)
         self.oscilloscope_form.addRow(QLabel_VerticalScale, self.QLineEdit_VerticalScale)
+        self.oscilloscope_form.addRow(self.QCheckBox_SpecialCase_Widget)
+        self.oscilloscope_form.addRow(self.QCheckBox_NormalCase_Widget)
 
-        #Transient Recovery Test conditions
+
+        """#Transient Recovery Test conditions
         self.performtest_widget = QGroupBox()
         self.performtest_layout = QFormLayout(self.performtest_widget)
         self.performtest_layout.addRow(self.QCheckBox_SpecialCase_Widget)
         self.performtest_layout.addRow(self.QCheckBox_NormalCase_Widget)
-
+"""
         #Collection and Delay
         self.collection_group = QGroupBox()
         self.collection_group_layout = QFormLayout(self.collection_group)
@@ -9523,11 +11384,13 @@ class AllTestMeasurement(QDialog):
         exec_layout.addRow(QPushButton_Widget2)
         exec_layout.addRow(self.QPushButton_Widget1)  
         exec_layout.addRow(self.abort_button) 
+        exec_layout.addRow(self.show_plot_button)
 
         exec_layout_box.addLayout(exec_layout)
  
-        Right_container.addLayout(save_path_layout)
+        Right_container.addLayout(save_path_layout)         #Need changes
         Right_container.addLayout(exec_layout_box)
+        Right_container.addWidget(self.plot_widget)
 
         #Setting Form Layout with Left Container
         top_widget = QWidget()
@@ -9556,7 +11419,7 @@ class AllTestMeasurement(QDialog):
         setting_layout.addRow(self.OVP_error_widget)
         setting_layout.addRow(self.Ratings_Widget)
         setting_layout.addRow(self.oscilloscope_settings_widget)
-        setting_layout.addRow(self.performtest_widget)
+        #setting_layout.addRow(self.performtest_widget)
         setting_layout.addRow(Desp7)
         setting_layout.addRow(self.collection_group)
 
@@ -9637,8 +11500,6 @@ class AllTestMeasurement(QDialog):
         self.QLineEdit_Programming_Response_Down_NoLoad.textEdited.connect(self.Programming_Response_Down_NoLoad_changed)
         self.QLineEdit_Programming_Response_Down_FullLoad.textEdited.connect(self.Programming_Response_Down_FullLoad_changed)
 
-        #Oscilloscope Settings
-        
         #Voltage/Current/Power changed
         self.QLineEdit_current_rated.textEdited.connect(self.Current_Rating_changed)
         self.QLineEdit_voltage_rated.textEdited.connect(self.Voltage_Rating_changed)
@@ -9700,6 +11561,120 @@ class AllTestMeasurement(QDialog):
         self.select_button()
         self.InteractiveAction()
         self.Image_Label_Setup()
+    
+    def stop_worker(self):
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            self.worker.request_stop()
+            self.OutputBox.append("Stop requested, waiting for worker to finish...")
+    
+    def update_plot(self, Vset, Iset, V_prog, V_read, I_read, prog_verror, read_verror, prog_percent, read_percent, prog_upper_bound, prog_lower_bound, read_upper_bound, read_lower_bound):
+        #Shamman changes 
+        self.params.counter += 1 
+        self.params.x_data.append(self.params.counter)
+        self.params.prog_data.append(prog_verror)
+        self.params.read_data.append(read_verror)
+        self.params.up_data.append(prog_upper_bound)
+        self.params.low_data.append(prog_lower_bound)
+
+        #keep only the latest 100 points for better performance
+        if len(self.params.x_data) > 100:
+            self.params.x_data = self.params.x_data[-100:]
+            self.params.prog_data = self.params.prog_data[-100:]
+            self.params.read_data = self.params.read_data[-100:]
+            self.params.up_data = self.params.up_data[-100:]
+            self.params.low_data = self.params.low_data[-100:]
+        
+        self.programming_curve.setData(self.params.x_data, self.params.prog_data)
+        self.readback_curve.setData(self.params.x_data, self.params.read_data)
+        self.prog_up_bound.setData(self.params.x_data, self.params.up_data)
+        self.prog_low_bound.setData(self.params.x_data, self.params.low_data)
+
+        # ✅ WRITE CSV ROW HERE  #Shamman changes (Note that percentage error boundary is bounded to 100 and -100)
+        if self.csv_writer:
+            self.data_index += 1
+            self.csv_writer.writerow([
+                self.data_index,
+                Vset,
+                Iset,
+                V_prog,
+                V_read,
+                I_read,
+                prog_verror,
+                read_verror,
+                prog_percent,
+                read_percent,
+                prog_upper_bound,
+                prog_lower_bound,  
+                read_upper_bound,
+                read_lower_bound
+            ])
+            self.csv_file.flush()
+
+        # ---- CURRENT BLOCK DIVIDER ----   #Shamman changes
+        if self.last_Iset is None or abs(Iset - self.last_Iset) > 1e-6:
+            self.OutputBox.append(
+                f"<br><b>===== Current Set: {Iset:.0f}A =====</b>"
+            )
+            self.last_Iset = Iset
+
+        # determine pass/fail
+        PASS = (
+            prog_lower_bound <= prog_verror <= prog_upper_bound
+            and
+            read_lower_bound <= read_verror <= read_upper_bound
+        )
+
+        status = "Pass" if PASS else "Fail"
+
+        log_line = f"[{self.data_index}] {Iset:.0f}A : {Vset:.0f}V : {status}"
+        
+        color = "green" if PASS else "red"
+        self.OutputBox.append(f'<span style="color:{color};">{log_line}</span>')
+
+        if not PASS and not self.fail_prompt_active:
+            self.fail_prompt_active = True
+
+            self.worker.pause()  # pause test loop
+            self.handle_test_failure()
+
+    def handle_test_failure(self):
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Test Failure Detected")
+
+        msg.setText("A test point failure has been detected.")
+
+        ignore_btn = msg.addButton("Ignore and Continue", QMessageBox.AcceptRole)
+        terminate_btn = msg.addButton("Terminate Test", QMessageBox.RejectRole)
+
+        msg.exec_()
+
+        if msg.clickedButton() == ignore_btn:
+            self.fail_prompt_active = False
+            self.worker.resume()
+            self.OutputBox.append(
+                "<span style='color:orange;'>⚠ Failure ignored by operator — test resumed</span>"
+            )
+        elif msg.clickedButton() == terminate_btn:
+            self.worker.stop()
+            self.OutputBox.append(
+                "<span style='color:red;'>⛔ Test terminated by operator</span>"
+            )
+
+    def pause(self):
+        self._paused = True
+
+    def resume(self):
+        self._paused = False
+
+    def stop(self):
+        self._running = False
+
+    def update_status(self, message):
+        self.OutputBox.append(message)
+    
+    def show_error(self, error_message):
+        QMessageBox.critical(self, "Error", error_message)
  
     def select_button(self):
         sender = self.sender()
@@ -9796,53 +11771,48 @@ class AllTestMeasurement(QDialog):
     
     def rshunt_changed(self, value):
         self.params.rshunt = value
-
-    def doFind(self):
+    
+    def doFind(self):       #Shamman changes
         try:
+            # Clear GUI fields
             self.QLineEdit_PSU_VisaAddress.clear()
             self.QLineEdit_DMM_VisaAddressforVoltage.clear()
             self.QLineEdit_DMM_VisaAddressforCurrent.clear()
             self.QLineEdit_OSC_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
+            self.OutputBox.clear()
 
-            self.visaIdList, self.nameList, instrument_roles = NewGetVisaSCPIResources()
+            # 🔑 Call the dispatcher
+            self.visaIdList, self.nameList, instrument_roles = ScanSelectedVisaResources(self)
 
-            for i in range(len(self.nameList)):
-                self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
-                self.QLineEdit_PSU_VisaAddress.addItems([str(self.visaIdList[i])])
-                self.QLineEdit_OSC_VisaAddress.addItems([str(self.visaIdList[i])])
-                self.QLineEdit_DMM_VisaAddressforVoltage.addItems([str(self.visaIdList[i])])
-                self.QLineEdit_DMM_VisaAddressforCurrent.addItems([str(self.visaIdList[i])])
-                self.QLineEdit_ELoad_VisaAddress.addItems([str(self.visaIdList[i])])
+            for visa_id, name in zip(self.visaIdList, self.nameList):
+                self.OutputBox.append(f"{name}  {visa_id}")
 
-            if 'PSU' in instrument_roles:
-                psu_index = self.visaIdList.index(instrument_roles['PSU'])
-                self.QLineEdit_PSU_VisaAddress.setCurrentIndex(psu_index)
+                self.QLineEdit_PSU_VisaAddress.addItem(visa_id)
+                self.QLineEdit_OSC_VisaAddress.addItem(visa_id)
+                self.QLineEdit_DMM_VisaAddressforVoltage.addItem(visa_id)
+                self.QLineEdit_DMM_VisaAddressforCurrent.addItem(visa_id)
+                self.QLineEdit_ELoad_VisaAddress.addItem(visa_id)
 
-            if 'ELOAD' in instrument_roles:
-                eload_index = self.visaIdList.index(instrument_roles['ELOAD'])
-                self.QLineEdit_ELoad_VisaAddress.setCurrentIndex(eload_index)
+            # Auto-assign roles
+            role_widget_map = {
+                'PSU': self.QLineEdit_PSU_VisaAddress,
+                'ELOAD': self.QLineEdit_ELoad_VisaAddress,
+                'DMM': self.QLineEdit_DMM_VisaAddressforVoltage,
+                'DMM2': self.QLineEdit_DMM_VisaAddressforCurrent,
+                'SCOPE': self.QLineEdit_OSC_VisaAddress
+            }
 
-            if 'DMM' in instrument_roles:
-                dmm_index = self.visaIdList.index(instrument_roles['DMM'])
-                self.QLineEdit_DMM_VisaAddressforVoltage.setCurrentIndex(dmm_index)
+            for role, visa in instrument_roles.items():
+                if role in role_widget_map and visa in self.visaIdList:
+                    idx = self.visaIdList.index(visa)
+                    role_widget_map[role].setCurrentIndex(idx)
 
-            if 'DMM2' in instrument_roles:
-                dmm2_index = self.visaIdList.index(instrument_roles['DMM2'])
-                self.QLineEdit_DMM_VisaAddressforCurrent.setCurrentIndex(dmm2_index)
+        except Exception as e:
+            self.OutputBox.append("No Devices Found!!! " + str(e))
+        return
 
-            if 'SCOPE' in instrument_roles:
-                osc_index = self.visaIdList.index(instrument_roles['SCOPE'])
-                self.QLineEdit_OSC_VisaAddress.setCurrentIndex(osc_index)
-            
-            if 'ACSource' in instrument_roles:
-                AC_index = self.visaIdList.index(instrument_roles['ACSource'])
-                self.QComboBox_AC_Supply_Type.setCurrentIndex(1)
-           
-        except:
-            self.OutputBox.append("No Devices Found!!!")
-        return   
-
+    
     def updatedelay_changed(self, value):
         self.params.updatedelay = value
 
@@ -10212,6 +12182,7 @@ class AllTestMeasurement(QDialog):
         #OCP Test Selected
         if not self.QCheckBox_OCP_Test_Widget.isChecked():
             self.QLineEdit_OCP_Level.setEnabled(False)
+            self.oscilloscope_settings_widget.setVisible(False)        
         else:
             self.QLineEdit_OCP_Level.setEnabled(True)
             self.oscilloscope_settings_widget.setVisible(True)
@@ -10264,23 +12235,51 @@ class AllTestMeasurement(QDialog):
         else:
             self.QPushButton_Widget0.setStyleSheet("color: red")
     
-    def estimateTime(self):
+    def estimateTime(self, params: Parameters):
+        """
+        Estimate the total time for nested voltage/current loops,
+        considering update delay, number of loops, and power limit.
+        """
         try:
-            self.params.currloop = ((float(self.params.maxCurrent) - float(self.params.minCurrent))/ float(self.params.current_step_size)) + 1
-            self.params.voltloop = ((float(self.params.maxVoltage) - float(self.params.minVoltage))/ float(self.params.voltage_step_size)) + 1
+            # Read parameters from the Parameters instance
+            min_current = float(params.minCurrent)
+            max_current = float(params.maxCurrent)
+            current_step = float(params.current_step_size)
+            min_voltage = float(params.minVoltage)
+            max_voltage = float(params.maxVoltage)
+            voltage_step = float(params.voltage_step_size)
+            update_delay = float(params.updatedelay or 0)
+            num_loops = float(params.noofloop or 1)
+            power_limit = float(params.Power_Rating or float('inf'))  # Use power rating if available
 
-            if self.params.updatedelay == 0.0:
-                constant = 0
-            else:
-                constant = 1
+            # Calculate number of steps
+            curr_steps = int((max_current - min_current) / current_step) + 1
+            volt_steps = int((max_voltage - min_voltage) / voltage_step) + 1
 
-            self.params.estimatetime = (self.params.currloop * self.params.voltloop *(0.2 + 0.8 + (float(self.params.updatedelay) * constant) )) * float(self.params.noofloop)
-            self.OutputBox.append(f"{self.params.estimatetime} seconds")
-            self.OutputBox.append("") 
+            total_steps = 0
+
+            # Count only voltage/current combinations that are within the power limit
+            for i in range(curr_steps):
+                curr = min_current + i * current_step
+                for j in range(volt_steps):
+                    volt = min_voltage + j * voltage_step
+                    if volt * curr <= power_limit:  # Skip steps exceeding power limit
+                        total_steps += 1
+
+            # Estimate time per step
+            time_per_step = 1.0 + update_delay if update_delay > 0 else 1.0
+
+            # Total estimated time
+            params.estimatetime = total_steps * time_per_step * num_loops
+
+            # Show in OutputBox if available
+            if hasattr(self, "OutputBox") and self.OutputBox:
+                self.OutputBox.append(f"{params.estimatetime:.2f} seconds")
+                self.OutputBox.append("")
+
         except Exception as e:
-            QMessageBox.warning(self, "Warning", "Input cannot be empty!")
+            QMessageBox.warning(self, "Warning", f"Input error: {e}")
             return
-
 
     def savepath(self):
         self.OutputBox.clear()
@@ -10375,6 +12374,9 @@ class AllTestMeasurement(QDialog):
             self.setEnabled(False)
             self.OutputBox.clear()
 
+            self.plot_window = VoltageAccuracyPlotWindow()      #Shamman changes
+            self.plot_window.show()
+
             #Default parameters to be check before test start
             params = {
                 "savedir":self.params.savelocation,
@@ -10418,6 +12420,8 @@ class AllTestMeasurement(QDialog):
                 "InputZ":self.params.inputZ,
                 "UpTime":self.params.UpTime,
                 "DownTime":self.params.DownTime,
+
+             
             }
 
             #Parameters to be check if specific test was selected
@@ -10540,7 +12544,39 @@ class AllTestMeasurement(QDialog):
                     self.progress_label.setVisible(True)
                     self.abort_button.setVisible(True)
                     self.abort_button.setEnabled(True)
+                    self.show_plot_button.setVisible(True)
+                    self.show_plot_button.setEnabled(True)
                     self.QPushButton_Widget1.setEnabled(False)
+
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")  #Shamman changes
+                    csv_path = os.path.join(
+                        self.params.savelocation,
+                        f"realtime_voltage_data_{timestamp}.csv"
+                    )
+
+                    self.csv_file = open(csv_path, "w", newline="")
+                    self.csv_writer = csv.writer(self.csv_file)
+
+                    # Header row
+                    self.csv_writer.writerow([
+                        "Index",
+                        "Set_Voltage",
+                        "Set_Current", 
+                        "Programming_Voltage",
+                        "Readback_Voltage",
+                        "Readback_Current",     #Shamman changes
+                        "Programming_Voltage_Error",
+                        "Readback_Voltage_Error",
+                        "Programming_Voltage_Percentage_Error",
+                        "Readback_Voltage_Percentage_Error",
+                        "Programming_Upper_Limit_Boundary",
+                        "Programming_Lower_Limit_Boundary",
+                        "Readback_Upper_Limit_Boundary",
+                        "Readback_lower_Limit_Boundary"
+                    ])
+                    self.csv_file.flush()
+
+                    self.data_index = 0
                                             
                     # Create and start worker
                     self.worker = None
@@ -10550,7 +12586,13 @@ class AllTestMeasurement(QDialog):
                     self.worker.progress_value.connect(self.update_progress_bar)
                     self.worker.finished.connect(self.test_finished)
                     self.worker.aborted.connect(self.test_aborted)
-                    self.worker.error.connect(lambda e, tb: show_error_dialog(self, e, tb))
+                    self.worker.error.connect(self.handle_test_error)  #Shamman changes made to redirect errors to new handler
+                    self.worker.new_data.connect(self.update_plot)
+                    self.worker.progress.connect(self.update_status)
+                    self.worker.error.connect(self.show_error)
+                    self.worker.popup_data.connect(self.plot_window.popup_plot)    #Shamman changes
+                    #self.worker.fail_signal.connect(self.on_voltage_fail)
+                    #self.worker.decision_signal.connect(self.worker.receive_decision)
                     self.worker.start()
                 else:
                     print("Test canceled by user")
@@ -10595,6 +12637,41 @@ class AllTestMeasurement(QDialog):
             self.worker.wait(2000)
             self.test_aborted()
 
+    def cleanup_test(self, reason="unknown"):       #Shamman changes
+        print(f"Cleaning up test due to: {reason}")
+
+        # Close CSV safely
+        if hasattr(self, "csv_file") and self.csv_file:
+            try:
+                self.csv_file.flush()
+                self.csv_file.close()
+            except Exception as e:
+                print("CSV cleanup error:", e)
+
+            self.csv_file = None
+            self.csv_writer = None
+
+        # Reset instruments (never crash cleanup)
+        try:
+            RESET.ResetInstrument(self, self.dict_reset)
+        except Exception as e:
+            print("Reset failed during cleanup:", e)
+
+        # Clean up worker
+        if self.worker:
+            self.worker.deleteLater()
+            self.worker = None
+
+    #Triggers when program experience crash
+    def handle_test_error(self, exception, traceback_str):    #Shamman changes
+        # Show error (same behavior as before)
+        show_error_dialog(self, exception, traceback_str)
+
+        # Log in output box (optional)
+        self.OutputBox.append("❌ Test crashed due to an error")
+
+        # Perform the SAME cleanup as abort
+        self.cleanup_test(reason="crash")
 
     def test_finished(self):
         """Called when the test finishes (completed or aborted)"""
@@ -10604,6 +12681,9 @@ class AllTestMeasurement(QDialog):
         self.abort_button.setVisible(False)
         self.abort_button.setText("Abort")
         self.abort_button.setEnabled(False)
+        self.show_plot_button.setVisible(False)
+        self.show_plot_button.setText("Show Plot")
+        self.show_plot_button.setEnabled(False)
         self.QPushButton_Widget1.setEnabled(True)
                  
         self.OutputBox.append("Test finished ✅")
@@ -10619,7 +12699,7 @@ class AllTestMeasurement(QDialog):
                     self.image_dialog.setModal(True)
                     self.image_dialog.show()
                 except:
-                    pass  # Handle case where image window fails
+                    pass  # Handle case where image window fails`
 
         # Clean up worker
         if self.worker:
@@ -10627,6 +12707,12 @@ class AllTestMeasurement(QDialog):
             self.worker = None
                  
         print("Test operation finished")
+
+        if hasattr(self, "csv_file"):   #Shamman changes
+            try:
+                self.csv_file.close()
+            except:
+                pass
 
     def test_aborted(self):
         """Called when the test is aborted"""
@@ -10636,12 +12722,20 @@ class AllTestMeasurement(QDialog):
         self.abort_button.setVisible(False)
         self.abort_button.setText("Abort")
         self.abort_button.setEnabled(False)
+        self.show_plot_button.setVisible(False)
+        self.show_plot_button.setText("Show Plot")
+        self.show_plot_button.setEnabled(False)
         self.QPushButton_Widget1.setEnabled(True)
         
         # Show abort message
         self.OutputBox.append("Test operation aborted ❌")
 
-        RESET.ResetInstrument(self,self.dict_reset)
+        self.cleanup_test(reason="aborted") #Shamman changes 
+
+        try:   #Shamman changes
+            RESET.ResetInstrument(self, self.dict_reset)
+        except Exception as e:
+            print("Reset failed during abort:", e)
 
         # Clean up worker
         if self.worker:
@@ -10650,12 +12744,52 @@ class AllTestMeasurement(QDialog):
         
         print("Test operation aborted")
 
+        if hasattr(self, "csv_file") and self.csv_file:  #Shamman changes
+            try:
+                self.csv_file.flush()
+                self.csv_file.close()
+            except Exception as e:
+                print("CSV close error:", e)
+
+            self.csv_file = None
+            self.csv_writer = None
+
+    def show_popup_plot(self):      #Shamman changes to call back the plot_window
+        self.plot_window.show()
+        self.plot_window.raise_()
+        self.plot_window.activateWindow()
+
+    '''def on_voltage_fail(self, error_value):     #Shamman changes
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Voltage Accuracy FAIL")
+        msg.setText(
+            f"Voltage accuracy test failed.\n\n"
+            f"Error value: {error_value:.6f} V\n\n"
+            "Do you want to continue the test?"
+        )
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+
+        response = msg.exec_()
+
+        if response == QMessageBox.Yes:
+            self.worker.decision_signal.emit(True)
+        else:
+            self.worker.decision_signal.emit(False)'''
+
 class TestWorker(QThread):
     progress = pyqtSignal(str)
     progress_value = pyqtSignal(int) 
     finished = pyqtSignal()
     error = pyqtSignal(Exception, str)
     aborted = pyqtSignal() 
+    new_data = pyqtSignal(float, float, float, float, float, float, float, float, float, float, float, float, float, float, float)  #Shamman changes for Vset, Iset, PSU readback voltage, and PSU readback current 
+    popup_data = pyqtSignal(float, float, float, float, float, float, float, float, float, float) #Shamman changes
+    test_failed = pyqtSignal(dict)   # send context
+    resume_test = pyqtSignal()
+    stop_test = pyqtSignal()
+    #fail_signal = pyqtSignal(float)     # send error value
+    #decision_signal = pyqtSignal(bool)  # receive Continue / Abort
 
     def __init__(self, checkbox_state, dict, params):
         super().__init__()
@@ -10666,12 +12800,18 @@ class TestWorker(QThread):
         self.infoList = []
         self.dataList = []
         self.dataList2 = []
+        self.ProgrammingV_percent_error_list = []
+        self.ReadbackV_percent_error_list = []
         self.results = []
         self.results2 = []
         self.currenttime = None
 
         self.was_aborted = False
         self.force_exit = False   # ✅ Add this line
+
+    '''@pyqtSlot(bool)         #Shamman changes
+    def receive_decision(self, decision):
+        self.decision = decision'''
 
     def run(self):
         try:
@@ -10684,7 +12824,7 @@ class TestWorker(QThread):
                         for ch in self.dict["PSU_Channel"]:
                             (infoList,
                             dataList,
-                            dataList2)= NewVoltageMeasurement.Execute_Voltage_Accuracy(self, self.dict, ch)
+                            dataList2)= NewVoltageMeasurement.Execute_Voltage_Accuracy(self, self.dict, ch, worker=self)
 
                             #Measurement Completion
                             if (int(self.params["noofloop"]) - 1) <= 0:
@@ -10749,7 +12889,7 @@ class TestWorker(QThread):
             elif self.checkbox_states["Current_Test"]:
                 #Current Accuracy Test
                 if self.checkbox_states.get("CurrentAccuracy"):
-                    if self.params["Instrument"] == "Keysight":
+                    if self.dict["Instrument"] == "Keysight":
                         for ch in self.params["PSU_Channel"]:
                             (infoList,
                             dataList,
@@ -10763,7 +12903,7 @@ class TestWorker(QThread):
                                 if self.checkbox_states["DataReport"]:
 
                                     #Export data to CSV and Graph (Refer data.py for details)
-                                    instrumentData(self.params.PSU, self.params.DMM, self.params.ELoad)
+                                    instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
                                     datatoCSV_Accuracy2(infoList, dataList, dataList2)
                                     datatoGraph2(infoList, dataList,dataList2)
                                     datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
@@ -10775,7 +12915,7 @@ class TestWorker(QThread):
                                     df.to_csv(os.path.join(csv_folder,"config.csv"))
 
                                     #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
-                                    A = xlreport(save_directory=self.params["savedir"], file_name=str(self.params["unit"]))
+                                    A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
                                     A.run()
                                     self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
                                     self.progress.emit("")
@@ -10860,6 +13000,102 @@ class TestWorker(QThread):
             self.error.emit(e, tb)
         finally:
             self.finished.emit()
+
+        try:        #Shamman changes
+            # main test loop
+            ...
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            self.error.emit(e, tb)
+
+class VoltageAccuracyPlotWindow(QWidget): #Shamman changes
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Voltage Accuracy Monitor")
+        self.resize(900, 600)
+
+        self.x = []
+        self.prog_data = []
+        self.rb_data = []
+        self.prog_up_data = []
+        self.prog_low_data = []
+        self.rb_up_data = []
+        self.rb_low_data = []
+        self.prog_perc_data = []
+        self.rb_perc_data = []
+        self.perc_up_data = []
+        self.perc_low_data = []
+
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QGridLayout(self)
+
+        # Programming plot
+        self.prog_plot = pg.PlotWidget(title="Programming Voltage Absolute Error")
+        self.programming_curve = self.prog_plot.plot(pen=pg.mkPen('r', width=3))
+        self.prog_upper_boundary = self.prog_plot.plot(pen=pg.mkPen("y",width = 3))
+        self.prog_lower_boundary = self.prog_plot.plot(pen=pg.mkPen("y",width = 3))
+        layout.addWidget(self.prog_plot, 0 ,0)
+
+        # Readback plot
+        self.rb_plot = pg.PlotWidget(title="Readback Voltage Absolute Error")
+        self.readback_curve = self.rb_plot.plot(pen=pg.mkPen('b', width=3))
+        self.rb_upper_boundary = self.rb_plot.plot(pen=pg.mkPen("y",width = 3))
+        self.rb_lower_boundary = self.rb_plot.plot(pen=pg.mkPen("y",width = 3))
+        layout.addWidget(self.rb_plot, 0, 1)
+
+        # Programming Percentage Error plot
+        self.prog_perc_plot = pg.PlotWidget(title="Programming Voltage Percentage Error (%)")
+        self.programming_percentage_curve = self.prog_perc_plot.plot(pen=pg.mkPen('r', width=3))
+        self.prog_perc_upper_boundary = self.prog_perc_plot.plot(pen=pg.mkPen("y",width = 3))
+        self.prog_perc_lower_boundary = self.prog_perc_plot.plot(pen=pg.mkPen("y",width = 3))
+        layout.addWidget(self.prog_perc_plot, 1, 0)
+        
+        # Readback Percentage Error plot
+        self.rb_perc_plot = pg.PlotWidget(title="Readback Voltage Percentage Error (%)")
+        self.readback_percentage_curve = self.rb_perc_plot.plot(pen=pg.mkPen('b', width=3))
+        self.rb_perc_upper_boundary = self.rb_perc_plot.plot(pen=pg.mkPen("y",width = 3))
+        self.rb_perc_lower_boundary = self.rb_perc_plot.plot(pen=pg.mkPen("y",width = 3))      
+        layout.addWidget(self.rb_perc_plot, 1, 1)  
+
+        self.setLayout(layout)
+
+
+    @pyqtSlot(float, float, float, float, float, float, float, float, float, float)
+    def popup_plot(self, prog_err, rb_err, prog_up_bound, prog_low_bound, rb_up_bound, rb_low_bound, prog_percent, read_percent, perc_up_bound, perc_low_bound):
+        i = len(self.x)
+        self.x.append(i)
+        self.prog_data.append(prog_err)
+        self.prog_up_data.append(prog_up_bound)
+        self.prog_low_data.append(prog_low_bound)
+        self.rb_data.append(rb_err)
+        self.rb_up_data.append(rb_up_bound)
+        self.rb_low_data.append(rb_low_bound)
+        self.prog_perc_data.append(prog_percent)
+        self.rb_perc_data.append(read_percent)
+        self.perc_up_data.append(perc_up_bound)
+        self.perc_low_data.append(perc_low_bound)
+
+        self.programming_curve.setData(self.x, self.prog_data)
+        self.prog_upper_boundary.setData(self.x, self.prog_up_data)
+        self.prog_lower_boundary.setData(self.x, self.prog_low_data)
+        self.readback_curve.setData(self.x, self.rb_data)
+        self.rb_upper_boundary.setData(self.x, self.rb_up_data)
+        self.rb_lower_boundary.setData(self.x, self.rb_low_data)
+        self.programming_percentage_curve.setData(self.x, self.prog_perc_data)
+        self.prog_perc_upper_boundary.setData(self.x, self.perc_up_data)
+        self.prog_perc_lower_boundary.setData(self.x, self.perc_low_data)
+        self.readback_percentage_curve.setData(self.x, self.rb_perc_data)
+        self.rb_perc_upper_boundary.setData(self.x, self.perc_up_data)
+        self.rb_perc_lower_boundary.setData(self.x, self.perc_low_data)
+
+    def closeEvent(self, event):
+        event.ignore()   # stop Qt from destroying the window
+        self.hide()      # just hide it
+
+
 
 class AdvancedSettings(QDialog):
     """This class is to configure the Advanced Settings when conducting voltage measurements,

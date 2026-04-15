@@ -23,29 +23,29 @@ class Subsystem(object):
         state: A boolean representing if the function should be enabled or disabled.
     """
 
-    def __init__(self, VISA_ADDRESS, timeout=20000):
-        """Initialize the instance where the Instrument is ready to receive commands
-
-        Object rm is created where the backend will find the shared VISA Library. VISA_Address is given as
-        an argument to declare which resources (in this case, the instruments) to use.
-
-        Args:
-            VISA_ADDRESS: String Literal of VISA Address of the Instrument.
-            timeout: The timeout value for VISA communication in milliseconds (default is 20000 ms).
-        """
+    def __init__(self, VISA_ADDRESS, timeout=5000):
+        """Initialize the VISA instrument with proper VXI-11 support."""
         self.VISA_ADDRESS = VISA_ADDRESS
-        self.timeout = timeout  # Store the timeout value
 
-        # ResourceManager Setup
         rm = pyvisa.ResourceManager()
-        try:
-            # Visa Address is found under Keysight Connection Expert
-            self.instr = rm.open_resource(self.VISA_ADDRESS)
-            self.instr.timeout = self.timeout  # Set the timeout for the instrument
-        except pyvisa.VisaIOError as e:
-            print(f"VISA IO Error: {e.args}")
-            self.instr = None  # Ensure instr is set to None if there's an error
 
+        try:
+            # Open resource normally (VXI-11 or USB or GPIB)
+            self.instr = rm.open_resource(self.VISA_ADDRESS)
+
+            # --- Important for VXI-11 ---
+            self.instr.write_termination = '\n'
+            self.instr.read_termination  = '\n'
+
+            # Timeout (ms)
+            self.instr.timeout = timeout     # one place only
+
+            # Recommended: increase buffer if reading large block data
+            self.instr.read_buffer_size = 20000
+
+        except pyvisa.VisaIOError as e:
+            print(f"VISA IO Error: {e}")
+            self.instr = None
 
 class Abort(Subsystem):
     """Child Class for Abort Subsystem"""
@@ -917,6 +917,9 @@ class Voltage(Subsystem):
 
     def __init__(self, VISA_ADDRESS):
         super().__init__(VISA_ADDRESS)
+    
+    def SourceVoltageLevel(self):
+        return self.instr.query("VOLT?")
 
     def setOutputVoltage(self, Value):
         self.instr.write(f"VOLT {Value}")
@@ -1196,28 +1199,58 @@ class Hornbill(Subsystem):
     def __init__(self, VISA_ADDRESS):
         super().__init__(VISA_ADDRESS)
 
-    def setMode(self, mode):
-        self.instr.write(f"FUNC:MODE {mode}")
+    def sourVoltageLevelImmediateAmplitude(self, Value, ChannelNumber):
+        self.instr.write(f"SOURce:VOLTage:LEVel:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
+    
+    def sourCurrentLimitPOS(self, Value, ChannelNumber):
+        self.instr.write(f"SOURce:CURRent:LIMit:POS:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
 
-    def setFrequency(self, frequency):
-        self.instr.write(f"SOUR:FREQ {frequency}")
+    def senseVoltageSource(self, Mode, ChannelNumber):
+        self.instr.write(f"SOURce:VOLTage:SENSe:SOURce {Mode}, (@{ChannelNumber})")
+                
+    def outputState(self, state, ChannelNumber):
+        self.instr.write(f"OUTPut:STATe {state}, (@{ChannelNumber})")
 
-    def setPower(self, power):
-        self.instr.write(f"SOUR:POW {power}")
+    def measureVoltageDC(self, ChannelNumber):
+        return self.instr.query(f"MEASure:VOLTage:DC? (@{ChannelNumber})")
+    
+    def measureCurrentDC(self, ChannelNumber):
+        return self.instr.query(f"MEASure:CURRent:DC? (@{ChannelNumber})")
+    
+    def askSourCurrentLimitPOSImmediateAmplitude(self, Condition, ChannelNumber):
+        return self.instr.query(f"SOURce:CURRent:LIMit:POSitive:IMMediate:AMPLitude? {Condition}, (@{ChannelNumber})")
+    
+    def diagVoltageReadbacklocal(self):
+        self.instr.write("DIAG:PEEK? 20,2")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diagVoltageReadback_VMON_100k(self):
+        self.instr.write("DIAG:PEEK? 20,0,100000")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diagVoltageReadback_VMON_200k(self):
+        self.instr.write("DIAG:PEEK? 20,0,200000")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diagCurrentReadback_IMON_FULL_100k(self):
+        self.instr.write("DIAG:PEEK? 20,7,100000")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diagCurrentReadback_IMON_200uA_100k(self):
+        self.instr.write("DIAG:PEEK? 21,1,100000")
+        resp = self.instr.read_raw()
+        return resp
 
-    def outputOn(self):
-        self.instr.write("OUTP ON")
+    def diagCurrentReadback_IMON_2mA_100k(self):
+        self.instr.write("DIAG:PEEK? 26,6,100000")
+        resp = self.instr.read_raw()
+        return resp
 
-    def outputOff(self):
-        self.instr.write("OUTP OFF")
+    
 
-    def queryFrequency(self):
-        return self.instr.query("SOUR:FREQ?")
 
-    def queryPower(self):
-        return self.instr.query("SOUR:POW?")
-
-    def queryOutputState(self):
-        return self.instr.query("OUTP?")
-
-print ("Keysight SCPI command List Loaded.")
+    
