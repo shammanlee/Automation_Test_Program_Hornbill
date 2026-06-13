@@ -1041,6 +1041,9 @@ class Hornbill(Subsystem):
 
     def __init__(self, VISA_ADDRESS):
         super().__init__(VISA_ADDRESS)
+    
+    def setMode(self, Mode, ChannelNumber):
+        self.instr.write(f"FUNC {Mode},(@{ChannelNumber})")
 
     def sourVoltageLevelImmediateAmplitude(self, Value, ChannelNumber):
         self.instr.write(f"SOURce:VOLTage:LEVel:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
