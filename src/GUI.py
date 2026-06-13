@@ -222,7 +222,7 @@ def GetVisaSCPIResources(): #USB
 
     for resource in resource_list:
         # Only look for USB instruments (skip GPIB, TCPIP, etc.)
-        if not resource.startswith("USB"):
+        if not resource.startswith(("USB", "GPIB")):
             continue
 
         try:
@@ -231,7 +231,10 @@ def GetVisaSCPIResources(): #USB
             instrument.timeout = 2000  # shorter timeout for faster scanning
 
             # Identify instrument
-            idn = instrument.query("*IDN?").strip().upper()
+            try:
+                idn = instrument.query("*IDN?").strip().upper()
+            except:
+                idn = instrument.query("ID?").strip().upper()
 
             if idn and "," in idn:
                 available_visa_ids.append(resource)
