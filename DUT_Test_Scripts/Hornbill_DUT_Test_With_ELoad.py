@@ -118,7 +118,6 @@ class Dimport:
             Channel,
             Mode,
             Voltage,
-            ELOAD_E367XXA
         )
 
 #Check Visa IO address
@@ -199,13 +198,13 @@ class HornbillVoltageMeasurementwithELoad:
             SMU_N67XX,
             DMM_344XXA,
             DMM_3458A,
+            ELOAD_E367XXA,
         ) = Dimport.getClasses_Keysight(dict["Instrument"])
 
         (
             Channel,
             Mode,
             Voltage,
-            ELOAD_E367XXA,
         ) = Dimport.getClasses_Chroma(dict["Instrument"])
 
         #Channel Loop (For usage of All Channels, the channel is taken from Execute Function in GUI.py)
