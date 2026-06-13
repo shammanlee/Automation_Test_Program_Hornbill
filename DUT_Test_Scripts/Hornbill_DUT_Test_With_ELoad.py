@@ -373,11 +373,7 @@ class HornbillVoltageMeasurementwithELoad:
                 sleep(1)
                 #self.dataList2.insert(k, [float(temp_values), float(temp_values2)])
                 self.dataList2.insert(k, [float(cleandiagVmon), float(cleandiagImon)])
-
-                if worker is not None:
-                    worker.new_data.emit(float(cleandiagVmon), float(cleandiagVmon))
-                
-                
+               
                 
                 if dict["DMM_Model"] == "344xxA":
                     #INIT DMM (Trigger Measurement)
@@ -419,6 +415,22 @@ class HornbillVoltageMeasurementwithELoad:
                                 
                                 k, [voltagemeasured , 0]
                     )
+                
+                if worker is not None:
+                    prog_percent = (voltagemeasured - V)/V*100
+                    read_percent = (cleandiagVmon - voltagemeasured)/voltagemeasured*100
+                    prog_upper_bound = (V*self.param1) + self.param2
+                    prog_lower_bound = -prog_upper_bound
+                    read_upper_bound = (V*self.param3) + self.param4
+                    read_lower_bound = -read_upper_bound
+                    perc_up_bound = 100
+                    perc_low_bound = -100
+                    worker.new_data.emit(V, I_fixed, cleandiagVmon, voltagemeasured, cleandiagImon, voltagemeasured - V, \
+                                         temp_values - voltagemeasured, prog_percent, read_percent, prog_upper_bound, prog_lower_bound, \
+                                        read_upper_bound, read_lower_bound, perc_up_bound, perc_low_bound)
+                    worker.popup_data.emit(voltagemeasured - V, cleandiagVmon - voltagemeasured, prog_upper_bound, prog_lower_bound, \
+                                           read_upper_bound, read_lower_bound, prog_percent, read_percent, perc_up_bound, perc_low_bound)
+                
 
                 #Increment of Steps
                 #Delay(dict["PSU"]).write(dict["DownTime"])
