@@ -211,7 +211,7 @@ class HornbillVoltageMeasurementwithELoad:
 
         #Assign Instrument Object and Initialize the Instrument based on the VISA Address given in GUI
         psu = Hornbill(dict["PSU"])
-        psu.setMode("VOLTAGE")
+        psu.setMode("VOLTAGE", ch)
         psu.senseVoltageSource(dict["VoltageSense"], ch)
         psu.sourCurrentLimitPOS("MAXimum", ch)         #Current LIMIT (Max for Voltage Accuracy)
         psu.outputState("ON", ch) #Turn On the PSU and Eload
