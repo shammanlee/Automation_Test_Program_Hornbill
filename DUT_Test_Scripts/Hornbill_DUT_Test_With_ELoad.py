@@ -344,7 +344,7 @@ class HornbillVoltageMeasurementwithELoad:
                 sleep(float(self.updatedelay))
 
                 #Readback Voltage and Current
-                diagVmon_raw = psu.diagVoltageReadback_VMON_100k()
+                diagVmon_raw = psu.diag_PEEK_diagVoltageReadback_VMON_100k()
                 sleep(1)
                 # Decode from bytes to string
                 diagVmon_str = diagVmon_raw.decode().strip()
@@ -358,7 +358,7 @@ class HornbillVoltageMeasurementwithELoad:
                 WAI(dict["PSU"])
 
                 #temp_values2 = psu.measureCurrentDC(ch)
-                diagImon_raw = psu.diagCurrentReadback_IMON_FULL_100k()
+                diagImon_raw = psu.diag_PEEK_diagCurrentReadback_IMON_FULL_100k()
                 sleep(1)
                 # Decode from bytes to string
                 diagImon_str = diagImon_raw.decode().strip()
