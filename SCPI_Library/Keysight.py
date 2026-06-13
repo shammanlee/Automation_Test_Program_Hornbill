@@ -12,7 +12,11 @@
 import pyvisa
 from time import sleep
 
-
+#########################################################################################################################################################
+#########################################################################################################################################################
+########################################### General SCPI Commands Library for Keysight Instruments ######################################################
+#########################################################################################################################################################
+#########################################################################################################################################################
 class Subsystem(object):
     """Parent Class for every SCPI Commands Subsystem
 
@@ -23,7 +27,7 @@ class Subsystem(object):
         state: A boolean representing if the function should be enabled or disabled.
     """
 
-    def __init__(self, VISA_ADDRESS, timeout=5000):
+    def __init__(self, VISA_ADDRESS, timeout=15000):
         """Initialize the VISA instrument with proper VXI-11 support."""
         self.VISA_ADDRESS = VISA_ADDRESS
 
@@ -46,6 +50,7 @@ class Subsystem(object):
         except pyvisa.VisaIOError as e:
             print(f"VISA IO Error: {e}")
             self.instr = None
+
 
 class Abort(Subsystem):
     """Child Class for Abort Subsystem"""
@@ -300,6 +305,7 @@ class Function(Subsystem):
     def setMode(self, MODE):
         self.instr.write(f"FUNC {MODE}")
 
+
 class Frequency(Subsystem):
     """Child Class for Frequency Subsystem (Designed for AC Source)"""
     
@@ -308,7 +314,8 @@ class Frequency(Subsystem):
 
     def setOutputFrequency (self, Value):
         self.instr.write(f"FREQ {Value}")
-        
+
+
 class Format(Subsystem):
     """Child Class for Format Subsystem"""
 
@@ -387,6 +394,7 @@ class Output(Subsystem):
     def SPModeConnection(self, state):
         self.instr.write(f"OUTP:PAIR {state}")
 
+
 class List(Subsystem):
     """Child Class for List Subsystem"""
 
@@ -462,6 +470,7 @@ class Measure(Subsystem):
 
         elif len(args) == 2:
             return self.instr.query(f"MEAS:{args[0]}:{args[1]}?(@{ChannelNumber})")
+
 
 class Memory(Subsystem):
     """Child Class for Memory Subsystem"""
@@ -1014,6 +1023,10 @@ class Voltage(Subsystem):
     def setAutoImpedanceMode(self, mode):
         self.instr.write(f"SENSe:VOLTage:DC:IMPedance:AUTO {mode}")
 
+
+############################################################################################################################################################
+##################################### Specific SCPI Commmands Library for Keysight Instruments ###############################################################
+############################################################################################################################################################
 class Excavator(Subsystem):
     
     def __init__(self, VISA_ADDRESS):
@@ -1022,7 +1035,94 @@ class Excavator(Subsystem):
     def setSYSTEMEMULationMode(self, mode):
         self.instr.write(f"SYSTem:EMULation {mode}")
 
-class SMU(Subsystem):
+
+class Hornbill(Subsystem):
+    """Child Class for Hornbill Subsystem"""
+
+    def __init__(self, VISA_ADDRESS):
+        super().__init__(VISA_ADDRESS)
+
+    def sourVoltageLevelImmediateAmplitude(self, Value, ChannelNumber):
+        self.instr.write(f"SOURce:VOLTage:LEVel:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
+    
+    def sourCurrentLimitPOS(self, Value, ChannelNumber):
+        self.instr.write(f"SOURce:CURRent:LIMit:POS:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
+
+    def senseVoltageSource(self, Mode, ChannelNumber):
+        self.instr.write(f"SOURce:VOLTage:SENSe:SOURce {Mode}, (@{ChannelNumber})")
+                
+    def outputState(self, state, ChannelNumber):
+        self.instr.write(f"OUTPut:STATe {state}, (@{ChannelNumber})")
+
+    def measureVoltageDC(self, ChannelNumber):
+        return self.instr.query(f"MEASure:VOLTage:DC? (@{ChannelNumber})")
+    
+    def measureCurrentDC(self, ChannelNumber):
+        return self.instr.query(f"MEASure:CURRent:DC? (@{ChannelNumber})")
+    
+    def askSourCurrentLimitPOSImmediateAmplitude(self, Condition, ChannelNumber):
+        return self.instr.query(f"SOURce:CURRent:LIMit:POSitive:IMMediate:AMPLitude? {Condition}, (@{ChannelNumber})")
+    
+
+    # DIAG Command for Hornbill
+    # Precision ADC input
+    #   0 : VMON
+    #   1 : IMON_200uA
+    #   2 : VLOC
+    #   3 : IMON_200mA
+    #   4 : IMON_20mA
+    #   5 : IMON_2A
+    #   6 : IMON_2mA
+    #   7 : IMON_FULL
+
+    def diag_POKE_Apply_Calibration_Constant(self, ChannelNumber, value):
+        self.instr.write(f"DIAG:POKE 23{ChannelNumber},{value}")
+    
+    def diag_POKE_SMR_200uA_2mA_20mA_200mA_AnalogSwitch_Control(self, ChannelNumber, state):
+        self.instr.write(f"DIAG:POKE 20{ChannelNumber},{state}")
+
+    def diag_PEEK_VoltageReadback_VMON_100k(self):
+        self.instr.write("DIAG:PEEK? 20,0,100000")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diag_PEEK_CurrentReadback_IMON_200uA_100k(self):
+        self.instr.write("DIAG:PEEK? 20,1,100000")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diag_PEEK_VoltageReadback_VLOC_100k(self):
+        self.instr.write("DIAG:PEEK? 20,2")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diag_PEEK_CurrentReadback_IMON_200mA_100k(self):
+        self.instr.write("DIAG:PEEK? 20,3,100000")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diag_PEEK_CurrentReadback_IMON_20mA_100k(self):
+        self.instr.write("DIAG:PEEK? 20,4,100000")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diag_PEEK_CurrentReadback_IMON_2A_100k(self):
+        self.instr.write("DIAG:PEEK? 20,5,100000")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diag_PEEK_CurrentReadback_IMON_2mA_100k(self):
+        self.instr.write("DIAG:PEEK? 20,6,100000")
+        resp = self.instr.read_raw()
+        return resp
+    
+    def diag_PEEK_CurrentReadback_IMON_FULL_100k(self):
+        self.instr.write("DIAG:PEEK? 20,7,100000")
+        resp = self.instr.read_raw()
+        return resp
+    
+
+class SMU_N67XX(Subsystem):
     
     def __init__(self,VISA_ADDRESS):
         super().__init__(VISA_ADDRESS)
@@ -1192,65 +1292,102 @@ class Oscilloscope(Subsystem):
         self.instr.write(f":MARK:X1Y1  {ChannelNumber}")
 
 
-
-class Hornbill(Subsystem):
-    """Child Class for Hornbill Subsystem"""
+class DMM_3458A(Subsystem):
+    """Child Class for 3458A Subsystem"""
 
     def __init__(self, VISA_ADDRESS):
         super().__init__(VISA_ADDRESS)
 
-    def sourVoltageLevelImmediateAmplitude(self, Value, ChannelNumber):
-        self.instr.write(f"SOURce:VOLTage:LEVel:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
+    def setDCV(self, range):
+        self.instr.write(f"DCV {range}")
     
-    def sourCurrentLimitPOS(self, Value, ChannelNumber):
-        self.instr.write(f"SOURce:CURRent:LIMit:POS:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
+    def presetNormal(self):
+        self.instr.write("PRESET NORM")
+    
+    def setDataFormat(self):
+        self.instr.write("OFORMAT ASCII")
+    
+    def setDCI(self, value):
+        self.instr.write(f"DCI {value}")
+    
+    def setTriggerArm(self):
+        self.instr.write(f"TARM HOLD")
+    
+    def setTriggerMode(self):
+        self.instr.write(f"TRIG AUTO")
+    
+    def setNPLC(self, value):
+        self.instr.write(f"NPLC {value}")
+    
+    def setNumberOfReadings(self):
+        self.instr.write(f"NRDGS 1,AUTO")
+    
+    def disableMemory(self):
+        self.instr.write("MEM OFF")
+    
+    def setEndCondition(self):
+        self.instr.write(f"END ALWAYS")
+    
+    def setDigits(self):
+        self.instr.write(f"NDIG 9")
+    
+    def enableAutoZero(self):
+        self.instr.write(f"AZERO ON")
+    
+    def enableDisplay(self):
+        self.instr.write(f"DISP ON")
 
-    def senseVoltageSource(self, Mode, ChannelNumber):
-        self.instr.write(f"SOURce:VOLTage:SENSe:SOURce {Mode}, (@{ChannelNumber})")
-                
-    def outputState(self, state, ChannelNumber):
-        self.instr.write(f"OUTPut:STATe {state}, (@{ChannelNumber})")
-
-    def measureVoltageDC(self, ChannelNumber):
-        return self.instr.query(f"MEASure:VOLTage:DC? (@{ChannelNumber})")
-    
-    def measureCurrentDC(self, ChannelNumber):
-        return self.instr.query(f"MEASure:CURRent:DC? (@{ChannelNumber})")
-    
-    def askSourCurrentLimitPOSImmediateAmplitude(self, Condition, ChannelNumber):
-        return self.instr.query(f"SOURce:CURRent:LIMit:POSitive:IMMediate:AMPLitude? {Condition}, (@{ChannelNumber})")
-    
-    def diagVoltageReadbacklocal(self):
-        self.instr.write("DIAG:PEEK? 20,2")
-        resp = self.instr.read_raw()
-        return resp
-    
-    def diagVoltageReadback_VMON_100k(self):
-        self.instr.write("DIAG:PEEK? 20,0,100000")
-        resp = self.instr.read_raw()
-        return resp
-    
-    def diagVoltageReadback_VMON_200k(self):
-        self.instr.write("DIAG:PEEK? 20,0,200000")
-        resp = self.instr.read_raw()
-        return resp
-    
-    def diagCurrentReadback_IMON_FULL_100k(self):
-        self.instr.write("DIAG:PEEK? 20,7,100000")
-        resp = self.instr.read_raw()
-        return resp
-    
-    def diagCurrentReadback_IMON_200uA_100k(self):
-        self.instr.write("DIAG:PEEK? 21,1,100000")
-        resp = self.instr.read_raw()
-        return resp
-
-    def diagCurrentReadback_IMON_2mA_100k(self):
-        self.instr.write("DIAG:PEEK? 26,6,100000")
-        resp = self.instr.read_raw()
-        return resp
-
-    
+    def queryMeasurement(self):
+        return self.instr.query("TARM SGL,1")
 
 
+class DMM_344XXA(Subsystem):
+    """Child Class for 344xxA Subsystem"""
+
+    def __init__(self, VISA_ADDRESS):
+        super().__init__(VISA_ADDRESS)
+
+    def initiate(self):
+        self.instr.write("INIT")
     
+    def operationCondition(self):
+        return self.instr.query("STAT:OPER:COND?")
+
+    def setFunction(self, mode):
+        self.instr.write(f"FUNC {mode}")
+
+    def setConfiguration(self, mode):
+        self.instr.write(f"CONF:{mode}")
+
+    def setNPLC(self, value):
+        self.instr.write(f"SENSe:VOLTage:DC:NPLCycles {value}")
+        
+    
+    def setAutoZeroMode(self, mode):
+        self.instr.write(f"{mode} AUTO")
+    def setAutoImpedanceMode(self, mode):
+        self.instr.write(f"{mode} IMP:AUTO {mode}")
+
+class ELOAD_E367XXA(Subsystem):
+    """Child Class for ELOAD_E367XXA Subsystem"""
+
+    def __init__(self, VISA_ADDRESS):
+        super().__init__(VISA_ADDRESS)
+
+    def setMode(self, mode):
+        self.instr.write(f"FUNC {mode}")
+    
+    def setOutputCurrent(self, value):
+        self.instr.write(f"CURR {value}")
+    
+    def setOutputState(self, state):
+        self.instr.write(f"OUTP {state}")
+
+    
+
+    
+
+
+
+
+  
