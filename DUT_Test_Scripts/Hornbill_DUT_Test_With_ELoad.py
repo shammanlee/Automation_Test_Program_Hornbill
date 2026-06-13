@@ -252,7 +252,7 @@ class HornbillVoltageMeasurementwithELoad:
             dmm.setEndCondition()
             dmm.setDigits()
             dmm.enableAutoZero()
-            dmm.enableDisplay(0)
+            dmm.enableDisplay()
         
         if dict["ELoad_Model"] == "E367XXA":
             eload = ELOAD_E367XXA(dict["ELoad"])
