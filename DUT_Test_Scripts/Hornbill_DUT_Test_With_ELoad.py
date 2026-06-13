@@ -71,7 +71,6 @@ class Dimport:
         Current = getattr(module, "Current")
         Oscilloscope = getattr(module, "Oscilloscope")
         Excavator = getattr(module, "Excavator")
-        SMU = getattr(module, "SMU")
         Power = getattr(module, "Power")
         Hornbill = getattr(module, "Hornbill")
         SMU_N67XX = getattr(module, "SMU_N67XX")
@@ -99,7 +98,6 @@ class Dimport:
             Current,
             Oscilloscope,
             Excavator,
-            SMU,
             Power,
             Hornbill,
             SMU_N67XX,
