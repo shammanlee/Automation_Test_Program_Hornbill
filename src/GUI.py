@@ -10665,6 +10665,8 @@ class Parameters:
         self.OCPActivationTime = None
         self.SPOperationMode = "Independent"
 
+        self.DMM_Model = "3458A"
+
         self.setFunction =  None
         self.VoltageRes =  None
         self.VoltageSense =  None
@@ -12513,6 +12515,8 @@ class AllTestMeasurement(QDialog):
                 "VoltageRes":self.params.VoltageRes,
                 "setFunction":self.params.setFunction,
                 "OperationMode":self.params.SPOperationMode,
+
+                "DMM_Model": self.params.DMM_Model,
 
                 "Range":self.params.Range,
                 "Aperture":self.params.Aperture,
