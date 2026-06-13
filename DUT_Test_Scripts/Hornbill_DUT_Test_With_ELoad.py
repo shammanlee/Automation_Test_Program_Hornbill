@@ -410,7 +410,7 @@ class HornbillVoltageMeasurementwithELoad:
 
                 elif dict["DMM_Model"] == "3458A":
                     # Read current from 3485A DMM
-                    voltagemeasured = float(dmm.queryMeasurement)
+                    voltagemeasured = float(dmm.queryMeasurement())
                     self.dataList.insert(
                                 
                                 k, [voltagemeasured , 0]
