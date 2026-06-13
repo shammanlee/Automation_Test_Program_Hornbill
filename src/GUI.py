@@ -226,23 +226,35 @@ def GetVisaSCPIResources(): #USB
             continue
 
         try:
-            # Try to open the resource
             instrument = rm.open_resource(resource)
-            instrument.timeout = 2000  # shorter timeout for faster scanning
+            instrument.timeout = 5000
 
-            # Identify instrument
+            idn = ""
+
             try:
                 idn = instrument.query("*IDN?").strip().upper()
-            except:
-                idn = instrument.query("ID?").strip().upper()
 
-            if idn and "," in idn:
+            except pyvisa.errors.VisaIOError:
+
+                if resource.startswith("GPIB"):
+
+                    try:
+                        instrument.clear()
+                        instrument.write("ID?")
+                        idn = instrument.read_raw().decode(
+                            errors="ignore"
+                        ).strip().upper()
+
+                    except:
+                        pass
+
+            if idn:
+
                 available_visa_ids.append(resource)
                 available_names.append(idn)
 
-                # Match model to role
                 for model, role in model_role_map.items():
-                    if model in idn:
+                    if model.upper() in idn:
                         instrument_roles[role] = resource
                         break
 
