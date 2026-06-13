@@ -205,7 +205,7 @@ class HornbillVoltageMeasurementwithELoad:
             Channel,
             Mode,
             Voltage,
-        ) = Dimport.getClasses_Chroma(dict["Instrument"])
+        ) = Dimport.getClasses_Chroma("Chroma")
 
         #Channel Loop (For usage of All Channels, the channel is taken from Execute Function in GUI.py)
         ch = channel
