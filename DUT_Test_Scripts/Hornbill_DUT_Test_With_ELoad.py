@@ -426,7 +426,7 @@ class HornbillVoltageMeasurementwithELoad:
                     perc_up_bound = 100
                     perc_low_bound = -100
                     worker.new_data.emit(V, I_fixed, cleandiagVmon, voltagemeasured, cleandiagImon, voltagemeasured - V, \
-                                         temp_values - voltagemeasured, prog_percent, read_percent, prog_upper_bound, prog_lower_bound, \
+                                         cleandiagVmon - voltagemeasured, prog_percent, read_percent, prog_upper_bound, prog_lower_bound, \
                                         read_upper_bound, read_lower_bound, perc_up_bound, perc_low_bound)
                     worker.popup_data.emit(voltagemeasured - V, cleandiagVmon - voltagemeasured, prog_upper_bound, prog_lower_bound, \
                                            read_upper_bound, read_lower_bound, prog_percent, read_percent, perc_up_bound, perc_low_bound)
