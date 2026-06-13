@@ -112,7 +112,6 @@ class Dimport:
         Channel = getattr(module, "Channel")
         Mode = getattr(module, "Mode")
         Voltage = getattr(module, "Voltage")
-        ELOAD_E367XXA = getattr(module, "ELOAD_E367XXA")
 
         return (
             Channel,
