@@ -85,3 +85,40 @@ class Show(Subsystem):
 
     def Display(self, Channel):
         self.instr.write(f"SHOW:DISP {Channel}")
+
+
+class ELOAD_E63200A(Subsystem):
+    """Child Class for ELOAD E63200A Subsystem"""
+
+    def __init__(self, VISA_ADDRESS):
+        super().__init__(VISA_ADDRESS)
+    
+    def setLoadMode(self, mode):
+        self.instr.write(f"MODE {mode}")
+    
+    def setCurrentDynamic_L1(self, params):
+        self.instr.write(f"CURR:DYN:L1 {params}")
+    
+    def setCurrentDynamic_L2(self, params):
+        self.instr.write(f"CURR:DYN:L2 {params}")
+    
+    def setCurrentDynamic_T1(self, params):
+        self.instr.write(f"CURR:DYN:T1 {params}")
+    
+    def setCurrentDynamic_T2(self, params):
+        self.instr.write(f"CURR:DYN:T2 {params}")
+    
+    def setCurrentDynamic_RISE(self, params):
+        self.instr.write(f"CURR:DYN:RISE {params}")
+    
+    def setCurrentDynamic_FALL(self, params):
+        self.instr.write(f"CURR:DYN:FALL {params}")
+    
+    def setCurrentDynamic_REPEAT(self, params):
+        self.instr.write(f"CURR:DYN:REPEAT {params}")  
+
+    def setLoadOutputState(self, params):
+        self.instr.write(f"LOAD {params}")
+
+    
+

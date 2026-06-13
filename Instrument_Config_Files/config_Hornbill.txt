@@ -28,12 +28,49 @@ VoltageSense = EXT
 rshunt = 0.01
 
 //Error Settings
+//Voltage Gain and Offset 
 Programming_Error_Gain = 0.0003
 Programming_Error_Offset = 0.006
 Readback_Error_Gain = 0.0003
 Readback_Error_Offset = 0.006
 Load_Programming_Error_Gain =  0.0001
 Load_Programming_Error_Offset =  0.002
+
+//Current Gain and Offset - 20A
+Current_20A_Programming_Error_Gain = 0.0005
+Current_20A_Programming_Error_Offset = 0.005
+Current_20A_Readback_Error_Gain = 0.0005
+Current_20A_Readback_Error_Offset = 0.005
+
+//Current Gain and Offset - 2A
+Current_2A_Programming_Error_Gain = 0.0005
+Current_2A_Programming_Error_Offset = 0.005
+Current_2A_Readback_Error_Gain = 0.0005
+Current_2A_Readback_Error_Offset = 0.005
+
+//Current Gain and Offset - 200mA
+Current_200mA_Programming_Error_Gain = 0.0005
+Current_200mA_Programming_Error_Offset = 0.005
+Current_200mA_Readback_Error_Gain = 0.0005
+Current_200mA_Readback_Error_Offset = 0.005
+
+//Current Gain and Offset - 20mA
+Current_20mA_Programming_Error_Gain = 0.0005
+Current_20mA_Programming_Error_Offset = 0.005
+Current_20mA_Readback_Error_Gain = 0.0005
+Current_20mA_Readback_Error_Offset = 0.005
+
+//Current Gain and Offset - 2mA
+Current_2mA_Programming_Error_Gain = 0.0005
+Current_2mA_Programming_Error_Offset = 0.005
+Current_2mA_Readback_Error_Gain = 0.0005
+Current_2mA_Readback_Error_Offset = 0.005
+
+//Current Gain and Offset - 200uA
+Current_200uA_Programming_Error_Gain = 0.0005
+Current_200uA_Programming_Error_Offset = 0.005
+Current_200uA_Readback_Error_Gain = 0.0005
+Current_200uA_Readback_Error_Offset = 0.005
 
 Programming_Response_Up_NoLoad = 80
 Programming_Response_Up_FullLoad = 80
