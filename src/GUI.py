@@ -10666,6 +10666,7 @@ class Parameters:
         self.SPOperationMode = "Independent"
 
         self.DMM_Model = "3458A"
+        self.ELoad_Model = "367XXA"
 
         self.setFunction =  None
         self.VoltageRes =  None
@@ -12517,6 +12518,7 @@ class AllTestMeasurement(QDialog):
                 "OperationMode":self.params.SPOperationMode,
 
                 "DMM_Model": self.params.DMM_Model,
+                "ELoad_Model": self.params.ELoad_Model,
 
                 "Range":self.params.Range,
                 "Aperture":self.params.Aperture,
