@@ -293,15 +293,13 @@ class HornbillVoltageMeasurementwithELoad:
             (float(dict["maxVoltage"]) - float(dict["minVoltage"]))
             / float(dict["voltage_step_size"])
         ) + 1
-        sleep(1)
-        
+  
 
         #Run Test (Voltage Loop in Current Loop)
         while i < current_iter:
             j = 0
             V = float(dict["minVoltage"])
             psu.sourVoltageLevelImmediateAmplitude(float(dict["minVoltage"]), ch)
-            sleep(3)
             Iset = dict["maxCurrent"]
             WAI(dict["PSU"])
 
@@ -329,7 +327,6 @@ class HornbillVoltageMeasurementwithELoad:
                     eload.setOutputCurrent(I_fixed)
                     WAI(dict["ELoad"])
 
-            sleep(1)
 
             #Voltage Iteration
             while j < voltage_iter:
@@ -350,8 +347,6 @@ class HornbillVoltageMeasurementwithELoad:
                 cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
                 print("Current Monitor Reading =", cleandiagImon)
 
-
-                sleep(1)
                 self.dataList2.insert(k, [float(cleandiagVmon), float(cleandiagImon)])
                
                 
