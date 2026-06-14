@@ -13192,7 +13192,7 @@ class TestWorker(QThread):
                                 for ch in self.dict["PSU_Channel"]:
                                     (infoList,
                                     dataList,
-                                    dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Static(self, self.dict, ch, worker=self)
+                                    dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change(self, self.dict, ch, worker=self)
 
                                     #Measurement Completion
                                     if (int(self.params["noofloop"]) - 1) <= 0:

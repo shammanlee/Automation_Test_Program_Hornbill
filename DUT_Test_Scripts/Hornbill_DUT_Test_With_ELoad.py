@@ -346,11 +346,10 @@ class HornbillVoltageMeasurementwithELoad:
                 #Readback Voltage and Current
                 cleandiagVmon = float(psu.diag_PEEK_VoltageReadback_VMON_100k())
                 print("Voltage Monitor Reading =", cleandiagVmon)
-                WAI(dict["PSU"])
 
                 cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
                 print("Current Monitor Reading =", cleandiagImon)
-                WAI(dict["PSU"])
+
 
                 sleep(1)
                 self.dataList2.insert(k, [float(cleandiagVmon), float(cleandiagImon)])
@@ -434,19 +433,9 @@ class HornbillVoltageMeasurementwithELoad:
         WAI(dict["PSU"])
        
         RST(dict["ELoad"])
-        WAI(dict["ELoad"])
         RST(dict["DMM"])
-        WAI(dict["DMM"])
         RST(dict["PSU"])
-        WAI(dict["PSU"])
 
-        #Clear the Error Status
-        CLS(dict["PSU"])
-        WAI(dict["PSU"])
-        CLS(dict["ELoad"])
-        WAI(dict["ELoad"])
-        CLS(dict["DMM"])
-        WAI(dict["DMM"])
 
         # Wrapper classes hold the real PyVISA session in .instr
         for instrument in (psu, dmm, eload):
@@ -602,11 +591,9 @@ class HornbillVoltageMeasurementwithELoad:
             #Readback Voltage and Current
             cleandiagVmon = float(psu.diag_PEEK_VoltageReadback_VMON_100k())
             print("Voltage Monitor Reading =", cleandiagVmon)
-            WAI(dict["PSU"])
 
             cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
             print("Current Monitor Reading =", cleandiagImon)
-            WAI(dict["PSU"])
 
             sleep(1)
             self.dataList2.insert(k, [float(cleandiagVmon), float(cleandiagImon)])
@@ -722,14 +709,9 @@ class HornbillVoltageMeasurementwithELoad:
         WAI(dict["PSU"])
         psu.sourCurrentLimitPOS("MIN", ch)
         WAI(dict["PSU"])
-        Current(dict["ELoad"]).setOutputCurrent(0)
-        WAI(dict["ELoad"])
-        psu.outputState("OFF", ch)
-        WAI(dict["PSU"])
-        Output(dict["ELoad"]).setOutputState("OFF")
-        WAI(dict["ELoad"])
+        
+        RST(dict["ELoad"])
         RST(dict["DMM"])
-        WAI(dict["DMM"])
 
         # Wrapper classes hold the real PyVISA session in .instr
         for instrument in (psu, dmm, eload):
