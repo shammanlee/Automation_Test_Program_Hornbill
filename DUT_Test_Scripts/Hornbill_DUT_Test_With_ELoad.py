@@ -475,7 +475,7 @@ class HornbillVoltageMeasurementwithELoad:
             DMM_344XXA,
             DMM_3458A,
             ELOAD_E367XXA,
-        ) = Dimport.getClasses(dict["Instrument"])
+        ) = Dimport.getClasses_Keysight(dict["Instrument"])
 
         (
             Channel,
