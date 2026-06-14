@@ -469,7 +469,6 @@ class HornbillVoltageMeasurementwithELoad:
             Current,
             Oscilloscope,
             Excavator,
-            SMU,
             Power,
             Hornbill,
             SMU_N67XX,
