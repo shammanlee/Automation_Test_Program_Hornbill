@@ -13187,7 +13187,7 @@ class TestWorker(QThread):
                                             self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
                                             self.progress.emit("")
 
-                        elif self.checkbox_states.get("CurrentStatic(CurrentChange)"):
+                        elif self.checkbox_states.get("CurrentChange(LoadChange)"):
                             if self.dict["Instrument"] == "Keysight":
                                 for ch in self.dict["PSU_Channel"]:
                                     (infoList,
