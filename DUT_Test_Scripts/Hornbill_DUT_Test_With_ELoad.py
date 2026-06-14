@@ -348,7 +348,7 @@ class HornbillVoltageMeasurementwithELoad:
                 print("Voltage Monitor Reading =", cleandiagVmon)
                 WAI(dict["PSU"])
 
-                cleandiagImon = float(diag_PEEK_CurrentReadback_IMON_FULL_100k())
+                cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
                 print("Current Monitor Reading =", cleandiagImon)
                 WAI(dict["PSU"])
 
@@ -484,18 +484,22 @@ class HornbillVoltageMeasurementwithELoad:
             SMU,
             Power,
             Hornbill,
+            SMU_N67XX,
+            DMM_344XXA,
+            DMM_3458A,
+            ELOAD_E367XXA,
         ) = Dimport.getClasses(dict["Instrument"])
 
-      
-        RST(dict["ELoad"])
-        WAI(dict["ELoad"])
-        RST(dict["DMM"])
-        WAI(dict["DMM"])
-        RST(dict["PSU"])
-        WAI(dict["PSU"])
+        (
+            Channel,
+            Mode,
+            Voltage,
+        ) = Dimport.getClasses_Chroma("Chroma")
 
         #Channel Loop (For usage of All Channels, the channel is taken from Execute Function in GUI.py)
         ch = channel
+
+        psu = Hornbill(dict["PSU"])
 
         #Use ch for each individual channel
         print(f"Channel {ch} Test Running\n")
@@ -735,6 +739,14 @@ class HornbillVoltageMeasurementwithELoad:
         WAI(dict["ELoad"])
         RST(dict["DMM"])
         WAI(dict["DMM"])
+
+
+        RST(dict["ELoad"])
+        WAI(dict["ELoad"])
+        RST(dict["DMM"])
+        WAI(dict["DMM"])
+        RST(dict["PSU"])
+        WAI(dict["PSU"])
 
         return self.infoList, self.dataList, self.dataList2
 
