@@ -10683,7 +10683,7 @@ class Parameters:
         self.SPOperationMode = "Independent"
 
         self.DMM_Model = "3458A"
-        self.ELoad_Model = "367XXA"
+        self.ELoad_Model = "E367XXA"
 
         self.setFunction =  None
         self.VoltageRes =  None

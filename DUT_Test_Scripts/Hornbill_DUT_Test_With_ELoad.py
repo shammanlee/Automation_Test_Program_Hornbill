@@ -449,9 +449,13 @@ class HornbillVoltageMeasurementwithELoad:
         CLS(dict["DMM"])
         WAI(dict["DMM"])
 
-        psu.close()
-        dmm.close()
-        eload.close()
+        # Wrapper classes hold the real PyVISA session in .instr
+        for instrument in (psu, dmm, eload):
+            try:
+                if instrument is not None and hasattr(instrument, "instr") and instrument.instr is not None:
+                    instrument.instr.close()
+            except Exception:
+                pass
 
 
         return self.infoList, self.dataList, self.dataList2
