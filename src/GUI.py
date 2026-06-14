@@ -228,6 +228,8 @@ def GetVisaSCPIResources(): #USB
         try:
             instrument = rm.open_resource(resource)
             instrument.timeout = 5000
+            instrument.write_termination = "\n"
+            instrument.read_termination = "\n"            
 
             idn = ""
 
