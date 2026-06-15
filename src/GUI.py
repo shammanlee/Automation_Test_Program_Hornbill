@@ -13162,13 +13162,7 @@ class TestWorker(QThread):
                                         dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Static(self, self.dict, ch, worker=self)
 
                                         #Measurement Completion
-                                        # ...existing code...
-                                        # safer final message (handles missing/invalid value)
-                                        try:
-                                            total = int(self.params.get('noofloop', 1))
-                                        except (ValueError, TypeError):
-                                            total = self.params.get('noofloop', 'N')
-                                        self.progress.emit(f"✅ {total-1} Measurement(s) complete!")
+                                        self.progress.emit(f"✅ {int(self.params['noofloop'])} Measurement is complete !")
                         
 
                                         #Export Data to CSV
