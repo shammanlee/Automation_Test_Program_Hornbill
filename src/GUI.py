@@ -13573,7 +13573,8 @@ class TestWorker(QThread):
                     if not self.force_exit:
                         self.progress_value.emit(100)
                         self.progress.emit("All measurements completed!")
-                    self.progress.emit("No DUT selected. Please select a DUT to perform the test.")
+                    else:
+                        self.progress.emit("No DUT selected. Please select a DUT to perform the test.")
 
                 
                                     
