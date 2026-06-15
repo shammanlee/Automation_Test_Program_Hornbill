@@ -12937,7 +12937,7 @@ class TestWorker(QThread):
 
     def run(self):
         try:
-            for x in range (int(self.params["noofloop"]))):
+            for x in range (int(self.params["noofloop"])):
                 #Execute Voltage Measurement for each test checked---------------
                 #Voltage Accuracy Test
                 if self.params["DUT"] == "Dolphin":
@@ -13151,7 +13151,6 @@ class TestWorker(QThread):
                         self.progress_value.emit(100)
                         self.progress.emit("All measurements completed!")
                 elif self.params["DUT"] == "Hornbill":
-                    
                     if self.checkbox_states["Voltage_Test"]:
                         #Voltage Accuracy
                         if self.checkbox_states.get("VoltageAccuracy"):
@@ -13163,28 +13162,35 @@ class TestWorker(QThread):
                                         dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Static(self, self.dict, ch, worker=self)
 
                                         #Measurement Completion
-                                        self.progress.emit(f"✅ {int(self.params['noofloop'])} Measurement is complete !")
+                                        # ...existing code...
+                                        # safer final message (handles missing/invalid value)
+                                        try:
+                                            total = int(self.params.get('noofloop', 1))
+                                        except (ValueError, TypeError):
+                                            total = self.params.get('noofloop', 'N')
+                                        self.progress.emit(f"✅ {total-1} Measurement(s) complete!")
+                        
 
                                         #Export Data to CSV
-                                        if self.checkbox_states["DataReport"]:
+                                        #if self.checkbox_states["DataReport"]:
 
-                                            #Export data to CSV and Graph (Refer data.py for details)
-                                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                            datatoCSV_Accuracy(infoList, dataList, dataList2)
-                                            datatoGraph(infoList, dataList,dataList2)
-                                            datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
+                                        #Export data to CSV and Graph (Refer data.py for details)
+                                        instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                        datatoCSV_Accuracy(infoList, dataList, dataList2)
+                                        datatoGraph(infoList, dataList,dataList2)
+                                        datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
 
-                                            #Export to config.csv from dict (Refer pandas.py for details)
-                                            df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                            df.index.name = "Parameter"
-                                            df.columns = ["Value"]
-                                            df.to_csv(os.path.join(csv_folder,"config.csv"))
+                                        #Export to config.csv from dict (Refer pandas.py for details)
+                                        df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                        df.index.name = "Parameter"
+                                        df.columns = ["Value"]
+                                        df.to_csv(os.path.join(csv_folder,"config.csv"))
 
-                                            #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
-                                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                            A.run()
-                                            self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
-                                            self.progress.emit("")
+                                        #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
+                                        A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                        A.run()
+                                        self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
+                                        self.progress.emit("")
 
                             elif self.checkbox_states.get("CurrentChange(LoadChange)"):
                                 if self.dict["Instrument"] == "Keysight":
