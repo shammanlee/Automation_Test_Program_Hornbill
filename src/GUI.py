@@ -12490,235 +12490,235 @@ class AllTestMeasurement(QDialog):
                 optionally export all the details into a CSV file or display a graph after the test is completed.
 
                 """
-            self.setEnabled(False)
-            self.OutputBox.clear()
+                self.setEnabled(False)
+                self.OutputBox.clear()
 
-            self.plot_window = VoltageAccuracyPlotWindow()      #Shamman changes
-            self.plot_window.show()
+                self.plot_window = VoltageAccuracyPlotWindow()      #Shamman changes
+                self.plot_window.show()
 
-            #Default parameters to be check before test start
-            params = {
-                "DUT":self.params.DUT,
-                "savedir":self.params.savelocation,
-                "V_Rating":self.params.Voltage_Rating,
-                "I_Rating":self.params.Current_Rating,
-                "P_Rating":self.params.Power_Rating,
-                "power":self.params.Power,
-                "estimatetime":self.params.estimatetime,
-                "updatedelay":self.params.updatedelay,
-                "readbackvoltage":self.params.readbackvoltage,
-                "readbackcurrent":self.params.readbackcurrent,
-                "noofloop":self.params.noofloop,
-                "Instrument":self.params.DMM_Instrument,
-                "Programming_Error_Gain":self.params.Programming_Error_Gain,
-                "Programming_Error_Offset":self.params.Programming_Error_Offset,
-                "Readback_Error_Gain":self.params.Readback_Error_Gain,
-                "Readback_Error_Offset":self.params.Readback_Error_Offset,
+                #Default parameters to be check before test start
+                params = {
+                    "DUT":self.params.DUT,
+                    "savedir":self.params.savelocation,
+                    "V_Rating":self.params.Voltage_Rating,
+                    "I_Rating":self.params.Current_Rating,
+                    "P_Rating":self.params.Power_Rating,
+                    "power":self.params.Power,
+                    "estimatetime":self.params.estimatetime,
+                    "updatedelay":self.params.updatedelay,
+                    "readbackvoltage":self.params.readbackvoltage,
+                    "readbackcurrent":self.params.readbackcurrent,
+                    "noofloop":self.params.noofloop,
+                    "Instrument":self.params.DMM_Instrument,
+                    "Programming_Error_Gain":self.params.Programming_Error_Gain,
+                    "Programming_Error_Offset":self.params.Programming_Error_Offset,
+                    "Readback_Error_Gain":self.params.Readback_Error_Gain,
+                    "Readback_Error_Offset":self.params.Readback_Error_Offset,
 
-                "unit":self.params.unit,
-                "minCurrent":self.params.minCurrent,
-                "maxCurrent":self.params.maxCurrent,
-                "current_step_size":self.params.current_step_size,
-                "minVoltage":self.params.minVoltage,
-                "maxVoltage":self.params.maxVoltage,
-                "voltage_step_size":self.params.voltage_step_size,
+                    "unit":self.params.unit,
+                    "minCurrent":self.params.minCurrent,
+                    "maxCurrent":self.params.maxCurrent,
+                    "current_step_size":self.params.current_step_size,
+                    "minVoltage":self.params.minVoltage,
+                    "maxVoltage":self.params.maxVoltage,
+                    "voltage_step_size":self.params.voltage_step_size,
 
-                "selected_DUT": self.params.selected_text,
-                "PSU":self.params.PSU,
-                "DMM":self.params.DMM,
-                "ELoad":self.params.ELoad,
-                "ELoad_Channel":self.params.ELoad_Channel,
-                "PSU_Channel":self.params.PSU_Channel,
-                "VoltageSense":self.params.VoltageSense,
-                "VoltageRes":self.params.VoltageRes,
-                "setFunction":self.params.setFunction,
-                "OperationMode":self.params.SPOperationMode,
+                    "selected_DUT": self.params.selected_text,
+                    "PSU":self.params.PSU,
+                    "DMM":self.params.DMM,
+                    "ELoad":self.params.ELoad,
+                    "ELoad_Channel":self.params.ELoad_Channel,
+                    "PSU_Channel":self.params.PSU_Channel,
+                    "VoltageSense":self.params.VoltageSense,
+                    "VoltageRes":self.params.VoltageRes,
+                    "setFunction":self.params.setFunction,
+                    "OperationMode":self.params.SPOperationMode,
 
-                "DMM_Model": self.params.DMM_Model,
-                "ELoad_Model": self.params.ELoad_Model,
+                    "DMM_Model": self.params.DMM_Model,
+                    "ELoad_Model": self.params.ELoad_Model,
 
-                "Range":self.params.Range,
-                "Aperture":self.params.Aperture,
-                "AutoZero":self.params.AutoZero,
-                "InputZ":self.params.inputZ,
-                "UpTime":self.params.UpTime,
-                "DownTime":self.params.DownTime,
+                    "Range":self.params.Range,
+                    "Aperture":self.params.Aperture,
+                    "AutoZero":self.params.AutoZero,
+                    "InputZ":self.params.inputZ,
+                    "UpTime":self.params.UpTime,
+                    "DownTime":self.params.DownTime,
 
-             
-            }
+                
+                }
 
-            #Parameters to be check if specific test was selected
-            checkbox_param_list = [
-                # Add more checkboxes as needed
-                (self.QPushButton_Current_Widget, "rshunt", self.params.rshunt),
-                (self.QPushButton_Current_Widget, "DMM2", self.params.DMM2),
-                (self.QPushButton_Current_Widget, "powerfin", self.params.Power),
+                #Parameters to be check if specific test was selected
+                checkbox_param_list = [
+                    # Add more checkboxes as needed
+                    (self.QPushButton_Current_Widget, "rshunt", self.params.rshunt),
+                    (self.QPushButton_Current_Widget, "DMM2", self.params.DMM2),
+                    (self.QPushButton_Current_Widget, "powerfin", self.params.Power),
 
-                (self.QCheckBox_OCP_Test_Widget, "OCP_Level", self.params.OCP_Level),
-                (self.QCheckBox_OCP_Test_Widget, "OCPActivationTime", self.params.OCPActivationTime),
+                    (self.QCheckBox_OCP_Test_Widget, "OCP_Level", self.params.OCP_Level),
+                    (self.QCheckBox_OCP_Test_Widget, "OCPActivationTime", self.params.OCPActivationTime),
 
-                (self.QCheckBox_OVP_Test_Widget, "OVP_Level", self.params.OVP_Level),
-                (self.QCheckBox_OVP_Test_Widget, "OVP_ErrorGain", self.params.OVP_ErrorGain),
-                (self.QCheckBox_OVP_Test_Widget, "OVP_ErrorOffset", self.params.OVP_ErrorOffset),
+                    (self.QCheckBox_OVP_Test_Widget, "OVP_Level", self.params.OVP_Level),
+                    (self.QCheckBox_OVP_Test_Widget, "OVP_ErrorGain", self.params.OVP_ErrorGain),
+                    (self.QCheckBox_OVP_Test_Widget, "OVP_ErrorOffset", self.params.OVP_ErrorOffset),
 
-                (self.QCheckBox_TransientRecovery_Widget, "OSC_Channel", self.params.OSC_Channel),
-                (self.QCheckBox_TransientRecovery_Widget, "Channel_CouplingMode", self.params.Channel_CouplingMode),
-                (self.QCheckBox_TransientRecovery_Widget, "Trigger_Mode", self.params.Trigger_Mode),
-                (self.QCheckBox_TransientRecovery_Widget, "Trigger_CouplingMode", self.params.Trigger_CouplingMode),
-                (self.QCheckBox_TransientRecovery_Widget, "Trigger_SweepMode", self.params.Trigger_SweepMode),
-                (self.QCheckBox_TransientRecovery_Widget, "Trigger_SlopeMode", self.params.Trigger_SlopeMode),
-                (self.QCheckBox_TransientRecovery_Widget, "Probe_Setting", self.params.Probe_Setting),
-                (self.QCheckBox_TransientRecovery_Widget, "Acq_Type", self.params.Acq_Type),
-                (self.QCheckBox_TransientRecovery_Widget, "TimeScale", self.params.TimeScale),
-                (self.QCheckBox_TransientRecovery_Widget, "VerticalScale", self.params.VerticalScale),
-                (self.QCheckBox_TransientRecovery_Widget, "DUT_V_Settling_Band", self.params.V_Settling_Band),
-                (self.QCheckBox_TransientRecovery_Widget, "DUT_T_Settling_Band", self.params.T_Settling_Band),
-                (self.QCheckBox_TransientRecovery_Widget, "OSC", self.params.OSC),
-                (self.QCheckBox_TransientRecovery_Widget, "CurrentTrigger_Probe_Setting", 100),
-                (self.QCheckBox_TransientRecovery_Widget, "CurrentTrigger_OSC_Channel", 2),
-                (self.QCheckBox_TransientRecovery_Widget, "CurrentTrigger_V_Settling_Band", 6),
+                    (self.QCheckBox_TransientRecovery_Widget, "OSC_Channel", self.params.OSC_Channel),
+                    (self.QCheckBox_TransientRecovery_Widget, "Channel_CouplingMode", self.params.Channel_CouplingMode),
+                    (self.QCheckBox_TransientRecovery_Widget, "Trigger_Mode", self.params.Trigger_Mode),
+                    (self.QCheckBox_TransientRecovery_Widget, "Trigger_CouplingMode", self.params.Trigger_CouplingMode),
+                    (self.QCheckBox_TransientRecovery_Widget, "Trigger_SweepMode", self.params.Trigger_SweepMode),
+                    (self.QCheckBox_TransientRecovery_Widget, "Trigger_SlopeMode", self.params.Trigger_SlopeMode),
+                    (self.QCheckBox_TransientRecovery_Widget, "Probe_Setting", self.params.Probe_Setting),
+                    (self.QCheckBox_TransientRecovery_Widget, "Acq_Type", self.params.Acq_Type),
+                    (self.QCheckBox_TransientRecovery_Widget, "TimeScale", self.params.TimeScale),
+                    (self.QCheckBox_TransientRecovery_Widget, "VerticalScale", self.params.VerticalScale),
+                    (self.QCheckBox_TransientRecovery_Widget, "DUT_V_Settling_Band", self.params.V_Settling_Band),
+                    (self.QCheckBox_TransientRecovery_Widget, "DUT_T_Settling_Band", self.params.T_Settling_Band),
+                    (self.QCheckBox_TransientRecovery_Widget, "OSC", self.params.OSC),
+                    (self.QCheckBox_TransientRecovery_Widget, "CurrentTrigger_Probe_Setting", 100),
+                    (self.QCheckBox_TransientRecovery_Widget, "CurrentTrigger_OSC_Channel", 2),
+                    (self.QCheckBox_TransientRecovery_Widget, "CurrentTrigger_V_Settling_Band", 6),
 
-                (self.QCheckBox_ProgrammingSpeed_Widget, "OSC_Channel", self.params.OSC_Channel),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "Channel_CouplingMode", self.params.Channel_CouplingMode),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "Trigger_Mode", self.params.Trigger_Mode),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "Trigger_CouplingMode", self.params.Trigger_CouplingMode),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "Trigger_SweepMode", self.params.Trigger_SweepMode),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "Trigger_SlopeMode", self.params.Trigger_SlopeMode),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "Probe_Setting", self.params.Probe_Setting),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "Acq_Type", self.params.Acq_Type),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "TimeScale", self.params.TimeScale),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "VerticalScale", self.params.VerticalScale),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "V_Settling_Band", self.params.V_Settling_Band),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "T_Settling_Band", self.params.T_Settling_Band),
-                (self.QCheckBox_ProgrammingSpeed_Widget, "OSC", self.params.OSC),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "OSC_Channel", self.params.OSC_Channel),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "Channel_CouplingMode", self.params.Channel_CouplingMode),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "Trigger_Mode", self.params.Trigger_Mode),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "Trigger_CouplingMode", self.params.Trigger_CouplingMode),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "Trigger_SweepMode", self.params.Trigger_SweepMode),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "Trigger_SlopeMode", self.params.Trigger_SlopeMode),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "Probe_Setting", self.params.Probe_Setting),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "Acq_Type", self.params.Acq_Type),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "TimeScale", self.params.TimeScale),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "VerticalScale", self.params.VerticalScale),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "V_Settling_Band", self.params.V_Settling_Band),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "T_Settling_Band", self.params.T_Settling_Band),
+                    (self.QCheckBox_ProgrammingSpeed_Widget, "OSC", self.params.OSC),
 
-                (self.QCheckBox_OCP_Test_Widget, "OSC_Channel", self.params.OSC_Channel),
-                (self.QCheckBox_OCP_Test_Widget, "Channel_CouplingMode", self.params.Channel_CouplingMode),
-                (self.QCheckBox_OCP_Test_Widget, "Trigger_Mode", self.params.Trigger_Mode),
-                (self.QCheckBox_OCP_Test_Widget, "Trigger_CouplingMode", self.params.Trigger_CouplingMode),
-                (self.QCheckBox_OCP_Test_Widget, "Trigger_SweepMode", self.params.Trigger_SweepMode),
-                (self.QCheckBox_OCP_Test_Widget, "Trigger_SlopeMode", self.params.Trigger_SlopeMode),
-                (self.QCheckBox_OCP_Test_Widget, "Probe_Setting", self.params.Probe_Setting),
-                (self.QCheckBox_OCP_Test_Widget, "Acq_Type", self.params.Acq_Type),
-                (self.QCheckBox_OCP_Test_Widget, "TimeScale", self.params.TimeScale),
-                (self.QCheckBox_OCP_Test_Widget, "VerticalScale", self.params.VerticalScale),
-                (self.QCheckBox_OCP_Test_Widget, "V_Settling_Band", self.params.V_Settling_Band),
-                (self.QCheckBox_OCP_Test_Widget, "T_Settling_Band", self.params.T_Settling_Band),
-                (self.QCheckBox_OCP_Test_Widget, "OSC", self.params.OSC),
+                    (self.QCheckBox_OCP_Test_Widget, "OSC_Channel", self.params.OSC_Channel),
+                    (self.QCheckBox_OCP_Test_Widget, "Channel_CouplingMode", self.params.Channel_CouplingMode),
+                    (self.QCheckBox_OCP_Test_Widget, "Trigger_Mode", self.params.Trigger_Mode),
+                    (self.QCheckBox_OCP_Test_Widget, "Trigger_CouplingMode", self.params.Trigger_CouplingMode),
+                    (self.QCheckBox_OCP_Test_Widget, "Trigger_SweepMode", self.params.Trigger_SweepMode),
+                    (self.QCheckBox_OCP_Test_Widget, "Trigger_SlopeMode", self.params.Trigger_SlopeMode),
+                    (self.QCheckBox_OCP_Test_Widget, "Probe_Setting", self.params.Probe_Setting),
+                    (self.QCheckBox_OCP_Test_Widget, "Acq_Type", self.params.Acq_Type),
+                    (self.QCheckBox_OCP_Test_Widget, "TimeScale", self.params.TimeScale),
+                    (self.QCheckBox_OCP_Test_Widget, "VerticalScale", self.params.VerticalScale),
+                    (self.QCheckBox_OCP_Test_Widget, "V_Settling_Band", self.params.V_Settling_Band),
+                    (self.QCheckBox_OCP_Test_Widget, "T_Settling_Band", self.params.T_Settling_Band),
+                    (self.QCheckBox_OCP_Test_Widget, "OSC", self.params.OSC),
 
-                (self.QCheckBox_VoltageLoadRegulation_Widget, "Load_Programming_Error_Gain", self.params.Load_Programming_Error_Gain),
-                (self.QCheckBox_VoltageLoadRegulation_Widget, "Load_Programming_Error_Offset", self.params.Load_Programming_Error_Offset),
-                (self.QCheckBox_CurrentLoadRegulation_Widget, "Load_Programming_Error_Gain", self.params.Load_Programming_Error_Gain),
-                (self.QCheckBox_CurrentLoadRegulation_Widget, "Load_Programming_Error_Offset", self.params.Load_Programming_Error_Offset),
-                (self.QCheckBox_VoltageLineRegulation_Widget, "Load_Programming_Error_Gain", self.params.Load_Programming_Error_Gain),
-                (self.QCheckBox_VoltageLineRegulation_Widget, "Load_Programming_Error_Offset", self.params.Load_Programming_Error_Offset),
-                (self.QCheckBox_CurrentLineRegulation_Widget, "Load_Programming_Error_Gain", self.params.Load_Programming_Error_Gain),
-                (self.QCheckBox_CurrentLineRegulation_Widget, "Load_Programming_Error_Offset", self.params.Load_Programming_Error_Offset),
+                    (self.QCheckBox_VoltageLoadRegulation_Widget, "Load_Programming_Error_Gain", self.params.Load_Programming_Error_Gain),
+                    (self.QCheckBox_VoltageLoadRegulation_Widget, "Load_Programming_Error_Offset", self.params.Load_Programming_Error_Offset),
+                    (self.QCheckBox_CurrentLoadRegulation_Widget, "Load_Programming_Error_Gain", self.params.Load_Programming_Error_Gain),
+                    (self.QCheckBox_CurrentLoadRegulation_Widget, "Load_Programming_Error_Offset", self.params.Load_Programming_Error_Offset),
+                    (self.QCheckBox_VoltageLineRegulation_Widget, "Load_Programming_Error_Gain", self.params.Load_Programming_Error_Gain),
+                    (self.QCheckBox_VoltageLineRegulation_Widget, "Load_Programming_Error_Offset", self.params.Load_Programming_Error_Offset),
+                    (self.QCheckBox_CurrentLineRegulation_Widget, "Load_Programming_Error_Gain", self.params.Load_Programming_Error_Gain),
+                    (self.QCheckBox_CurrentLineRegulation_Widget, "Load_Programming_Error_Offset", self.params.Load_Programming_Error_Offset),
 
-                (self.QCheckBox_PowerAccuracy_Widget, "Power_Programming_Error_Gain", self.params.Power_Programming_Error_Gain),
-                (self.QCheckBox_PowerAccuracy_Widget, "Power_Programming_Error_Offset", self.params.Power_Programming_Error_Offset),
-                (self.QCheckBox_PowerAccuracy_Widget, "Power_Readback_Error_Gain", self.params.Power_Readback_Error_Gain),
-                (self.QCheckBox_PowerAccuracy_Widget, "Power_Readback_Error_Offset", self.params.Power_Readback_Error_Offset),
-                (self.QCheckBox_PowerAccuracy_Widget, "powerini", self.params.powerini),
-                (self.QCheckBox_PowerAccuracy_Widget, "power_step_size", self.params.power_step_size),
+                    (self.QCheckBox_PowerAccuracy_Widget, "Power_Programming_Error_Gain", self.params.Power_Programming_Error_Gain),
+                    (self.QCheckBox_PowerAccuracy_Widget, "Power_Programming_Error_Offset", self.params.Power_Programming_Error_Offset),
+                    (self.QCheckBox_PowerAccuracy_Widget, "Power_Readback_Error_Gain", self.params.Power_Readback_Error_Gain),
+                    (self.QCheckBox_PowerAccuracy_Widget, "Power_Readback_Error_Offset", self.params.Power_Readback_Error_Offset),
+                    (self.QCheckBox_PowerAccuracy_Widget, "powerini", self.params.powerini),
+                    (self.QCheckBox_PowerAccuracy_Widget, "power_step_size", self.params.power_step_size),
 
-                (self.QCheckBox_VoltageLineRegulation_Widget,"ACSource", self.params.ACSource),
-                (self.QCheckBox_VoltageLineRegulation_Widget,"AC_CurrentLimit", self.params.AC_CurrentLimit),
-                (self.QCheckBox_VoltageLineRegulation_Widget,"AC_VoltageOutput", self.params.AC_VoltageOutput),
-                (self.QCheckBox_VoltageLineRegulation_Widget,"Frequency", self.params.Frequency),
-                (self.QCheckBox_VoltageLineRegulation_Widget,"AC_Supply_Type", self.params.AC_Supply_Type),
-                (self.QCheckBox_VoltageLineRegulation_Widget,"Line_Reg_Range", self.params.Line_Reg_Range),
-                (self.QCheckBox_CurrentLineRegulation_Widget,"ACSource", self.params.ACSource),
-                (self.QCheckBox_CurrentLineRegulation_Widget,"AC_CurrentLimit", self.params.AC_CurrentLimit),
-                (self.QCheckBox_CurrentLineRegulation_Widget,"AC_VoltageOutput", self.params.AC_VoltageOutput),
-                (self.QCheckBox_CurrentLineRegulation_Widget,"Frequency", self.params.Frequency),
-                (self.QCheckBox_CurrentLineRegulation_Widget,"AC_Supply_Type", self.params.AC_Supply_Type),
-                (self.QCheckBox_CurrentLineRegulation_Widget,"Line_Reg_Range", self.params.Line_Reg_Range),
+                    (self.QCheckBox_VoltageLineRegulation_Widget,"ACSource", self.params.ACSource),
+                    (self.QCheckBox_VoltageLineRegulation_Widget,"AC_CurrentLimit", self.params.AC_CurrentLimit),
+                    (self.QCheckBox_VoltageLineRegulation_Widget,"AC_VoltageOutput", self.params.AC_VoltageOutput),
+                    (self.QCheckBox_VoltageLineRegulation_Widget,"Frequency", self.params.Frequency),
+                    (self.QCheckBox_VoltageLineRegulation_Widget,"AC_Supply_Type", self.params.AC_Supply_Type),
+                    (self.QCheckBox_VoltageLineRegulation_Widget,"Line_Reg_Range", self.params.Line_Reg_Range),
+                    (self.QCheckBox_CurrentLineRegulation_Widget,"ACSource", self.params.ACSource),
+                    (self.QCheckBox_CurrentLineRegulation_Widget,"AC_CurrentLimit", self.params.AC_CurrentLimit),
+                    (self.QCheckBox_CurrentLineRegulation_Widget,"AC_VoltageOutput", self.params.AC_VoltageOutput),
+                    (self.QCheckBox_CurrentLineRegulation_Widget,"Frequency", self.params.Frequency),
+                    (self.QCheckBox_CurrentLineRegulation_Widget,"AC_Supply_Type", self.params.AC_Supply_Type),
+                    (self.QCheckBox_CurrentLineRegulation_Widget,"Line_Reg_Range", self.params.Line_Reg_Range),
 
-                (self.QCheckBox_ProgrammingSpeed_Widget,"Response_Up_NoLoad", self.params.Programming_Response_Up_NoLoad),
-                (self.QCheckBox_ProgrammingSpeed_Widget,"Response_Up_FullLoad", self.params.Programming_Response_Up_FullLoad),
-                (self.QCheckBox_ProgrammingSpeed_Widget,"Response_Down_NoLoad", self.params.Programming_Response_Down_NoLoad),
-                (self.QCheckBox_ProgrammingSpeed_Widget,"Response_Down_FullLoad", self.params.Programming_Response_Down_FullLoad),
+                    (self.QCheckBox_ProgrammingSpeed_Widget,"Response_Up_NoLoad", self.params.Programming_Response_Up_NoLoad),
+                    (self.QCheckBox_ProgrammingSpeed_Widget,"Response_Up_FullLoad", self.params.Programming_Response_Up_FullLoad),
+                    (self.QCheckBox_ProgrammingSpeed_Widget,"Response_Down_NoLoad", self.params.Programming_Response_Down_NoLoad),
+                    (self.QCheckBox_ProgrammingSpeed_Widget,"Response_Down_FullLoad", self.params.Programming_Response_Down_FullLoad),
 
-            ]
+                ]
 
-            for checkbox, key, value in checkbox_param_list:
-                if checkbox.isChecked():
-                    params[key] = value
+                for checkbox, key, value in checkbox_param_list:
+                    if checkbox.isChecked():
+                        params[key] = value
 
-            #Send the parameters to the dictionary in DUT_Test
-            dict = dictGenerator.input(**params)
-            self.dict_reset = dict
+                #Send the parameters to the dictionary in DUT_Test
+                dict = dictGenerator.input(**params)
+                self.dict_reset = dict
 
-            #Run Qthread after pre-test check
-            if self.pre_test_check(dict):
-                reply = QMessageBox.question(
-                    self,
-                    "Test Running",
-                    "Test will be started.\nDo you still want to continue?",
-                    QMessageBox.Yes | QMessageBox.Cancel,
-                    QMessageBox.Cancel  # Default button
-                )
-
-                if reply == QMessageBox.Yes:
-                    # Show progress elements
-                    self.progress_bar.setVisible(True)
-                    self.progress_bar.setValue(0)
-                    self.progress_label.setVisible(True)
-                    self.abort_button.setVisible(True)
-                    self.abort_button.setEnabled(True)
-                    self.show_plot_button.setVisible(True)
-                    self.show_plot_button.setEnabled(True)
-                    self.QPushButton_Widget1.setEnabled(False)
-
-                    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")  #Shamman changes
-                    csv_path = os.path.join(
-                        self.params.savelocation,
-                        f"realtime_voltage_data_{timestamp}.csv"
+                #Run Qthread after pre-test check
+                if self.pre_test_check(dict):
+                    reply = QMessageBox.question(
+                        self,
+                        "Test Running",
+                        "Test will be started.\nDo you still want to continue?",
+                        QMessageBox.Yes | QMessageBox.Cancel,
+                        QMessageBox.Cancel  # Default button
                     )
 
-                    self.csv_file = open(csv_path, "w", newline="")
-                    self.csv_writer = csv.writer(self.csv_file)
+                    if reply == QMessageBox.Yes:
+                        # Show progress elements
+                        self.progress_bar.setVisible(True)
+                        self.progress_bar.setValue(0)
+                        self.progress_label.setVisible(True)
+                        self.abort_button.setVisible(True)
+                        self.abort_button.setEnabled(True)
+                        self.show_plot_button.setVisible(True)
+                        self.show_plot_button.setEnabled(True)
+                        self.QPushButton_Widget1.setEnabled(False)
 
-                    # Header row
-                    self.csv_writer.writerow([
-                        "Index",
-                        "Set_Voltage",
-                        "Set_Current", 
-                        "Programming_Voltage",
-                        "Readback_Voltage",
-                        "Readback_Current",     #Shamman changes
-                        "Programming_Voltage_Error",
-                        "Readback_Voltage_Error",
-                        "Programming_Voltage_Percentage_Error",
-                        "Readback_Voltage_Percentage_Error",
-                        "Programming_Upper_Limit_Boundary",
-                        "Programming_Lower_Limit_Boundary",
-                        "Readback_Upper_Limit_Boundary",
-                        "Readback_lower_Limit_Boundary"
-                    ])
-                    self.csv_file.flush()
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")  #Shamman changes
+                        csv_path = os.path.join(
+                            self.params.savelocation,
+                            f"realtime_voltage_data_{timestamp}.csv"
+                        )
 
-                    self.data_index = 0
-                                            
-                    # Create and start worker
-                    self.worker = None
-                    self.was_aborted = False 
-                    self.worker = TestWorker(self.checkbox_states, dict, self.params)
-                    self.worker.progress.connect(self.update_output)
-                    self.worker.progress_value.connect(self.update_progress_bar)
-                    self.worker.finished.connect(self.test_finished)
-                    self.worker.aborted.connect(self.test_aborted)
-                    self.worker.error.connect(self.handle_test_error)  #Shamman changes made to redirect errors to new handler
-                    self.worker.new_data.connect(self.update_plot)
-                    self.worker.progress.connect(self.update_status)
-                    self.worker.error.connect(self.show_error)
-                    self.worker.popup_data.connect(self.plot_window.popup_plot)    #Shamman changes
-                    #self.worker.fail_signal.connect(self.on_voltage_fail)
-                    #self.worker.decision_signal.connect(self.worker.receive_decision)
-                    self.worker.start()
-                else:
-                    print("Test canceled by user")
+                        self.csv_file = open(csv_path, "w", newline="")
+                        self.csv_writer = csv.writer(self.csv_file)
+
+                        # Header row
+                        self.csv_writer.writerow([
+                            "Index",
+                            "Set_Voltage",
+                            "Set_Current", 
+                            "Programming_Voltage",
+                            "Readback_Voltage",
+                            "Readback_Current",     #Shamman changes
+                            "Programming_Voltage_Error",
+                            "Readback_Voltage_Error",
+                            "Programming_Voltage_Percentage_Error",
+                            "Readback_Voltage_Percentage_Error",
+                            "Programming_Upper_Limit_Boundary",
+                            "Programming_Lower_Limit_Boundary",
+                            "Readback_Upper_Limit_Boundary",
+                            "Readback_lower_Limit_Boundary"
+                        ])
+                        self.csv_file.flush()
+
+                        self.data_index = 0
+                                                
+                        # Create and start worker
+                        self.worker = None
+                        self.was_aborted = False 
+                        self.worker = TestWorker(self.checkbox_states, dict, self.params)
+                        self.worker.progress.connect(self.update_output)
+                        self.worker.progress_value.connect(self.update_progress_bar)
+                        self.worker.finished.connect(self.test_finished)
+                        self.worker.aborted.connect(self.test_aborted)
+                        self.worker.error.connect(self.handle_test_error)  #Shamman changes made to redirect errors to new handler
+                        self.worker.new_data.connect(self.update_plot)
+                        self.worker.progress.connect(self.update_status)
+                        self.worker.error.connect(self.show_error)
+                        self.worker.popup_data.connect(self.plot_window.popup_plot)    #Shamman changes
+                        #self.worker.fail_signal.connect(self.on_voltage_fail)
+                        #self.worker.decision_signal.connect(self.worker.receive_decision)
+                        self.worker.start()
+                    else:
+                        print("Test canceled by user")
 
         except Exception as e:
             show_error_dialog(self, e)
