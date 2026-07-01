@@ -1050,6 +1050,9 @@ class Hornbill(Subsystem):
     
     def sourCurrentLimitPOS(self, Value, ChannelNumber):
         self.instr.write(f"SOURce:CURRent:LIMit:POS:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
+    
+    def sourCurrentLimitNEG(self, Value, ChannelNumber):
+        self.instr.write(f"SOURce:CURRent:LIMit:NEG:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
 
     def senseVoltageSource(self, Mode, ChannelNumber):
         self.instr.write(f"SOURce:VOLTage:SENSe:SOURce {Mode}, (@{ChannelNumber})")

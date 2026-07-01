@@ -214,6 +214,7 @@ class HornbillVoltageMeasurementwithELoad:
         psu.setMode("VOLTAGE", ch)
         psu.senseVoltageSource(dict["VoltageSense"], ch)
         psu.sourCurrentLimitPOS("MAXimum", ch)         #Current LIMIT (Max for Voltage Accuracy)
+        psu.sourCurrentLimitNEG("MINimum", ch)         #Current LIMIT (Max for Voltage Accuracy)
         psu.outputState("ON", ch) #Turn On the PSU and Eload
        
        
