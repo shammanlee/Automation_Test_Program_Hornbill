@@ -9451,6 +9451,10 @@ class MultiThreadVoltageMeasurementDialog(QDialog):
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setText("Current Change(Load Change)")
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setCheckState(Qt.Unchecked)
 
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget = QCheckBox()
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.setText("Current Static (Voltage Change) with Oscilloscope Capture") 
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.setCheckState(Qt.Unchecked)
+
         self.QCheckbox_Simulation_Mode = QCheckBox()
         self.QCheckbox_Simulation_Mode.setText("Simulation Mode")
         self.QCheckbox_Simulation_Mode.setCheckState(Qt.Unchecked)
@@ -9661,6 +9665,7 @@ class MultiThreadVoltageMeasurementDialog(QDialog):
         setting_layout.addRow(QLabel_Voltage_Accuracy_Mode)
         setting_layout.addRow(self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget)
         setting_layout.addRow(self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget)
+        setting_layout.addRow(self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget)
         setting_layout.addRow(QPushButton_Widget4)
         setting_layout.addRow(QLabel_PSU_VisaAddress, self.QLineEdit_PSU_VisaAddress)
         setting_layout.addRow(QLabel_DMM_VisaAddress, self.QLineEdit_DMM_VisaAddress)
@@ -9708,6 +9713,7 @@ class MultiThreadVoltageMeasurementDialog(QDialog):
 
         self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.stateChanged.connect(self.checkbox_state_Voltage_Accuracy_Voltage_Mode)
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.stateChanged.connect(self.checkbox_state_Voltage_Accuracy_Current_Mode)
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.stateChanged.connect(self.checkbox_state_Voltage_Accuracy_Voltage_Mode_Oscilloscope)
         
         self.QComboBox_DUT.currentTextChanged.connect(self.DUT_changed)
         self.QLineEdit_Programming_Error_Gain.textEdited.connect(self.Programming_Error_Gain_changed)
@@ -10885,6 +10891,10 @@ class AllTestMeasurement(QDialog):
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setText("Current Change (Load Change)")
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setCheckState(Qt.Unchecked)
 
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget = QCheckBox()
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.setText("Oscilloscope Capture (Voltage Change)")
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.setCheckState(Qt.Unchecked)
+
         self.QCheckBox_VoltageLoadRegulation_Widget = QCheckBox()
         self.QCheckBox_VoltageLoadRegulation_Widget.setText("Voltage Load Regulation")
         self.QCheckBox_VoltageLoadRegulation_Widget.setCheckState(Qt.Unchecked)
@@ -11329,6 +11339,10 @@ class AllTestMeasurement(QDialog):
         )
         VoltageAccuracy_Branch_Layout.addWidget(
             self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget
+        )
+
+        VoltageAccuracy_Branch_Layout.addWidget(
+            self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget
         )
 
         Voltage_Testing_Selection_Layout.addWidget(self.VoltageAccuracy_Branch_Widget)
@@ -12314,21 +12328,22 @@ class AllTestMeasurement(QDialog):
 
         #Transient Test Selected
         if not self.QCheckBox_TransientRecovery_Widget.isChecked():
-            self.QLabel_OSC_VisaAddress.setVisible(False)
-            self.QLineEdit_OSC_VisaAddress.setVisible(False)
+            #self.QLabel_OSC_VisaAddress.setVisible(False)
+            #self.QLineEdit_OSC_VisaAddress.setVisible(False)
+            self.oscilloscope_settings_widget.setVisible(False)
         else:
-            self.QLabel_OSC_VisaAddress.setVisible(True)
-            self.QLineEdit_OSC_VisaAddress.setVisible(True)
+            #self.QLabel_OSC_VisaAddress.setVisible(True)
+            #self.QLineEdit_OSC_VisaAddress.setVisible(True)
             self.oscilloscope_settings_widget.setVisible(True)
 
         #Programming Speed Test Selected
         if not self.QCheckBox_ProgrammingSpeed_Widget.isChecked():
-            self.QLabel_OSC_VisaAddress.setVisible(False)
-            self.QLineEdit_OSC_VisaAddress.setVisible(False)
+            #self.QLabel_OSC_VisaAddress.setVisible(False)
+            #self.QLineEdit_OSC_VisaAddress.setVisible(False)
             self.Programming_Response_widget.setVisible(False)
         else:
-            self.QLabel_OSC_VisaAddress.setVisible(True)
-            self.QLineEdit_OSC_VisaAddress.setVisible(True)
+            #self.QLabel_OSC_VisaAddress.setVisible(True)
+            #self.QLineEdit_OSC_VisaAddress.setVisible(True)
             self.oscilloscope_settings_widget.setVisible(True)
             self.Programming_Response_widget.setVisible(True)
         
@@ -12422,6 +12437,7 @@ class AllTestMeasurement(QDialog):
             "VoltageAccuracy": self.QCheckBox_VoltageAccuracy_Widget.isChecked(),
             "CurrentStatic(VoltageChange)":self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.isChecked(),
             "CurrentChange(LoadChange)": self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.isChecked(),
+            "CurrentStatic(VoltageChange)withOscilloscope": self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.isChecked(),
 
             #Current
             "Current_Test": self.QPushButton_Current_Widget.isChecked(),
@@ -13218,6 +13234,38 @@ class TestWorker(QThread):
                                                 self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
                                                 self.progress.emit("")
 
+                            elif self.checkbox_states.get("CurrentStatic(VoltageChange) with Oscilloscope"):
+                                if self.dict["Instrument"] == "Keysight":
+                                    for ch in self.dict["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change(self, self.dict, ch, worker=self)
+
+                                        #Measurement Completion
+                                        if (int(self.params["noofloop"]) - 1) <= 0:
+                                            self.progress.emit("✅Measurement is complete !")
+
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
+
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy(infoList, dataList, dataList2)
+                                                datatoGraph(infoList, dataList,dataList2)
+                                                datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
+
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                                                #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
+                                                self.progress.emit("")
+                        
                         #Voltage Load Regulation
                         if self.checkbox_states.get("VoltageLoadRegulation"):
                             if self.params["Instrument"] == "Keysight":
