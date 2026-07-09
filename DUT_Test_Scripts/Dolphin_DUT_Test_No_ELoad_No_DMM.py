@@ -5866,6 +5866,7 @@ class RESET:
             Excavator,
             SMU,
             Power,
+            Hornbill
         ) = Dimport.getClasses(dict_reset["Instrument"])
 
         try:

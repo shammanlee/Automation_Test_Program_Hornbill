@@ -28,12 +28,19 @@ VoltageSense = EXT
 rshunt = 0.01
 
 //Error Settings
+//Voltage Gain and Offset
 Programming_Error_Gain = 0.0005
 Programming_Error_Offset = 0.005
 Readback_Error_Gain = 0.0005
 Readback_Error_Offset = 0.005
 Load_Programming_Error_Gain =  0.0001
 Load_Programming_Error_Offset =  0.002
+
+//Current Gain and Offset
+Current_Programming_Error_Gain = 0.0005
+Current_Programming_Error_Offset = 0.005
+Current_Readback_Error_Gain = 0.0005
+Current_Readback_Error_Offset = 0.005
 
 Programming_Response_Up_NoLoad = 80
 Programming_Response_Up_FullLoad = 80
@@ -58,10 +65,10 @@ Power_Readback_Error_Gain = 0.005
 Voltage_Rating = 32
 Current_Rating = 10
 minCurrent = 1
-maxCurrent = 10
+maxCurrent = 3
 current_step_size = 1
 minVoltage = 1
-maxVoltage = 32
+maxVoltage = 3
 voltage_step_size = 1
 
 

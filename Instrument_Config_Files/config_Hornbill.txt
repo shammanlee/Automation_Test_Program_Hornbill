@@ -11,9 +11,9 @@ noofloop = 1
 updatedelay = 3.0
 
 //Connections (Visa Address Default Settings)
-PSU = USB0::0x2A8D::0xCC04::CN10000012::0::INSTR
+PSU = TCPIP0::141.183.188.184::inst0::INSTR
 DMM = USB0::0x2A8D::0x0201::MY57701012::0::INSTR
-ELoad = USB0::0x2A8D::0x3702::MY60260104::0::INSTR
+ELoad = USB0::0x2A8D::0x3902::MY61002060::0::INSTR
 OSC = USB0::0x0957::0x1754::MY44008005::0::INSTR
 DMM2 = USB0::0x2A8D::0x1301::MY53204794::0::INSTR
 ACSource = USB0::0x2A8D::0x3801::LPQ0000103::0::INSTR
@@ -28,12 +28,49 @@ VoltageSense = EXT
 rshunt = 0.01
 
 //Error Settings
-Programming_Error_Gain = 0.0005
-Programming_Error_Offset = 0.005
-Readback_Error_Gain = 0.0005
-Readback_Error_Offset = 0.005
+//Voltage Gain and Offset 
+Programming_Error_Gain = 0.0003
+Programming_Error_Offset = 0.006
+Readback_Error_Gain = 0.0003
+Readback_Error_Offset = 0.006
 Load_Programming_Error_Gain =  0.0001
 Load_Programming_Error_Offset =  0.002
+
+//Current Gain and Offset - 20A
+Current_20A_Programming_Error_Gain = 0.0005
+Current_20A_Programming_Error_Offset = 0.005
+Current_20A_Readback_Error_Gain = 0.0005
+Current_20A_Readback_Error_Offset = 0.005
+
+//Current Gain and Offset - 2A
+Current_2A_Programming_Error_Gain = 0.0005
+Current_2A_Programming_Error_Offset = 0.005
+Current_2A_Readback_Error_Gain = 0.0005
+Current_2A_Readback_Error_Offset = 0.005
+
+//Current Gain and Offset - 200mA
+Current_200mA_Programming_Error_Gain = 0.0005
+Current_200mA_Programming_Error_Offset = 0.005
+Current_200mA_Readback_Error_Gain = 0.0005
+Current_200mA_Readback_Error_Offset = 0.005
+
+//Current Gain and Offset - 20mA
+Current_20mA_Programming_Error_Gain = 0.0005
+Current_20mA_Programming_Error_Offset = 0.005
+Current_20mA_Readback_Error_Gain = 0.0005
+Current_20mA_Readback_Error_Offset = 0.005
+
+//Current Gain and Offset - 2mA
+Current_2mA_Programming_Error_Gain = 0.0005
+Current_2mA_Programming_Error_Offset = 0.005
+Current_2mA_Readback_Error_Gain = 0.0005
+Current_2mA_Readback_Error_Offset = 0.005
+
+//Current Gain and Offset - 200uA
+Current_200uA_Programming_Error_Gain = 0.0005
+Current_200uA_Programming_Error_Offset = 0.005
+Current_200uA_Readback_Error_Gain = 0.0005
+Current_200uA_Readback_Error_Offset = 0.005
 
 Programming_Response_Up_NoLoad = 80
 Programming_Response_Up_FullLoad = 80
@@ -44,8 +81,8 @@ OVP_ErrorGain = 0.002
 OVP_ErrorOffset = 0.4
 
 //Power 
-Power_Rating = 160
-Power = 160
+Power_Rating = 300
+Power = 300
 powerini = 0
 power_step_size = 10
 
@@ -55,19 +92,19 @@ Power_Readback_Error_Offset = 0.0005
 Power_Readback_Error_Gain = 0.005
 
 //Voltage & Current Settings
-Voltage_Rating = 32
-Current_Rating = 10
+Voltage_Rating = 60
+Current_Rating = 20
 minCurrent = 1
-maxCurrent = 10
-current_step_size = 1
-minVoltage = 1
-maxVoltage = 32
-voltage_step_size = 1
+maxCurrent = 20
+current_step_size = 5
+minVoltage = 3
+maxVoltage = 3000
+voltage_step_size = 3
 
 
 //DMM Settings (Default Hardcoded in GUI.py)
 Range = Auto
-Aperture = 10
+Aperture = 100
 AutoZero = ON
 //Auto - ON, 10M - OFF
 inputZ = ON
