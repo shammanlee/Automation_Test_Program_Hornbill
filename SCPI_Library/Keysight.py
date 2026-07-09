@@ -1041,12 +1041,18 @@ class Hornbill(Subsystem):
 
     def __init__(self, VISA_ADDRESS):
         super().__init__(VISA_ADDRESS)
+    
+    def setMode(self, Mode, ChannelNumber):
+        self.instr.write(f"FUNC {Mode},(@{ChannelNumber})")
 
     def sourVoltageLevelImmediateAmplitude(self, Value, ChannelNumber):
         self.instr.write(f"SOURce:VOLTage:LEVel:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
     
     def sourCurrentLimitPOS(self, Value, ChannelNumber):
         self.instr.write(f"SOURce:CURRent:LIMit:POS:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
+    
+    def sourCurrentLimitNEG(self, Value, ChannelNumber):
+        self.instr.write(f"SOURce:CURRent:LIMit:NEG:IMMediate:AMPLitude {Value}, (@{ChannelNumber})")
 
     def senseVoltageSource(self, Mode, ChannelNumber):
         self.instr.write(f"SOURce:VOLTage:SENSe:SOURce {Mode}, (@{ChannelNumber})")
@@ -1082,43 +1088,35 @@ class Hornbill(Subsystem):
         self.instr.write(f"DIAG:POKE 20{ChannelNumber},{state}")
 
     def diag_PEEK_VoltageReadback_VMON_100k(self):
-        self.instr.write("DIAG:PEEK? 20,0,100000")
-        resp = self.instr.read_raw()
+        resp = self.instr.query("DIAG:PEEK? 20,0,100000")
         return resp
     
     def diag_PEEK_CurrentReadback_IMON_200uA_100k(self):
-        self.instr.write("DIAG:PEEK? 20,1,100000")
-        resp = self.instr.read_raw()
+        resp = self.instr.query("DIAG:PEEK? 20,1,100000")
         return resp
     
     def diag_PEEK_VoltageReadback_VLOC_100k(self):
-        self.instr.write("DIAG:PEEK? 20,2")
-        resp = self.instr.read_raw()
+        resp = self.instr.query("DIAG:PEEK? 20,2,100000")
         return resp
     
     def diag_PEEK_CurrentReadback_IMON_200mA_100k(self):
-        self.instr.write("DIAG:PEEK? 20,3,100000")
-        resp = self.instr.read_raw()
+        resp = self.instr.query("DIAG:PEEK? 20,3,100000")
         return resp
     
     def diag_PEEK_CurrentReadback_IMON_20mA_100k(self):
-        self.instr.write("DIAG:PEEK? 20,4,100000")
-        resp = self.instr.read_raw()
+        resp = self.instr.query("DIAG:PEEK? 20,4,100000")
         return resp
     
     def diag_PEEK_CurrentReadback_IMON_2A_100k(self):
-        self.instr.write("DIAG:PEEK? 20,5,100000")
-        resp = self.instr.read_raw()
+        resp = self.instr.query("DIAG:PEEK? 20,5,100000")
         return resp
     
     def diag_PEEK_CurrentReadback_IMON_2mA_100k(self):
-        self.instr.write("DIAG:PEEK? 20,6,100000")
-        resp = self.instr.read_raw()
+        resp = self.instr.query("DIAG:PEEK? 20,6,100000")
         return resp
     
     def diag_PEEK_CurrentReadback_IMON_FULL_100k(self):
-        self.instr.write("DIAG:PEEK? 20,7,100000")
-        resp = self.instr.read_raw()
+        resp = self.instr.query("DIAG:PEEK? 20,7,100000")
         return resp
     
 

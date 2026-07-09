@@ -71,7 +71,6 @@ class Dimport:
         Current = getattr(module, "Current")
         Oscilloscope = getattr(module, "Oscilloscope")
         Excavator = getattr(module, "Excavator")
-        SMU = getattr(module, "SMU")
         Power = getattr(module, "Power")
         Hornbill = getattr(module, "Hornbill")
         SMU_N67XX = getattr(module, "SMU_N67XX")
@@ -99,7 +98,6 @@ class Dimport:
             Current,
             Oscilloscope,
             Excavator,
-            SMU,
             Power,
             Hornbill,
             SMU_N67XX,
@@ -114,13 +112,11 @@ class Dimport:
         Channel = getattr(module, "Channel")
         Mode = getattr(module, "Mode")
         Voltage = getattr(module, "Voltage")
-        ELOAD_E367XXA = getattr(module, "ELOAD_E367XXA")
 
         return (
             Channel,
             Mode,
             Voltage,
-            ELOAD_E367XXA
         )
 
 #Check Visa IO address
@@ -196,29 +192,29 @@ class HornbillVoltageMeasurementwithELoad:
             Current,
             Oscilloscope,
             Excavator,
-            SMU,
             Power,
             Hornbill,
             SMU_N67XX,
             DMM_344XXA,
             DMM_3458A,
+            ELOAD_E367XXA,
         ) = Dimport.getClasses_Keysight(dict["Instrument"])
 
         (
             Channel,
             Mode,
             Voltage,
-            ELOAD_E367XXA,
-        ) = Dimport.getClasses_Chroma(dict["Instrument"])
+        ) = Dimport.getClasses_Chroma("Chroma")
 
         #Channel Loop (For usage of All Channels, the channel is taken from Execute Function in GUI.py)
         ch = channel
 
         #Assign Instrument Object and Initialize the Instrument based on the VISA Address given in GUI
         psu = Hornbill(dict["PSU"])
-        psu.setMode("VOLTAGE")
+        psu.setMode("VOLTAGE", ch)
         psu.senseVoltageSource(dict["VoltageSense"], ch)
         psu.sourCurrentLimitPOS("MAXimum", ch)         #Current LIMIT (Max for Voltage Accuracy)
+        psu.sourCurrentLimitNEG("MINimum", ch)         #Current LIMIT (Max for Voltage Accuracy)
         psu.outputState("ON", ch) #Turn On the PSU and Eload
        
        
@@ -257,7 +253,7 @@ class HornbillVoltageMeasurementwithELoad:
             dmm.setEndCondition()
             dmm.setDigits()
             dmm.enableAutoZero()
-            dmm.enableDisplay(0)
+            dmm.enableDisplay()
         
         if dict["ELoad_Model"] == "E367XXA":
             eload = ELOAD_E367XXA(dict["ELoad"])
@@ -298,15 +294,13 @@ class HornbillVoltageMeasurementwithELoad:
             (float(dict["maxVoltage"]) - float(dict["minVoltage"]))
             / float(dict["voltage_step_size"])
         ) + 1
-        sleep(1)
-        
+  
 
         #Run Test (Voltage Loop in Current Loop)
         while i < current_iter:
             j = 0
             V = float(dict["minVoltage"])
             psu.sourVoltageLevelImmediateAmplitude(float(dict["minVoltage"]), ch)
-            sleep(3)
             Iset = dict["maxCurrent"]
             WAI(dict["PSU"])
 
@@ -334,7 +328,6 @@ class HornbillVoltageMeasurementwithELoad:
                     eload.setOutputCurrent(I_fixed)
                     WAI(dict["ELoad"])
 
-            sleep(1)
 
             #Voltage Iteration
             while j < voltage_iter:
@@ -349,40 +342,14 @@ class HornbillVoltageMeasurementwithELoad:
                 sleep(float(self.updatedelay))
 
                 #Readback Voltage and Current
-                diagVmon_raw = psu.diagVoltageReadback_VMON_100k()
-                sleep(1)
-                # Decode from bytes to string
-                diagVmon_str = diagVmon_raw.decode().strip()
-                print("Raw Response:", diagVmon_str)
-
-                # Split into components
-                values = diagVmon_str.split(',')
-                cleandiagVmon = float(values[0])
-
+                cleandiagVmon = float(psu.diag_PEEK_VoltageReadback_VMON_100k())
                 print("Voltage Monitor Reading =", cleandiagVmon)
-                WAI(dict["PSU"])
 
-                #temp_values2 = psu.measureCurrentDC(ch)
-                diagImon_raw = psu.diagCurrentReadback_IMON_FULL_100k()
-                sleep(1)
-                # Decode from bytes to string
-                diagImon_str = diagImon_raw.decode().strip()
-                print("Raw Response:", diagImon_str)
-
-                # Split into components
-                diagImon_values = diagImon_str.split(',')
-                cleandiagImon = float(diagImon_values[0])
+                cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
                 print("Current Monitor Reading =", cleandiagImon)
-                WAI(dict["PSU"])
 
-                sleep(1)
-                #self.dataList2.insert(k, [float(temp_values), float(temp_values2)])
                 self.dataList2.insert(k, [float(cleandiagVmon), float(cleandiagImon)])
-
-                if worker is not None:
-                    worker.new_data.emit(float(cleandiagVmon), float(cleandiagVmon))
-                
-                
+               
                 
                 if dict["DMM_Model"] == "344xxA":
                     #INIT DMM (Trigger Measurement)
@@ -419,11 +386,27 @@ class HornbillVoltageMeasurementwithELoad:
 
                 elif dict["DMM_Model"] == "3458A":
                     # Read current from 3485A DMM
-                    voltagemeasured = float(dmm.queryMeasurement)
+                    voltagemeasured = float(dmm.queryMeasurement())
                     self.dataList.insert(
                                 
                                 k, [voltagemeasured , 0]
                     )
+                
+                if worker is not None:
+                    prog_percent = (voltagemeasured - V)/V*100
+                    read_percent = (cleandiagVmon - voltagemeasured)/voltagemeasured*100
+                    prog_upper_bound = (V*self.param1) + self.param2
+                    prog_lower_bound = -prog_upper_bound
+                    read_upper_bound = (V*self.param3) + self.param4
+                    read_lower_bound = -read_upper_bound
+                    perc_up_bound = 100
+                    perc_low_bound = -100
+                    worker.new_data.emit(V, I_fixed, cleandiagVmon, voltagemeasured, cleandiagImon, voltagemeasured - V, \
+                                         cleandiagVmon - voltagemeasured, prog_percent, read_percent, prog_upper_bound, prog_lower_bound, \
+                                        read_upper_bound, read_lower_bound, perc_up_bound, perc_low_bound)
+                    worker.popup_data.emit(voltagemeasured - V, cleandiagVmon - voltagemeasured, prog_upper_bound, prog_lower_bound, \
+                                           read_upper_bound, read_lower_bound, prog_percent, read_percent, perc_up_bound, perc_low_bound)
+                
 
                 #Increment of Steps
                 #Delay(dict["PSU"]).write(dict["DownTime"])
@@ -446,23 +429,17 @@ class HornbillVoltageMeasurementwithELoad:
         WAI(dict["PSU"])
        
         RST(dict["ELoad"])
-        WAI(dict["ELoad"])
         RST(dict["DMM"])
-        WAI(dict["DMM"])
         RST(dict["PSU"])
-        WAI(dict["PSU"])
 
-        #Clear the Error Status
-        CLS(dict["PSU"])
-        WAI(dict["PSU"])
-        CLS(dict["ELoad"])
-        WAI(dict["ELoad"])
-        CLS(dict["DMM"])
-        WAI(dict["DMM"])
 
-        psu.close()
-        dmm.close()
-        eload.close()
+        # Wrapper classes hold the real PyVISA session in .instr
+        for instrument in (psu, dmm, eload):
+            try:
+                if instrument is not None and hasattr(instrument, "instr") and instrument.instr is not None:
+                    instrument.instr.close()
+            except Exception:
+                pass
 
 
         return self.infoList, self.dataList, self.dataList2
@@ -488,38 +465,29 @@ class HornbillVoltageMeasurementwithELoad:
             Current,
             Oscilloscope,
             Excavator,
-            SMU,
             Power,
             Hornbill,
-        ) = Dimport.getClasses(dict["Instrument"])
+            SMU_N67XX,
+            DMM_344XXA,
+            DMM_3458A,
+            ELOAD_E367XXA,
+        ) = Dimport.getClasses_Keysight(dict["Instrument"])
 
-      
-        RST(dict["ELoad"])
-        WAI(dict["ELoad"])
-        RST(dict["DMM"])
-        WAI(dict["DMM"])
-        RST(dict["PSU"])
-        WAI(dict["PSU"])
+        (
+            Channel,
+            Mode,
+            Voltage,
+        ) = Dimport.getClasses_Chroma("Chroma")
 
         #Channel Loop (For usage of All Channels, the channel is taken from Execute Function in GUI.py)
         ch = channel
 
-        #Use ch for each individual channel
-        print(f"Channel {ch} Test Running\n")
-        print("")
-        #offset
-        sleep(3)
-
-        # Instrument Initialization
-        Configure(dict["DMM"]).write("Voltage")
-        Trigger(dict["DMM"]).setSource("BUS")
-        Sense(dict["DMM"]).setVoltageResDC(dict["VoltageRes"])
-        Function(dict["ELoad"]).setMode("Current")
-        Function(dict["PSU"]).setMode("Voltage")
-
-        #Instrument Channel Set
-        Voltage(dict["ELoad"]).setInstrumentChannel(dict["ELoad_Channel"])
-        sleep(2)
+        #Assign Instrument Object and Initialize the Instrument based on the VISA Address given in GUI
+        psu = Hornbill(dict["PSU"])
+        psu.setMode("VOLTAGE", ch)
+        psu.senseVoltageSource(dict["VoltageSense"], ch)
+        psu.sourCurrentLimitPOS("MAXimum", ch)         #Current LIMIT (Max for Voltage Accuracy)
+        psu.outputState("ON", ch) #Turn On the PSU and Eload
 
         #Set Series/Parallel Mode
         if dict["OperationMode"] == "Series":
@@ -532,20 +500,44 @@ class HornbillVoltageMeasurementwithELoad:
             Output(dict["PSU"]).SPModeConnection("OFF")
             WAI(dict["PSU"])
 
-        #Set Current and Sense Mode
-        Voltage(dict["PSU"]).setSenseModeMultipleChannel(dict["VoltageSense"], ch)
-        Voltage(dict["ELoad"]).setSenseModeMultipleChannel(dict["VoltageSense"], dict["ELoad_Channel"])
+        if dict["DMM_Model"] == "344xxA":
+            dmm = DMM_344XXA(dict["DMM"])
+            dmm.setNPLC(dict["Aperture"])
+            dmm.setAutoZeroMode(dict["AutoZero"])
+            dmm.setAutoImpedanceMode(dict["InputZ"])
+            dmm.setConfiguration("VOLT")
+            dmm.setTriggerSource("BUS")
+            dmm.setVoltageResolutionDC("HIGH")
 
-        #DMM Mode
-        Voltage(dict["DMM"]).setNPLC(dict["Aperture"])
-        Voltage(dict["DMM"]).setAutoZeroMode(dict["AutoZero"])
-        Voltage(dict["DMM"]).setAutoImpedanceMode(dict["InputZ"])
+            if dict["Range"] == "Auto":
+                Sense(dict["DMM"]).setVoltageRangeDCAuto()
+            else:
+                Sense(dict["DMM"]).setVoltageRangeDC(dict["Range"])
 
-        if dict["Range"] == "Auto":
-            Sense(dict["DMM"]).setVoltageRangeDCAuto()
+        elif dict["DMM_Model"] == "3458A":
+            dmm = DMM_3458A(dict["DMM"])
+            dmm.setDCV("AUTO")
+            dmm.setTriggerArm()
+            dmm.setNPLC(dict["Aperture"])
+            dmm.setNumberOfReadings()
+            dmm.disableMemory()
+            dmm.setEndCondition()
+            dmm.setDigits()
+            dmm.enableAutoZero()
+            dmm.enableDisplay()
+        
+        if dict["ELoad_Model"] == "E367XXA":
+            eload = ELOAD_E367XXA(dict["ELoad"])
+            eload.setOutputState("ON")
+            WAI(dict["ELoad"])
+            
+            
+        elif dict["ELoad_Model"] == "Chroma":
+            eload = ELOAD_E63200A(dict["ELoad"])
 
-        else:
-            Sense(dict["DMM"]).setVoltageRangeDC(dict["Range"])
+        #Use ch for each individual channel
+        print(f"Channel {ch} Test Running\n")
+        print("")
 
         #Programming Parameters
         self.param1 = float(dict["Programming_Error_Gain"])
@@ -573,34 +565,13 @@ class HornbillVoltageMeasurementwithELoad:
             / float(dict["voltage_step_size"])
         ) + 1
         sleep(1)
-
-        psu = Hornbill(dict["PSU"])
-        #Current LIMIT (Max for Voltage Accuracy)
-        psu.sourCurrentLimitPOS("MAXimum", ch)
-        WAI(dict["PSU"])
         
-        #Turn On the PSU and Eload
-        psu.outputState("ON", ch)
-        WAI(dict["PSU"])
-        Output(dict["ELoad"]).setOutputState("ON")
-        WAI(dict["ELoad"])
-
-        #Clear the Error Status
-        CLS(dict["PSU"])
-        WAI(dict["PSU"])
-        CLS(dict["ELoad"])
-        WAI(dict["ELoad"])
-        CLS(dict["DMM"])
-        WAI(dict["DMM"])
-        
-        
-        j = 0
-        V = float(dict["minVoltage"])
+    
         #Voltage Iteration
         while j < voltage_iter:
             i=0
             I_fixed = float(dict["minCurrent"])
-            Current(dict["ELoad"]).setOutputCurrent(I_fixed)
+            eload.setOutputCurrent(I_fixed)
 
             WAI(dict["ELoad"])
             #Set Voltage and Current
@@ -610,56 +581,21 @@ class HornbillVoltageMeasurementwithELoad:
             WAI(dict["PSU"])
             self.infoList.insert(k, [V, I_fixed, i])
 
-            #Timeout/Delay-----------------------------------------?
-            #Delay(dict["PSU"]).write(dict["UpTime"])
-            #WAI(dict["PSU"])
-            sleep(0.2)
             sleep(float(self.updatedelay))
 
             #Readback Voltage and Current
-            #temp_values = psu.measureVoltageDC(ch)
-            diagVmon_raw = psu.diagVoltageReadback_VMON_100k()
-            sleep(1)
-            # Decode from bytes to string
-            diagVmon_str = diagVmon_raw.decode().strip()
-            print("Raw Response:", diagVmon_str)
-
-            # Split into components
-            values = diagVmon_str.split(',')
-            cleandiagVmon = float(values[0])
-
+            cleandiagVmon = float(psu.diag_PEEK_VoltageReadback_VMON_100k())
             print("Voltage Monitor Reading =", cleandiagVmon)
-            WAI(dict["PSU"])
 
-            #temp_values2 = psu.measureCurrentDC(ch)
-            diagImon_raw = psu.diagCurrentReadback_IMON_FULL_100k()
-            sleep(1)
-            # Decode from bytes to string
-            diagImon_str = diagImon_raw.decode().strip()
-            print("Raw Response:", diagImon_str)
-
-            # Split into components
-            diagImon_values = diagImon_str.split(',')
-            cleandiagImon = float(diagImon_values[0])
+            cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
             print("Current Monitor Reading =", cleandiagImon)
-            WAI(dict["PSU"])
 
             sleep(1)
-            #self.dataList2.insert(k, [float(temp_values), float(temp_values2)])
             self.dataList2.insert(k, [float(cleandiagVmon), float(cleandiagImon)])
             
-            #INIT DMM (Trigger Measurement)
-            Initiate(dict["DMM"]).initiate()
-            status = float(Status(dict["DMM"]).operationCondition())
-            sleep(1)
-            #print(status)
-            TRG(dict["DMM"])
-            #Run Test (Voltage Loop in Current Loop)
-            
+        
             while i < current_iter:
                 Iset = dict["maxCurrent"]
-                #Iset = float(psu.askSourCurrentLimitPOSImmediateAmplitude("MAX", ch)) #Query Current Level
-                #Iset = float(psu.askSourCurrentLimitPOSImmediateAmplitude("MAX", ch)) #Query Current Level
                 sleep(2)
                 WAI(dict["PSU"])
 
@@ -670,78 +606,699 @@ class HornbillVoltageMeasurementwithELoad:
                 if I_fixed == 0:           
                     I_fixedOS = 1
                     I_fixed = I_fixed + I_fixedOS
+                
+                if dict["ELoad_Model"] == "E367XXA":
+                    #If PSU MAX I = ELOAD MAX I (Reduce Eload I by 0.1 - Prevent Overload)
+                    if I_fixed == float(dict["maxCurrent"]) and Iset == float(dict["maxCurrent"]):
+                        eload.setOutputCurrent(I_fixed - 0.1)
+                        WAI(dict["ELoad"])
 
-                #If PSU MAX I = ELOAD MAX I (Reduce Eload I by 0.1 - Prevent Overload)
-                if I_fixed == float(dict["maxCurrent"]) and Iset == float(dict["maxCurrent"]):
-                    Current(dict["ELoad"]).setOutputCurrent(I_fixed - 0.001)
-                    WAI(dict["ELoad"])
-                else:
-                    Current(dict["ELoad"]).setOutputCurrent(I_fixed-0.001)
-                    WAI(dict["ELoad"])
+                    else:
+                        eload.setOutputCurrent(I_fixed-0.001)
+                        WAI(dict["ELoad"])
+
+                elif dict["ELoad_Model"] == "Chroma":
+                    #If PSU MAX I = ELOAD MAX I (Reduce Eload I by 0.1 - Prevent Overload)
+                    if I_fixed == float(dict["maxCurrent"]) and Iset == float(dict["maxCurrent"]):
+                        Current(dict["ELoad"]).setOutputCurrent(I_fixed - 0.001)
+                        WAI(dict["ELoad"])
+
+                    else:
+                        Current(dict["ELoad"]).setOutputCurrent(I_fixed-0.001)
+                        WAI(dict["ELoad"])
 
                 sleep(1)
 
-                while 1:
-                    status = float(Status(dict["DMM"]).operationCondition())
-                    
-                    #Measure Voltage with Error Flag Rised
-                    if status == 8704.0:
-                        voltagemeasured = float(Fetch(dict["DMM"]).query())
-                        self.dataList.insert(
-                            
-                            k, [voltagemeasured , 0]
-                        )
-                        break
-                    
-                    #Measrue Voltage with Normal Condition
-                    elif status == 512.0:
-                        voltagemeasured = float(Fetch(dict["DMM"]).query())
-                        self.dataList.insert(
-                            
-                            k, [voltagemeasured , 0]
-                        )
-                        break
-                    elif status == 8192.0:
-                        voltagemeasured = float(Fetch(dict["DMM"]).query())
-                        self.dataList.insert(
-                            
-                            k, [voltagemeasured , 0]
-                        )
-                        break
-                    WAI(dict["DMM"])
+                if dict["DMM_Model"] == "344xxA":
+                    #INIT DMM (Trigger Measurement)
+                    dmm.initiate()
+                    status = float(dmm.operationCondition())
+                    TRG(dict["DMM"])
+                    while 1:
+                        status = float(Status(dict["DMM"]).operationCondition())
+                        
+                        #Measure Voltage with Error Flag Rised
+                        if status == 8704.0:
+                            voltagemeasured = float(Fetch(dict["DMM"]).query())
+                            self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                            )
+                            break
+                        
+                        #Measrue Voltage with Normal Condition
+                        elif status == 512.0:
+                            voltagemeasured = float(Fetch(dict["DMM"]).query())
+                            self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                            )
+                            break
+                        elif status == 8192.0:
+                            voltagemeasured = float(Fetch(dict["DMM"]).query())
+                            self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                            )
+                            break
+
+                elif dict["DMM_Model"] == "3458A":
+                    # Read current from 3485A DMM
+                    voltagemeasured = float(dmm.queryMeasurement())
+                    self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                    )
+                
+                if worker is not None:
+                    prog_percent = (voltagemeasured - V)/V*100
+                    read_percent = (cleandiagVmon - voltagemeasured)/voltagemeasured*100
+                    prog_upper_bound = (V*self.param1) + self.param2
+                    prog_lower_bound = -prog_upper_bound
+                    read_upper_bound = (V*self.param3) + self.param4
+                    read_lower_bound = -read_upper_bound
+                    perc_up_bound = 100
+                    perc_low_bound = -100
+                    worker.new_data.emit(V, I_fixed, cleandiagVmon, voltagemeasured, cleandiagImon, voltagemeasured - V, \
+                                         cleandiagVmon - voltagemeasured, prog_percent, read_percent, prog_upper_bound, prog_lower_bound, \
+                                        read_upper_bound, read_lower_bound, perc_up_bound, perc_low_bound)
+                    worker.popup_data.emit(voltagemeasured - V, cleandiagVmon - voltagemeasured, prog_upper_bound, prog_lower_bound, \
+                                           read_upper_bound, read_lower_bound, prog_percent, read_percent, perc_up_bound, perc_low_bound)
                 
                 I_fixed += float(dict["current_step_size"])
                 i += 1
             
-            
-
                 #Ensure the DUT won't exceed the power limit set
                 powermeasure = float (V * I_fixed)
                 if powermeasure > self.Power:
                     break
+                
             #Increment of Steps
             #Delay(dict["PSU"]).write(dict["DownTime"])
             V += float(dict["voltage_step_size"])
             j += 1
             k += 1
-            
-
         
 
         psu.sourVoltageLevelImmediateAmplitude(0, ch)
         WAI(dict["PSU"])
         psu.sourCurrentLimitPOS("MIN", ch)
         WAI(dict["PSU"])
-        Current(dict["ELoad"]).setOutputCurrent(0)
-        WAI(dict["ELoad"])
-        """Output(dict["PSU"]).SPModeConnection("OFF")
-        WAI(dict["PSU"])"""
-        psu.outputState("OFF", ch)
-        WAI(dict["PSU"])
-        Output(dict["ELoad"]).setOutputState("OFF")
-        WAI(dict["ELoad"])
+        
+        RST(dict["ELoad"])
         RST(dict["DMM"])
-        WAI(dict["DMM"])
+
+        # Wrapper classes hold the real PyVISA session in .instr
+        for instrument in (psu, dmm, eload):
+            try:
+                if instrument is not None and hasattr(instrument, "instr") and instrument.instr is not None:
+                    instrument.instr.close()
+            except Exception:
+                pass
+
+        return self.infoList, self.dataList, self.dataList2
+
+class HornbillVoltageMeasurementwithELoadwithOscilloscope:
+
+    def __init__(self):
+        self.results = []
+        self.infoList = []
+        self.dataList = []
+        self.dataList2 = []
+
+    def Execute_Voltage_Accuracy_Current_Static(self,dict,channel, worker=None):
+        (
+            Read,
+            Apply,
+            Display,
+            Function,
+            Frequency,
+            Output,
+            Measure,
+            Sense,
+            Configure,
+            Delay,
+            Trigger,
+            Sample,
+            Initiate,
+            Fetch,
+            Status,
+            Voltage,
+            Current,
+            Oscilloscope,
+            Excavator,
+            Power,
+            Hornbill,
+            SMU_N67XX,
+            DMM_344XXA,
+            DMM_3458A,
+            ELOAD_E367XXA,
+        ) = Dimport.getClasses_Keysight(dict["Instrument"])
+
+        (
+            Channel,
+            Mode,
+            Voltage,
+        ) = Dimport.getClasses_Chroma("Chroma")
+
+        #Channel Loop (For usage of All Channels, the channel is taken from Execute Function in GUI.py)
+        ch = channel
+
+        #Assign Instrument Object and Initialize the Instrument based on the VISA Address given in GUI
+        psu = Hornbill(dict["PSU"])
+        psu.setMode("VOLTAGE", ch)
+        psu.senseVoltageSource(dict["VoltageSense"], ch)
+        psu.sourCurrentLimitPOS("MAXimum", ch)         #Current LIMIT (Max for Voltage Accuracy)
+        psu.sourCurrentLimitNEG("MINimum", ch)         #Current LIMIT (Max for Voltage Accuracy)
+        psu.outputState("ON", ch) #Turn On the PSU and Eload
+       
+       
+        #Set Series/Parallel Mode
+        if dict["OperationMode"] == "Series":
+            Output(dict["PSU"]).SPModeConnection("SER")
+            WAI(dict["PSU"])
+        elif dict["OperationMode"] == "Parallel":
+            Output(dict["PSU"]).SPModeConnection("PAR")
+            WAI(dict["PSU"])
+        else:
+            Output(dict["PSU"]).SPModeConnection("OFF")
+            WAI(dict["PSU"])
+
+        if dict["DMM_Model"] == "344xxA":
+            dmm = DMM_344XXA(dict["DMM"])
+            dmm.setNPLC(dict["Aperture"])
+            dmm.setAutoZeroMode(dict["AutoZero"])
+            dmm.setAutoImpedanceMode(dict["InputZ"])
+            dmm.setConfiguration("VOLT")
+            dmm.setTriggerSource("BUS")
+            dmm.setVoltageResolutionDC("HIGH")
+
+            if dict["Range"] == "Auto":
+                Sense(dict["DMM"]).setVoltageRangeDCAuto()
+            else:
+                Sense(dict["DMM"]).setVoltageRangeDC(dict["Range"])
+
+        elif dict["DMM_Model"] == "3458A":
+            dmm = DMM_3458A(dict["DMM"])
+            dmm.setDCV("AUTO")
+            dmm.setTriggerArm()
+            dmm.setNPLC(dict["Aperture"])
+            dmm.setNumberOfReadings()
+            dmm.disableMemory()
+            dmm.setEndCondition()
+            dmm.setDigits()
+            dmm.enableAutoZero()
+            dmm.enableDisplay()
+        
+        if dict["ELoad_Model"] == "E367XXA":
+            eload = ELOAD_E367XXA(dict["ELoad"])
+            eload.setOutputState("ON")
+            WAI(dict["ELoad"])
+            
+            
+        elif dict["ELoad_Model"] == "Chroma":
+            eload = ELOAD_E63200A(dict["ELoad"])
+
+
+        #Use ch for each individual channel
+        print(f"Channel {ch} Test Running\n")
+        print("")
+
+        #Programming Parameters
+        self.param1 = float(dict["Programming_Error_Gain"])
+        self.param2 = float(dict["Programming_Error_Offset"])
+        self.param3 = float(dict["Readback_Error_Gain"])
+        self.param4 = float(dict["Readback_Error_Offset"])
+        self.unit = dict["unit"]
+        self.updatedelay = float(dict["updatedelay"])
+
+        #Set Program Loop Using Step Size
+        self.Power = float(dict["power"])
+        i = 0   #Current Iteration
+        j = 0   #Voltage Iteration
+        k = 0   #Step of Iteration
+        I_fixedOS = 0                               #Offset Current (Manually Added)
+        I_fixed = float(dict["minCurrent"])         #Min Current
+        V = float(dict["minVoltage"])
+        I = float(dict["maxVoltage"]) + 1
+        current_iter = (
+            (float(dict["maxCurrent"]) - float(dict["minCurrent"]))
+            / float(dict["current_step_size"])
+        ) + 1
+        voltage_iter = (
+            (float(dict["maxVoltage"]) - float(dict["minVoltage"]))
+            / float(dict["voltage_step_size"])
+        ) + 1
+  
+
+        #Run Test (Voltage Loop in Current Loop)
+        while i < current_iter:
+            j = 0
+            V = float(dict["minVoltage"])
+            psu.sourVoltageLevelImmediateAmplitude(float(dict["minVoltage"]), ch)
+            Iset = dict["maxCurrent"]
+            WAI(dict["PSU"])
+
+            if I_fixed > float(dict["maxCurrent"]):
+                I_fixed= float(dict["maxCurrent"])
+
+            #If minimum current is 0, set to 1A
+            if I_fixed == 0:           
+                I_fixedOS = 1
+                I_fixed = I_fixed + I_fixedOS
+
+            #If PSU MAX I = ELOAD MAX I (Reduce Eload I by 0.1 - Prevent Overload)
+            if I_fixed == float(dict["maxCurrent"]) and Iset == float(dict["maxCurrent"]):
+                if dict["ELoad_Model"] == "E367XXA":
+                    eload.setOutputCurrent(I_fixed - 0.1)
+                    WAI(dict["ELoad"])
+                elif dict["ELoad_Model"] == "Chroma":
+                    eload.setOutputCurrent(I_fixed - 0.1)
+                    WAI(dict["ELoad"])
+            else:
+                if dict["ELoad_Model"] == "E367XXA":
+                    eload.setOutputCurrent(I_fixed)
+                    WAI(dict["ELoad"])
+                elif dict["ELoad_Model"] == "Chroma":
+                    eload.setOutputCurrent(I_fixed)
+                    WAI(dict["ELoad"])
+
+
+            #Voltage Iteration
+            while j < voltage_iter:
+                #Set Voltage and Current
+                if V > float(dict["maxVoltage"]):
+                    V = float(dict["maxVoltage"])
+                    
+                psu.sourVoltageLevelImmediateAmplitude(V, ch)
+                WAI(dict["PSU"])
+                self.infoList.insert(k, [V, I_fixed, i])
+
+                sleep(float(self.updatedelay))
+
+                #Readback Voltage and Current
+                cleandiagVmon = float(psu.diag_PEEK_VoltageReadback_VMON_100k())
+                print("Voltage Monitor Reading =", cleandiagVmon)
+
+                cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
+                print("Current Monitor Reading =", cleandiagImon)
+
+                self.dataList2.insert(k, [float(cleandiagVmon), float(cleandiagImon)])
+               
+                #DMM Measurement
+                if dict["DMM_Model"] == "344xxA":
+                    #INIT DMM (Trigger Measurement)
+                    dmm.initiate()
+                    status = float(dmm.operationCondition())
+                    TRG(dict["DMM"])
+                    while 1:
+                        status = float(Status(dict["DMM"]).operationCondition())
+                        
+                        #Measure Voltage with Error Flag Rised
+                        if status == 8704.0:
+                            voltagemeasured = float(Fetch(dict["DMM"]).query())
+                            self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                            )
+                            break
+                        
+                        #Measrue Voltage with Normal Condition
+                        elif status == 512.0:
+                            voltagemeasured = float(Fetch(dict["DMM"]).query())
+                            self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                            )
+                            break
+                        elif status == 8192.0:
+                            voltagemeasured = float(Fetch(dict["DMM"]).query())
+                            self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                            )
+                            break
+
+                elif dict["DMM_Model"] == "3458A":
+                    # Read current from 3485A DMM
+                    voltagemeasured = float(dmm.queryMeasurement())
+                    self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                    )
+                
+                #Oscilloscope Measurement
+                Oscilloscope(dict["OSC"]).run()
+                sleep(1)
+                Oscilloscope(dict["OSC"]).stop()
+                try:
+                    Oscilloscope(dict["OSC"]).displaydata()
+                    displayData=Oscilloscope(dict["OSC"]).read_binary_data()
+                    print("Data retrieved successfully:", displayData)
+                except VisaIOError as e:
+                    print(f"Timeout or communication error: {e}")
+                    raise
+
+                if displayData.startswith(b"#"):
+                    header_length = int(displayData[1:2])  # Get header size length
+                    num_digits = int(displayData[2:2 + header_length])  # Extract data length
+                    displayData = displayData[2 + header_length:]  # Extract actual image data
+
+                # Define save path with timestamp
+                save_path = str(dict["savedir"])
+                current_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+                png_file = os.path.join(save_path, f"{V}_{I_fixed}_{current_time}.png")
+
+                # Save PNG file as binary
+                with open(png_file, "wb") as file:
+                    file.write(displayData)
+
+                print(f"Screenshot saved at: {png_file}")
+
+
+                if worker is not None:
+                    prog_percent = (voltagemeasured - V)/V*100
+                    read_percent = (cleandiagVmon - voltagemeasured)/voltagemeasured*100
+                    prog_upper_bound = (V*self.param1) + self.param2
+                    prog_lower_bound = -prog_upper_bound
+                    read_upper_bound = (V*self.param3) + self.param4
+                    read_lower_bound = -read_upper_bound
+                    perc_up_bound = 100
+                    perc_low_bound = -100
+                    worker.new_data.emit(V, I_fixed, cleandiagVmon, voltagemeasured, cleandiagImon, voltagemeasured - V, \
+                                         cleandiagVmon - voltagemeasured, prog_percent, read_percent, prog_upper_bound, prog_lower_bound, \
+                                        read_upper_bound, read_lower_bound, perc_up_bound, perc_low_bound)
+                    worker.popup_data.emit(voltagemeasured - V, cleandiagVmon - voltagemeasured, prog_upper_bound, prog_lower_bound, \
+                                           read_upper_bound, read_lower_bound, prog_percent, read_percent, perc_up_bound, perc_low_bound)
+                
+
+                #Increment of Steps
+                #Delay(dict["PSU"]).write(dict["DownTime"])
+                V += float(dict["voltage_step_size"])
+                j += 1
+                k += 1
+
+                #Ensure the DUT won't exceed the power limit set
+                powermeasure = float (V * I_fixed)
+                if powermeasure > self.Power:
+                    break
+
+            I_fixed += float(dict["current_step_size"])
+            i += 1
+
+
+        psu.sourVoltageLevelImmediateAmplitude(3, ch)
+        WAI(dict["PSU"])
+        psu.sourCurrentLimitPOS("MIN", ch)
+        WAI(dict["PSU"])
+       
+        RST(dict["ELoad"])
+        RST(dict["DMM"])
+        RST(dict["PSU"])
+
+
+        # Wrapper classes hold the real PyVISA session in .instr
+        for instrument in (psu, dmm, eload):
+            try:
+                if instrument is not None and hasattr(instrument, "instr") and instrument.instr is not None:
+                    instrument.instr.close()
+            except Exception:
+                pass
+
+
+        return self.infoList, self.dataList, self.dataList2
+    
+    def Execute_Voltage_Accuracy_Current_Change(self,dict,channel, worker=None):
+        (
+            Read,
+            Apply,
+            Display,
+            Function,
+            Frequency,
+            Output,
+            Measure,
+            Sense,
+            Configure,
+            Delay,
+            Trigger,
+            Sample,
+            Initiate,
+            Fetch,
+            Status,
+            Voltage,
+            Current,
+            Oscilloscope,
+            Excavator,
+            Power,
+            Hornbill,
+            SMU_N67XX,
+            DMM_344XXA,
+            DMM_3458A,
+            ELOAD_E367XXA,
+        ) = Dimport.getClasses_Keysight(dict["Instrument"])
+
+        (
+            Channel,
+            Mode,
+            Voltage,
+        ) = Dimport.getClasses_Chroma("Chroma")
+
+        #Channel Loop (For usage of All Channels, the channel is taken from Execute Function in GUI.py)
+        ch = channel
+
+        #Assign Instrument Object and Initialize the Instrument based on the VISA Address given in GUI
+        psu = Hornbill(dict["PSU"])
+        psu.setMode("VOLTAGE", ch)
+        psu.senseVoltageSource(dict["VoltageSense"], ch)
+        psu.sourCurrentLimitPOS("MAXimum", ch)         #Current LIMIT (Max for Voltage Accuracy)
+        psu.outputState("ON", ch) #Turn On the PSU and Eload
+
+        #Set Series/Parallel Mode
+        if dict["OperationMode"] == "Series":
+            Output(dict["PSU"]).SPModeConnection("SER")
+            WAI(dict["PSU"])
+        elif dict["OperationMode"] == "Parallel":
+            Output(dict["PSU"]).SPModeConnection("PAR")
+            WAI(dict["PSU"])
+        else:
+            Output(dict["PSU"]).SPModeConnection("OFF")
+            WAI(dict["PSU"])
+
+        if dict["DMM_Model"] == "344xxA":
+            dmm = DMM_344XXA(dict["DMM"])
+            dmm.setNPLC(dict["Aperture"])
+            dmm.setAutoZeroMode(dict["AutoZero"])
+            dmm.setAutoImpedanceMode(dict["InputZ"])
+            dmm.setConfiguration("VOLT")
+            dmm.setTriggerSource("BUS")
+            dmm.setVoltageResolutionDC("HIGH")
+
+            if dict["Range"] == "Auto":
+                Sense(dict["DMM"]).setVoltageRangeDCAuto()
+            else:
+                Sense(dict["DMM"]).setVoltageRangeDC(dict["Range"])
+
+        elif dict["DMM_Model"] == "3458A":
+            dmm = DMM_3458A(dict["DMM"])
+            dmm.setDCV("AUTO")
+            dmm.setTriggerArm()
+            dmm.setNPLC(dict["Aperture"])
+            dmm.setNumberOfReadings()
+            dmm.disableMemory()
+            dmm.setEndCondition()
+            dmm.setDigits()
+            dmm.enableAutoZero()
+            dmm.enableDisplay()
+        
+        if dict["ELoad_Model"] == "E367XXA":
+            eload = ELOAD_E367XXA(dict["ELoad"])
+            eload.setOutputState("ON")
+            WAI(dict["ELoad"])
+            
+            
+        elif dict["ELoad_Model"] == "Chroma":
+            eload = ELOAD_E63200A(dict["ELoad"])
+
+        #Use ch for each individual channel
+        print(f"Channel {ch} Test Running\n")
+        print("")
+
+        #Programming Parameters
+        self.param1 = float(dict["Programming_Error_Gain"])
+        self.param2 = float(dict["Programming_Error_Offset"])
+        self.param3 = float(dict["Readback_Error_Gain"])
+        self.param4 = float(dict["Readback_Error_Offset"])
+        self.unit = dict["unit"]
+        self.updatedelay = float(dict["updatedelay"])
+
+        #Set Program Loop Using Step Size
+        self.Power = float(dict["power"])
+        i = 0   #Current Iteration
+        j = 0   #Voltage Iteration
+        k = 0   #Step of Iteration
+        I_fixedOS = 0                               #Offset Current (Manually Added)
+        I_fixed = float(dict["minCurrent"])         #Min Current
+        V = float(dict["minVoltage"])
+        I = float(dict["maxVoltage"]) + 1
+        current_iter = (
+            (float(dict["maxCurrent"]) - float(dict["minCurrent"]))
+            / float(dict["current_step_size"])
+        ) + 1
+        voltage_iter = (
+            (float(dict["maxVoltage"]) - float(dict["minVoltage"]))
+            / float(dict["voltage_step_size"])
+        ) + 1
+        sleep(1)
+        
+    
+        #Voltage Iteration
+        while j < voltage_iter:
+            i=0
+            I_fixed = float(dict["minCurrent"])
+            eload.setOutputCurrent(I_fixed)
+
+            WAI(dict["ELoad"])
+            #Set Voltage and Current
+            if V > float(dict["maxVoltage"]):
+                V = float(dict["maxVoltage"])
+            psu.sourVoltageLevelImmediateAmplitude(V, ch)
+            WAI(dict["PSU"])
+            self.infoList.insert(k, [V, I_fixed, i])
+
+            sleep(float(self.updatedelay))
+
+            #Readback Voltage and Current
+            cleandiagVmon = float(psu.diag_PEEK_VoltageReadback_VMON_100k())
+            print("Voltage Monitor Reading =", cleandiagVmon)
+
+            cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
+            print("Current Monitor Reading =", cleandiagImon)
+
+            sleep(1)
+            self.dataList2.insert(k, [float(cleandiagVmon), float(cleandiagImon)])
+            
+        
+            while i < current_iter:
+                Iset = dict["maxCurrent"]
+                sleep(2)
+                WAI(dict["PSU"])
+
+                if I_fixed > float(dict["maxCurrent"]):
+                    I_fixed= float(dict["maxCurrent"])
+
+                #If minimum current is 0, set to 1A
+                if I_fixed == 0:           
+                    I_fixedOS = 1
+                    I_fixed = I_fixed + I_fixedOS
+                
+                if dict["ELoad_Model"] == "E367XXA":
+                    #If PSU MAX I = ELOAD MAX I (Reduce Eload I by 0.1 - Prevent Overload)
+                    if I_fixed == float(dict["maxCurrent"]) and Iset == float(dict["maxCurrent"]):
+                        eload.setOutputCurrent(I_fixed - 0.1)
+                        WAI(dict["ELoad"])
+
+                    else:
+                        eload.setOutputCurrent(I_fixed-0.001)
+                        WAI(dict["ELoad"])
+
+                elif dict["ELoad_Model"] == "Chroma":
+                    #If PSU MAX I = ELOAD MAX I (Reduce Eload I by 0.1 - Prevent Overload)
+                    if I_fixed == float(dict["maxCurrent"]) and Iset == float(dict["maxCurrent"]):
+                        Current(dict["ELoad"]).setOutputCurrent(I_fixed - 0.001)
+                        WAI(dict["ELoad"])
+
+                    else:
+                        Current(dict["ELoad"]).setOutputCurrent(I_fixed-0.001)
+                        WAI(dict["ELoad"])
+
+                sleep(1)
+
+                if dict["DMM_Model"] == "344xxA":
+                    #INIT DMM (Trigger Measurement)
+                    dmm.initiate()
+                    status = float(dmm.operationCondition())
+                    TRG(dict["DMM"])
+                    while 1:
+                        status = float(Status(dict["DMM"]).operationCondition())
+                        
+                        #Measure Voltage with Error Flag Rised
+                        if status == 8704.0:
+                            voltagemeasured = float(Fetch(dict["DMM"]).query())
+                            self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                            )
+                            break
+                        
+                        #Measrue Voltage with Normal Condition
+                        elif status == 512.0:
+                            voltagemeasured = float(Fetch(dict["DMM"]).query())
+                            self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                            )
+                            break
+                        elif status == 8192.0:
+                            voltagemeasured = float(Fetch(dict["DMM"]).query())
+                            self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                            )
+                            break
+
+                elif dict["DMM_Model"] == "3458A":
+                    # Read current from 3485A DMM
+                    voltagemeasured = float(dmm.queryMeasurement())
+                    self.dataList.insert(
+                                
+                                k, [voltagemeasured , 0]
+                    )
+                
+                if worker is not None:
+                    prog_percent = (voltagemeasured - V)/V*100
+                    read_percent = (cleandiagVmon - voltagemeasured)/voltagemeasured*100
+                    prog_upper_bound = (V*self.param1) + self.param2
+                    prog_lower_bound = -prog_upper_bound
+                    read_upper_bound = (V*self.param3) + self.param4
+                    read_lower_bound = -read_upper_bound
+                    perc_up_bound = 100
+                    perc_low_bound = -100
+                    worker.new_data.emit(V, I_fixed, cleandiagVmon, voltagemeasured, cleandiagImon, voltagemeasured - V, \
+                                         cleandiagVmon - voltagemeasured, prog_percent, read_percent, prog_upper_bound, prog_lower_bound, \
+                                        read_upper_bound, read_lower_bound, perc_up_bound, perc_low_bound)
+                    worker.popup_data.emit(voltagemeasured - V, cleandiagVmon - voltagemeasured, prog_upper_bound, prog_lower_bound, \
+                                           read_upper_bound, read_lower_bound, prog_percent, read_percent, perc_up_bound, perc_low_bound)
+                
+                I_fixed += float(dict["current_step_size"])
+                i += 1
+            
+                #Ensure the DUT won't exceed the power limit set
+                powermeasure = float (V * I_fixed)
+                if powermeasure > self.Power:
+                    break
+                
+            #Increment of Steps
+            #Delay(dict["PSU"]).write(dict["DownTime"])
+            V += float(dict["voltage_step_size"])
+            j += 1
+            k += 1
+        
+
+        psu.sourVoltageLevelImmediateAmplitude(0, ch)
+        WAI(dict["PSU"])
+        psu.sourCurrentLimitPOS("MIN", ch)
+        WAI(dict["PSU"])
+        
+        RST(dict["ELoad"])
+        RST(dict["DMM"])
+
+        # Wrapper classes hold the real PyVISA session in .instr
+        for instrument in (psu, dmm, eload):
+            try:
+                if instrument is not None and hasattr(instrument, "instr") and instrument.instr is not None:
+                    instrument.instr.close()
+            except Exception:
+                pass
 
         return self.infoList, self.dataList, self.dataList2
 

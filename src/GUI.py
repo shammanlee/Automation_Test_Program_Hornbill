@@ -222,24 +222,41 @@ def GetVisaSCPIResources(): #USB
 
     for resource in resource_list:
         # Only look for USB instruments (skip GPIB, TCPIP, etc.)
-        if not resource.startswith("USB"):
+        if not resource.startswith(("USB", "GPIB")):
             continue
 
         try:
-            # Try to open the resource
             instrument = rm.open_resource(resource)
-            instrument.timeout = 2000  # shorter timeout for faster scanning
+            instrument.timeout = 5000
+            instrument.write_termination = "\n"
+            instrument.read_termination = "\n"            
 
-            # Identify instrument
-            idn = instrument.query("*IDN?").strip().upper()
+            idn = ""
 
-            if idn and "," in idn:
+            try:
+                idn = instrument.query("*IDN?").strip().upper()
+
+            except pyvisa.errors.VisaIOError:
+
+                if resource.startswith("GPIB"):
+
+                    try:
+                        instrument.clear()
+                        instrument.write("ID?")
+                        idn = instrument.read_raw().decode(
+                            errors="ignore"
+                        ).strip().upper()
+
+                    except:
+                        pass
+
+            if idn:
+
                 available_visa_ids.append(resource)
                 available_names.append(idn)
 
-                # Match model to role
                 for model, role in model_role_map.items():
-                    if model in idn:
+                    if model.upper() in idn:
                         instrument_roles[role] = resource
                         break
 
@@ -9434,6 +9451,10 @@ class MultiThreadVoltageMeasurementDialog(QDialog):
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setText("Current Change(Load Change)")
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setCheckState(Qt.Unchecked)
 
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget = QCheckBox()
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.setText("Current Static (Voltage Change) with Oscilloscope Capture") 
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.setCheckState(Qt.Unchecked)
+
         self.QCheckbox_Simulation_Mode = QCheckBox()
         self.QCheckbox_Simulation_Mode.setText("Simulation Mode")
         self.QCheckbox_Simulation_Mode.setCheckState(Qt.Unchecked)
@@ -9644,6 +9665,7 @@ class MultiThreadVoltageMeasurementDialog(QDialog):
         setting_layout.addRow(QLabel_Voltage_Accuracy_Mode)
         setting_layout.addRow(self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget)
         setting_layout.addRow(self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget)
+        setting_layout.addRow(self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget)
         setting_layout.addRow(QPushButton_Widget4)
         setting_layout.addRow(QLabel_PSU_VisaAddress, self.QLineEdit_PSU_VisaAddress)
         setting_layout.addRow(QLabel_DMM_VisaAddress, self.QLineEdit_DMM_VisaAddress)
@@ -9691,6 +9713,7 @@ class MultiThreadVoltageMeasurementDialog(QDialog):
 
         self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.stateChanged.connect(self.checkbox_state_Voltage_Accuracy_Voltage_Mode)
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.stateChanged.connect(self.checkbox_state_Voltage_Accuracy_Current_Mode)
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.stateChanged.connect(self.checkbox_state_Voltage_Accuracy_Voltage_Mode_Oscilloscope)
         
         self.QComboBox_DUT.currentTextChanged.connect(self.DUT_changed)
         self.QLineEdit_Programming_Error_Gain.textEdited.connect(self.Programming_Error_Gain_changed)
@@ -10665,6 +10688,9 @@ class Parameters:
         self.OCPActivationTime = None
         self.SPOperationMode = "Independent"
 
+        self.DMM_Model = "3458A"
+        self.ELoad_Model = "E367XXA"
+
         self.setFunction =  None
         self.VoltageRes =  None
         self.VoltageSense =  None
@@ -10864,6 +10890,10 @@ class AllTestMeasurement(QDialog):
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget = QCheckBox()
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setText("Current Change (Load Change)")
         self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.setCheckState(Qt.Unchecked)
+
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget = QCheckBox()
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.setText("Oscilloscope Capture (Voltage Change)")
+        self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.setCheckState(Qt.Unchecked)
 
         self.QCheckBox_VoltageLoadRegulation_Widget = QCheckBox()
         self.QCheckBox_VoltageLoadRegulation_Widget.setText("Voltage Load Regulation")
@@ -11309,6 +11339,10 @@ class AllTestMeasurement(QDialog):
         )
         VoltageAccuracy_Branch_Layout.addWidget(
             self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget
+        )
+
+        VoltageAccuracy_Branch_Layout.addWidget(
+            self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget
         )
 
         Voltage_Testing_Selection_Layout.addWidget(self.VoltageAccuracy_Branch_Widget)
@@ -12294,21 +12328,22 @@ class AllTestMeasurement(QDialog):
 
         #Transient Test Selected
         if not self.QCheckBox_TransientRecovery_Widget.isChecked():
-            self.QLabel_OSC_VisaAddress.setVisible(False)
-            self.QLineEdit_OSC_VisaAddress.setVisible(False)
+            #self.QLabel_OSC_VisaAddress.setVisible(False)
+            #self.QLineEdit_OSC_VisaAddress.setVisible(False)
+            self.oscilloscope_settings_widget.setVisible(False)
         else:
-            self.QLabel_OSC_VisaAddress.setVisible(True)
-            self.QLineEdit_OSC_VisaAddress.setVisible(True)
+            #self.QLabel_OSC_VisaAddress.setVisible(True)
+            #self.QLineEdit_OSC_VisaAddress.setVisible(True)
             self.oscilloscope_settings_widget.setVisible(True)
 
         #Programming Speed Test Selected
         if not self.QCheckBox_ProgrammingSpeed_Widget.isChecked():
-            self.QLabel_OSC_VisaAddress.setVisible(False)
-            self.QLineEdit_OSC_VisaAddress.setVisible(False)
+            #self.QLabel_OSC_VisaAddress.setVisible(False)
+            #self.QLineEdit_OSC_VisaAddress.setVisible(False)
             self.Programming_Response_widget.setVisible(False)
         else:
-            self.QLabel_OSC_VisaAddress.setVisible(True)
-            self.QLineEdit_OSC_VisaAddress.setVisible(True)
+            #self.QLabel_OSC_VisaAddress.setVisible(True)
+            #self.QLineEdit_OSC_VisaAddress.setVisible(True)
             self.oscilloscope_settings_widget.setVisible(True)
             self.Programming_Response_widget.setVisible(True)
         
@@ -12402,6 +12437,7 @@ class AllTestMeasurement(QDialog):
             "VoltageAccuracy": self.QCheckBox_VoltageAccuracy_Widget.isChecked(),
             "CurrentStatic(VoltageChange)":self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget.isChecked(),
             "CurrentChange(LoadChange)": self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget.isChecked(),
+            "CurrentStatic(VoltageChange)withOscilloscope": self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.isChecked(),
 
             #Current
             "Current_Test": self.QPushButton_Current_Widget.isChecked(),
@@ -12459,17 +12495,16 @@ class AllTestMeasurement(QDialog):
     def executeTest(self):
         global globalvv
         try:
-            for x in range (int(self.params.noofloop)):
+            
+            """The method begins by compiling all the parameters in a dictionary for ease of storage and calling,
+            then the parameters are looped through to check if any of them are empty or return NULL, a warning dialogue
+            will appear if the statement is true, and the users have to troubleshoot the issue. After so, the tests will
+            begin right after another warning dialogue prompting the user that the tests will begin very soon. When test
+            begins, the VISA_Addresses of the Instruments are passed through the VISA Resource Manager to make sure there
+            are connected. Then the actual DUT Tests will commence. Depending on the users selection, the method can
+            optionally export all the details into a CSV file or display a graph after the test is completed.
 
-                """The method begins by compiling all the parameters in a dictionary for ease of storage and calling,
-                then the parameters are looped through to check if any of them are empty or return NULL, a warning dialogue
-                will appear if the statement is true, and the users have to troubleshoot the issue. After so, the tests will
-                begin right after another warning dialogue prompting the user that the tests will begin very soon. When test
-                begins, the VISA_Addresses of the Instruments are passed through the VISA Resource Manager to make sure there
-                are connected. Then the actual DUT Tests will commence. Depending on the users selection, the method can
-                optionally export all the details into a CSV file or display a graph after the test is completed.
-
-                """
+            """
             self.setEnabled(False)
             self.OutputBox.clear()
 
@@ -12514,6 +12549,9 @@ class AllTestMeasurement(QDialog):
                 "setFunction":self.params.setFunction,
                 "OperationMode":self.params.SPOperationMode,
 
+                "DMM_Model": self.params.DMM_Model,
+                "ELoad_Model": self.params.ELoad_Model,
+
                 "Range":self.params.Range,
                 "Aperture":self.params.Aperture,
                 "AutoZero":self.params.AutoZero,
@@ -12521,7 +12559,7 @@ class AllTestMeasurement(QDialog):
                 "UpTime":self.params.UpTime,
                 "DownTime":self.params.DownTime,
 
-             
+            
             }
 
             #Parameters to be check if specific test was selected
@@ -12915,326 +12953,114 @@ class TestWorker(QThread):
 
     def run(self):
         try:
-            #Execute Voltage Measurement for each test checked---------------
-            #Voltage Accuracy Test
-            if self.params["DUT"] == "Dolphin":
-                if self.checkbox_states["Voltage_Test"]:
-                    #Voltage Accuracy
-                    if self.checkbox_states.get("VoltageAccuracy"):
-                        if self.dict["Instrument"] == "Keysight":
-                            if self.checkbox_states.get("CurrentStatic(VoltageChange)"):
-                                for ch in self.dict["PSU_Channel"]:
-                                    (infoList,
-                                    dataList,
-                                    dataList2)= NewVoltageMeasurement.Execute_Voltage_Accuracy_Current_Static(self, self.dict, ch, worker=self)
+            for x in range (int(self.params["noofloop"])):
+                #Execute Voltage Measurement for each test checked---------------
+                #Voltage Accuracy Test
+                if self.params["DUT"] == "Dolphin":
+                    if self.checkbox_states["Voltage_Test"]:
+                        #Voltage Accuracy
+                        if self.checkbox_states.get("VoltageAccuracy"):
+                            if self.dict["Instrument"] == "Keysight":
+                                if self.checkbox_states.get("CurrentStatic(VoltageChange)"):
+                                    for ch in self.dict["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2)= NewVoltageMeasurement.Execute_Voltage_Accuracy_Current_Static(self, self.dict, ch, worker=self)
 
-                                    #Measurement Completion
-                                    if (int(self.params["noofloop"]) - 1) <= 0:
-                                        self.progress.emit("✅Measurement is complete !")
+                                        #Measurement Completion
+                                        if (int(self.params["noofloop"]) - 1) <= 0:
+                                            self.progress.emit("✅Measurement is complete !")
 
-                                        #Export Data to CSV
-                                        if self.checkbox_states["DataReport"]:
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
 
-                                            #Export data to CSV and Graph (Refer data.py for details)
-                                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                            datatoCSV_Accuracy(infoList, dataList, dataList2)
-                                            datatoGraph(infoList, dataList,dataList2)
-                                            datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy(infoList, dataList, dataList2)
+                                                datatoGraph(infoList, dataList,dataList2)
+                                                datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
 
-                                            #Export to config.csv from dict (Refer pandas.py for details)
-                                            df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                            df.index.name = "Parameter"
-                                            df.columns = ["Value"]
-                                            df.to_csv(os.path.join(csv_folder,"config.csv"))
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
 
-                                            #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
-                                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                            A.run()
-                                            self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
-                                            self.progress.emit("")
+                                                #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
+                                                self.progress.emit("")
 
-                            elif self.checkbox_states.get("CurrentChange(LoadChange)"):
-                                for ch in self.dict["PSU_Channel"]:
-                                    (infoList,
-                                    dataList,
-                                    dataList2)= NewVoltageMeasurement.Execute_Voltage_Accuracy_Current_Change(self, self.dict, ch, worker=self)
+                                elif self.checkbox_states.get("CurrentChange(LoadChange)"):
+                                    for ch in self.dict["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2)= NewVoltageMeasurement.Execute_Voltage_Accuracy_Current_Change(self, self.dict, ch, worker=self)
 
-                                    #Measurement Completion
-                                    if (int(self.params["noofloop"]) - 1) <= 0:
-                                        self.progress.emit("✅Measurement is complete !")
+                                        #Measurement Completion
+                                        if (int(self.params["noofloop"]) - 1) <= 0:
+                                            self.progress.emit("✅Measurement is complete !")
 
-                                        #Export Data to CSV
-                                        if self.checkbox_states["DataReport"]:
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
 
-                                            #Export data to CSV and Graph (Refer data.py for details)
-                                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                            datatoCSV_Accuracy(infoList, dataList, dataList2)
-                                            datatoGraph(infoList, dataList,dataList2)
-                                            datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy(infoList, dataList, dataList2)
+                                                datatoGraph(infoList, dataList,dataList2)
+                                                datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
 
-                                            #Export to config.csv from dict (Refer pandas.py for details)
-                                            df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                            df.index.name = "Parameter"
-                                            df.columns = ["Value"]
-                                            df.to_csv(os.path.join(csv_folder,"config.csv"))
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
 
-                                            #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
-                                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                            A.run()
-                                            self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
-                                            self.progress.emit("")
+                                                #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
+                                                self.progress.emit("")
 
-                    #Voltage Load Regulation
-                    if self.checkbox_states.get("VoltageLoadRegulation"):
-                        if self.params["Instrument"] == "Keysight":
-                            for ch in self.params["PSU_Channel"]:
-                                self.results = NewLoadRegulation.executeCV_LoadRegulation(self, self.dict)
-                                os.system('cls')
-                                datatoCSV_LoadRegulation(self.results, self.params)
+                        #Voltage Load Regulation
+                        if self.checkbox_states.get("VoltageLoadRegulation"):
+                            if self.params["Instrument"] == "Keysight":
+                                for ch in self.params["PSU_Channel"]:
+                                    self.results = NewLoadRegulation.executeCV_LoadRegulation(self, self.dict)
+                                    os.system('cls')
+                                    datatoCSV_LoadRegulation(self.results, self.params)
 
-                    #Transient Recovery       
-                    if self.checkbox_states.get("TransientRecovery"):
-                        if self.checkbox_states["SpecialCase"]:
-                            RiseFallTime.executeC(self, self.dict)
-                        
-                        if self.checkbox_states["NormalCase"]:
-                            RiseFallTime.executeC(self, self.dict)
-                    
-                    #OVP Accuracy Test
-                    if self.checkbox_states.get("OVP_Test"):
-                        self.results = OVP_Test.Execute_OVP(self,self.dict)
-                        os.system('cls')
-                        datatoCSV_OVP_Accuracy(self.results, self.params)
-                        
-                    #Voltage Line RegulationW
-                    if self.checkbox_states.get("VoltageLineRegulation"):
-                        self.results = LineRegulation.executeCV_LoadRegulation(self, self.dict)
-                        #os.system('cls')
-                        datatoCSV_Line_Regulation(self.results, self.params)
-                    
-                    #Programming Responses
-                    if self.checkbox_states.get("ProgrammingSpeed"):
-                        test = ProgrammingResponse()
-                        self.results, self.currenttime = test.execute(self.dict)
-                        os.system('cls')    
-                        datatoCSV_Programming_Response(self.results,self.currenttime,self.params)
-                    
-                elif self.checkbox_states["Current_Test"]:
-                    #Current Accuracy Test
-                    if self.checkbox_states.get("CurrentAccuracy"):
-                        if self.dict["Instrument"] == "Keysight":
-                            for ch in self.params["PSU_Channel"]:
-                                (infoList,
-                                dataList,
-                                dataList2) = NewCurrentMeasurement.executeCurrentMeasurementA(self, self.dict, ch)
-
-                                #Measurement Completion
-                                if x == (int(self.params["noofloop"]) - 1):   
-                                    self.progress.emit("✅Measurement is complete !")
-
-                                    #Export Data to CSV
-                                    if self.checkbox_states["DataReport"]:
-
-                                        #Export data to CSV and Graph (Refer data.py for details)
-                                        instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                        datatoCSV_Accuracy2(infoList, dataList, dataList2)
-                                        datatoGraph2(infoList, dataList,dataList2)
-                                        datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
-
-                                        #Export to config.csv from dict (Refer pandas.py for details)
-                                        df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                        df.index.name = "Parameter"
-                                        df.columns = ["Value"]
-                                        df.to_csv(os.path.join(csv_folder,"config.csv"))
-
-                                        #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
-                                        A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                        A.run()
-                                        self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-                                        self.progress.emit("")
-
-                                if self.force_exit:
-                                    self.progress.emit("Operation aborted")
-                                    return  # Exit immediately                         
-
-                    #Current Load Regulation Test
-                    if self.checkbox_states.get("CurrentLoadRegulation"):
-                        if self.params["Instrument"] == "Keysight":
-                            for ch in self.params["PSU_Channel"]:
-                                self.results = NewLoadRegulation.executeCC_LoadRegulation(self, self.dict)
-                                os.system('cls')
-                                datatoCSV_LoadRegulation(self.results, self.params)
-
-                    #Power Accuracy Test
-                    if self.checkbox_states.get("PowerAccuracy"):
-                        if self.checkbox_states["Voltage_Test"]:
-                            infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementB(self, self.dict)  # Power CC
+                        #Transient Recovery       
+                        if self.checkbox_states.get("TransientRecovery"):
+                            if self.checkbox_states["SpecialCase"]:
+                                RiseFallTime.executeC(self, self.dict)
                             
-                        elif self.checkbox_states["Current_Test"]:
-                            infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementA(self, self.dict)  # Power CV
+                            if self.checkbox_states["NormalCase"]:
+                                RiseFallTime.executeC(self, self.dict)
                         
-                        #Measurement Completion
-                        if x == (int(self.params["noofloop"]) - 1):   
-                            self.progress.emit("✅Measurement is complete !")
-
-                            #Export Data to CSV
-                            if self.checkbox_states["DataReport"]:
-
-                                #Export data to CSV and Graph (Refer data.py for details)
-                                powerinstrumentData(self.params["PSU"], self.params["DMM"], self.params["DMM2"], self.params["ELoad"])
-                                datatoCSV_PowerAccuracy(infoList, dataList, dataList2)
-                                datatoGraph3(infoList, dataList,dataList2)
-                                datatoGraph3.scatterComparePower(self, float(self.params["Power_Programming_Error_Gain"]), float(self.params["Power_Programming_Error_Offset"]), float(self.params["Power_Readback_Error_Gain"]), float(self.params["Power_Readback_Error_Offset"]), str(self.params["setFunction"]), float(self.params["P_Rating"]))
-                                
-                                #Export to config.csv from dict (Refer pandas.py for details)
-                                df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                df.index.name = "Parameter"
-                                df.columns = ["Value"]
-                                df.to_csv(os.path.join(csv_folder,"powerconfig.csv"))
-
-                                #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
-                                file_name = "Power_CV" if self.params["setFunction"] == "Current" else "Power_CC"
-                                A = xlreportpower(save_directory=self.params["savedir"], file_name=file_name)
-                                A.run()
-                                
-                                self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-                                self.progress.emit("")
-
-                    #Current Line Regulation
-                    if self.checkbox_states.get("CurrentLineRegulation"):
-                        self.results = LineRegulation.executeCC_LoadRegulation(self, self.dict)
-                        datatoCSV_Line_Regulation(self.results, self.params)
+                        #OVP Accuracy Test
+                        if self.checkbox_states.get("OVP_Test"):
+                            self.results = OVP_Test.Execute_OVP(self,self.dict)
+                            os.system('cls')
+                            datatoCSV_OVP_Accuracy(self.results, self.params)
+                            
+                        #Voltage Line RegulationW
+                        if self.checkbox_states.get("VoltageLineRegulation"):
+                            self.results = LineRegulation.executeCV_LoadRegulation(self, self.dict)
+                            #os.system('cls')
+                            datatoCSV_Line_Regulation(self.results, self.params)
                         
-                    #OCP Accuracy Test
-                    if self.checkbox_states.get("OCP_Test"):
+                        #Programming Responses
+                        if self.checkbox_states.get("ProgrammingSpeed"):
+                            test = ProgrammingResponse()
+                            self.results, self.currenttime = test.execute(self.dict)
+                            os.system('cls')    
+                            datatoCSV_Programming_Response(self.results,self.currenttime,self.params)
                         
-                        #Accuracy Test 1st
-                        #OCP_test = OCP_Accuracy()
-                        #self.results = OCP_test.Execute_OCP(dict)
-                        #os.system('cls')
-                        # OCP_data_export = datatoCSV_OCP_Test(params)
-                        #OCP_data_export.AccuracyTest(self.results)
-
-                        self.results =[]
-                        
-                        #Activation Time Test
-                        OCP_test2 = OCP_Activation_Time()
-                        self.results = OCP_test2.Execute_OCP(self.dict)
-                        OCP_data_export2 = datatoCSV_OCP_Test(self.params)
-                        OCP_data_export2.ActivationTime(self.results)
-
-                # Final progress (only if completed)
-                if not self.force_exit:
-                    self.progress_value.emit(100)
-                    self.progress.emit("All measurements completed!")
-            elif self.params["DUT"] == "Hornbill":
-                
-                if self.checkbox_states["Voltage_Test"]:
-                    #Voltage Accuracy
-                    if self.checkbox_states.get("VoltageAccuracy"):
-                        if self.checkbox_states.get("CurrentStatic(VoltageChange)"):
-                            if self.dict["Instrument"] == "Keysight":
-                                for ch in self.dict["PSU_Channel"]:
-                                    (infoList,
-                                    dataList,
-                                    dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Static(self, self.dict, ch, worker=self)
-
-                                    #Measurement Completion
-                                    if (int(self.params["noofloop"]) - 1) <= 0:
-                                        self.progress.emit("✅Measurement is complete !")
-
-                                        #Export Data to CSV
-                                        if self.checkbox_states["DataReport"]:
-
-                                            #Export data to CSV and Graph (Refer data.py for details)
-                                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                            datatoCSV_Accuracy(infoList, dataList, dataList2)
-                                            datatoGraph(infoList, dataList,dataList2)
-                                            datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
-
-                                            #Export to config.csv from dict (Refer pandas.py for details)
-                                            df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                            df.index.name = "Parameter"
-                                            df.columns = ["Value"]
-                                            df.to_csv(os.path.join(csv_folder,"config.csv"))
-
-                                            #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
-                                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                            A.run()
-                                            self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
-                                            self.progress.emit("")
-
-                        elif self.checkbox_states.get("CurrentStatic(CurrentChange)"):
-                            if self.dict["Instrument"] == "Keysight":
-                                for ch in self.dict["PSU_Channel"]:
-                                    (infoList,
-                                    dataList,
-                                    dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Static(self, self.dict, ch, worker=self)
-
-                                    #Measurement Completion
-                                    if (int(self.params["noofloop"]) - 1) <= 0:
-                                        self.progress.emit("✅Measurement is complete !")
-
-                                        #Export Data to CSV
-                                        if self.checkbox_states["DataReport"]:
-
-                                            #Export data to CSV and Graph (Refer data.py for details)
-                                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                            datatoCSV_Accuracy(infoList, dataList, dataList2)
-                                            datatoGraph(infoList, dataList,dataList2)
-                                            datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
-
-                                            #Export to config.csv from dict (Refer pandas.py for details)
-                                            df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                            df.index.name = "Parameter"
-                                            df.columns = ["Value"]
-                                            df.to_csv(os.path.join(csv_folder,"config.csv"))
-
-                                            #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
-                                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                            A.run()
-                                            self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
-                                            self.progress.emit("")
-
-                    #Voltage Load Regulation
-                    if self.checkbox_states.get("VoltageLoadRegulation"):
-                        if self.params["Instrument"] == "Keysight":
-                            for ch in self.params["PSU_Channel"]:
-                                self.results = NewLoadRegulation.executeCV_LoadRegulation(self, self.dict)
-                                os.system('cls')
-                                datatoCSV_LoadRegulation(self.results, self.params)
-
-                    #Transient Recovery       
-                    if self.checkbox_states.get("TransientRecovery"):
-                        if self.checkbox_states["SpecialCase"]:
-                            RiseFallTime.executeC(self, self.dict)
-                        
-                        if self.checkbox_states["NormalCase"]:
-                            RiseFallTime.executeC(self, self.dict)
-                    
-                    #OVP Accuracy Test
-                    if self.checkbox_states.get("OVP_Test"):
-                        self.results = OVP_Test.Execute_OVP(self,self.dict)
-                        os.system('cls')
-                        datatoCSV_OVP_Accuracy(self.results, self.params)
-                        
-                    #Voltage Line RegulationW
-                    if self.checkbox_states.get("VoltageLineRegulation"):
-                        self.results = LineRegulation.executeCV_LoadRegulation(self, self.dict)
-                        #os.system('cls')
-                        datatoCSV_Line_Regulation(self.results, self.params)
-                    
-                    #Programming Responses
-                    if self.checkbox_states.get("ProgrammingSpeed"):
-                        test = ProgrammingResponse()
-                        self.results, self.currenttime = test.execute(self.dict)
-                        os.system('cls')    
-                        datatoCSV_Programming_Response(self.results,self.currenttime,self.params)
-                    
-                elif self.checkbox_states["Current_Test"]:
-                    #Current Accuracy Test
-                    if self.checkbox_states.get("CurrentAccuracy"):
-                        if self.checkbox_states.get("CurrentAccuracy_20A_Range"):
+                    elif self.checkbox_states["Current_Test"]:
+                        #Current Accuracy Test
+                        if self.checkbox_states.get("CurrentAccuracy"):
                             if self.dict["Instrument"] == "Keysight":
                                 for ch in self.params["PSU_Channel"]:
                                     (infoList,
@@ -13269,291 +13095,536 @@ class TestWorker(QThread):
                                     if self.force_exit:
                                         self.progress.emit("Operation aborted")
                                         return  # Exit immediately                         
-                        elif self.checkbox_states.get("CurrentAccuracy_2A_Range"):
-                            if self.dict["Instrument"] == "Keysight":
+
+                        #Current Load Regulation Test
+                        if self.checkbox_states.get("CurrentLoadRegulation"):
+                            if self.params["Instrument"] == "Keysight":
                                 for ch in self.params["PSU_Channel"]:
-                                    (infoList,
-                                    dataList,
-                                    dataList2) = NewCurrentMeasurement.executeCurrentMeasurementA(self, self.dict, ch)
+                                    self.results = NewLoadRegulation.executeCC_LoadRegulation(self, self.dict)
+                                    os.system('cls')
+                                    datatoCSV_LoadRegulation(self.results, self.params)
 
-                                    #Measurement Completion
-                                    if x == (int(self.params["noofloop"]) - 1):   
-                                        self.progress.emit("✅Measurement is complete !")
-
-                                        #Export Data to CSV
-                                        if self.checkbox_states["DataReport"]:
-
-                                            #Export data to CSV and Graph (Refer data.py for details)
-                                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                            datatoCSV_Accuracy2(infoList, dataList, dataList2)
-                                            datatoGraph2(infoList, dataList,dataList2)
-                                            datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
-
-                                            #Export to config.csv from dict (Refer pandas.py for details)
-                                            df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                            df.index.name = "Parameter"
-                                            df.columns = ["Value"]
-                                            df.to_csv(os.path.join(csv_folder,"config.csv"))
-
-                                            #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
-                                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                            A.run()
-                                            self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-                                            self.progress.emit("")
-
-                                    if self.force_exit:
-                                        self.progress.emit("Operation aborted")
-                                        return  # Exit immediately                
-                        elif self.checkbox_states.get("CurrentAccuracy_200mA_Range"):
-                            if self.dict["Instrument"] == "Keysight":
-                                for ch in self.params["PSU_Channel"]:
-                                    (infoList,
-                                    dataList,
-                                    dataList2) = NewCurrentMeasurement.executeCurrentMeasurementA(self, self.dict, ch)
-
-                                    #Measurement Completion
-                                    if x == (int(self.params["noofloop"]) - 1):   
-                                        self.progress.emit("✅Measurement is complete !")
-
-                                        #Export Data to CSV
-                                        if self.checkbox_states["DataReport"]:
-
-                                            #Export data to CSV and Graph (Refer data.py for details)
-                                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                            datatoCSV_Accuracy2(infoList, dataList, dataList2)
-                                            datatoGraph2(infoList, dataList,dataList2)
-                                            datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
-
-                                            #Export to config.csv from dict (Refer pandas.py for details)
-                                            df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                            df.index.name = "Parameter"
-                                            df.columns = ["Value"]
-                                            df.to_csv(os.path.join(csv_folder,"config.csv"))
-
-                                            #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
-                                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                            A.run()
-                                            self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-                                            self.progress.emit("")
-
-                                    if self.force_exit:
-                                        self.progress.emit("Operation aborted")
-                                        return  # Exit immediately                
-                        elif self.checkbox_states.get("CurrentAccuracy_20mA_Range"):
-                            if self.dict["Instrument"] == "Keysight":
-                                for ch in self.params["PSU_Channel"]:
-                                    (infoList,
-                                    dataList,
-                                    dataList2) = NewCurrentMeasurement.executeCurrentMeasurementA(self, self.dict, ch)
-
-                                    #Measurement Completion
-                                    if x == (int(self.params["noofloop"]) - 1):   
-                                        self.progress.emit("✅Measurement is complete !")
-
-                                        #Export Data to CSV
-                                        if self.checkbox_states["DataReport"]:
-
-                                            #Export data to CSV and Graph (Refer data.py for details)
-                                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                            datatoCSV_Accuracy2(infoList, dataList, dataList2)
-                                            datatoGraph2(infoList, dataList,dataList2)
-                                            datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
-
-                                            #Export to config.csv from dict (Refer pandas.py for details)
-                                            df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                            df.index.name = "Parameter"
-                                            df.columns = ["Value"]
-                                            df.to_csv(os.path.join(csv_folder,"config.csv"))
-
-                                            #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
-                                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                            A.run()
-                                            self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-                                            self.progress.emit("")
-
-                                    if self.force_exit:
-                                        self.progress.emit("Operation aborted")
-                                        return  # Exit immediately                
-                        elif self.checkbox_states.get("CurrentAccuracy_2mA_Range"):
-                            if self.dict["Instrument"] == "Keysight":
-                                for ch in self.params["PSU_Channel"]:
-                                    (infoList,
-                                    dataList,
-                                    dataList2) = HornbillCurrentMeasurementwithELoad_IMON_2mA.Execute_Current_Accuracy_Current_Static(self, self.dict, ch)
-
-                                    #Measurement Completion
-                                    if x == (int(self.params["noofloop"]) - 1):   
-                                        self.progress.emit("✅Measurement is complete !")
-
-                                        #Export Data to CSV
-                                        if self.checkbox_states["DataReport"]:
-
-                                            #Export data to CSV and Graph (Refer data.py for details)
-                                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                            datatoCSV_Accuracy2(infoList, dataList, dataList2)
-                                            datatoGraph2(infoList, dataList,dataList2)
-                                            datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
-
-                                            #Export to config.csv from dict (Refer pandas.py for details)
-                                            df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                            df.index.name = "Parameter"
-                                            df.columns = ["Value"]
-                                            df.to_csv(os.path.join(csv_folder,"config.csv"))
-
-                                            #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
-                                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                            A.run()
-                                            self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-                                            self.progress.emit("")
-
-                                    if self.force_exit:
-                                        self.progress.emit("Operation aborted")
-                                        return  # Exit immediately                
-                        elif self.checkbox_states.get("CurrentAccuracy_200uA_Range"):
-                            if self.dict["Instrument"] == "Keysight":
-                                for ch in self.params["PSU_Channel"]:
-                                    (infoList,
-                                    dataList,
-                                    dataList2) = HornbillCurrentMeasurementwithELoad_IMON_200uA.Execute_Current_Accuracy_Current_Static(self, self.dict, ch)
-
-                                    #Measurement Completion
-                                    if x == (int(self.params["noofloop"]) - 1):   
-                                        self.progress.emit("✅Measurement is complete !")
-
-                                        #Export Data to CSV
-                                        if self.checkbox_states["DataReport"]:
-
-                                            #Export data to CSV and Graph (Refer data.py for details)
-                                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                            datatoCSV_Accuracy2(infoList, dataList, dataList2)
-                                            datatoGraph2(infoList, dataList,dataList2)
-                                            datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
-
-                                            #Export to config.csv from dict (Refer pandas.py for details)
-                                            df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                            df.index.name = "Parameter"
-                                            df.columns = ["Value"]
-                                            df.to_csv(os.path.join(csv_folder,"config.csv"))
-
-                                            #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
-                                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                                            A.run()
-                                            self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-                                            self.progress.emit("")
-
-                                    if self.force_exit:
-                                        self.progress.emit("Operation aborted")
-                                        return  # Exit immediately                
-                    
-                    #Current Load Regulation Test
-                    if self.checkbox_states.get("CurrentLoadRegulation"):
-                        if self.params["Instrument"] == "Keysight":
-                            for ch in self.params["PSU_Channel"]:
-                                self.results = NewLoadRegulation.executeCC_LoadRegulation(self, self.dict)
-                                os.system('cls')
-                                datatoCSV_LoadRegulation(self.results, self.params)
-
-                    #Power Accuracy Test
-                    if self.checkbox_states.get("PowerAccuracy"):
-                        if self.checkbox_states["Voltage_Test"]:
-                            infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementB(self, self.dict)  # Power CC
+                        #Power Accuracy Test
+                        if self.checkbox_states.get("PowerAccuracy"):
+                            if self.checkbox_states["Voltage_Test"]:
+                                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementB(self, self.dict)  # Power CC
+                                
+                            elif self.checkbox_states["Current_Test"]:
+                                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementA(self, self.dict)  # Power CV
                             
-                        elif self.checkbox_states["Current_Test"]:
-                            infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementA(self, self.dict)  # Power CV
-                        
-                        #Measurement Completion
-                        if x == (int(self.params["noofloop"]) - 1):   
-                            self.progress.emit("✅Measurement is complete !")
+                            #Measurement Completion
+                            if x == (int(self.params["noofloop"]) - 1):   
+                                self.progress.emit("✅Measurement is complete !")
 
-                            #Export Data to CSV
-                            if self.checkbox_states["DataReport"]:
+                                #Export Data to CSV
+                                if self.checkbox_states["DataReport"]:
 
-                                #Export data to CSV and Graph (Refer data.py for details)
-                                powerinstrumentData(self.params["PSU"], self.params["DMM"], self.params["DMM2"], self.params["ELoad"])
-                                datatoCSV_PowerAccuracy(infoList, dataList, dataList2)
-                                datatoGraph3(infoList, dataList,dataList2)
-                                datatoGraph3.scatterComparePower(self, float(self.params["Power_Programming_Error_Gain"]), float(self.params["Power_Programming_Error_Offset"]), float(self.params["Power_Readback_Error_Gain"]), float(self.params["Power_Readback_Error_Offset"]), str(self.params["setFunction"]), float(self.params["P_Rating"]))
-                                
-                                #Export to config.csv from dict (Refer pandas.py for details)
-                                df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                df.index.name = "Parameter"
-                                df.columns = ["Value"]
-                                df.to_csv(os.path.join(csv_folder,"powerconfig.csv"))
+                                    #Export data to CSV and Graph (Refer data.py for details)
+                                    powerinstrumentData(self.params["PSU"], self.params["DMM"], self.params["DMM2"], self.params["ELoad"])
+                                    datatoCSV_PowerAccuracy(infoList, dataList, dataList2)
+                                    datatoGraph3(infoList, dataList,dataList2)
+                                    datatoGraph3.scatterComparePower(self, float(self.params["Power_Programming_Error_Gain"]), float(self.params["Power_Programming_Error_Offset"]), float(self.params["Power_Readback_Error_Gain"]), float(self.params["Power_Readback_Error_Offset"]), str(self.params["setFunction"]), float(self.params["P_Rating"]))
+                                    
+                                    #Export to config.csv from dict (Refer pandas.py for details)
+                                    df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                    df.index.name = "Parameter"
+                                    df.columns = ["Value"]
+                                    df.to_csv(os.path.join(csv_folder,"powerconfig.csv"))
 
-                                #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
-                                file_name = "Power_CV" if self.params["setFunction"] == "Current" else "Power_CC"
-                                A = xlreportpower(save_directory=self.params["savedir"], file_name=file_name)
-                                A.run()
-                                
-                                self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-                                self.progress.emit("")
+                                    #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
+                                    file_name = "Power_CV" if self.params["setFunction"] == "Current" else "Power_CC"
+                                    A = xlreportpower(save_directory=self.params["savedir"], file_name=file_name)
+                                    A.run()
+                                    
+                                    self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
+                                    self.progress.emit("")
 
-                    #Current Line Regulation
-                    if self.checkbox_states.get("CurrentLineRegulation"):
-                        self.results = LineRegulation.executeCC_LoadRegulation(self, self.dict)
-                        datatoCSV_Line_Regulation(self.results, self.params)
-                        
-                    #OCP Accuracy Test
-                    if self.checkbox_states.get("OCP_Test"):
-                        
-                        #Accuracy Test 1st
-                        #OCP_test = OCP_Accuracy()
-                        #self.results = OCP_test.Execute_OCP(dict)
-                        #os.system('cls')
-                        # OCP_data_export = datatoCSV_OCP_Test(params)
-                        #OCP_data_export.AccuracyTest(self.results)
-
-                        self.results =[]
-                        
-                        #Activation Time Test
-                        OCP_test2 = OCP_Activation_Time()
-                        self.results = OCP_test2.Execute_OCP(self.dict)
-                        OCP_data_export2 = datatoCSV_OCP_Test(self.params)
-                        OCP_data_export2.ActivationTime(self.results)
-
-                    #Peak Power Test
-                    if self.checkbox_states.get("Peak_Power_Test"):
-                        if self.checkbox_states["Voltage_Test"]:
-                            infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementB(self, self.dict)  # Power CC
+                        #Current Line Regulation
+                        if self.checkbox_states.get("CurrentLineRegulation"):
+                            self.results = LineRegulation.executeCC_LoadRegulation(self, self.dict)
+                            datatoCSV_Line_Regulation(self.results, self.params)
                             
-                        elif self.checkbox_states["Current_Test"]:
-                            infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementA(self, self.dict)  # Power CV
+                        #OCP Accuracy Test
+                        if self.checkbox_states.get("OCP_Test"):
+                            
+                            #Accuracy Test 1st
+                            #OCP_test = OCP_Accuracy()
+                            #self.results = OCP_test.Execute_OCP(dict)
+                            #os.system('cls')
+                            # OCP_data_export = datatoCSV_OCP_Test(params)
+                            #OCP_data_export.AccuracyTest(self.results)
+
+                            self.results =[]
+                            
+                            #Activation Time Test
+                            OCP_test2 = OCP_Activation_Time()
+                            self.results = OCP_test2.Execute_OCP(self.dict)
+                            OCP_data_export2 = datatoCSV_OCP_Test(self.params)
+                            OCP_data_export2.ActivationTime(self.results)
+
+                    # Final progress (only if completed)
+                    if not self.force_exit:
+                        self.progress_value.emit(100)
+                        self.progress.emit("All measurements completed!")
+                elif self.params["DUT"] == "Hornbill":
+                    if self.checkbox_states["Voltage_Test"]:
+                        #Voltage Accuracy
+                        if self.checkbox_states.get("VoltageAccuracy"):
+                            if self.checkbox_states.get("CurrentStatic(VoltageChange)"):
+                                if self.dict["Instrument"] == "Keysight":
+                                    for ch in self.dict["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Static(self, self.dict, ch, worker=self)
+
+                                        #Measurement Completion
+                                        self.progress.emit(f"✅ {int(self.params['noofloop'])} Measurement is complete !")
                         
-                        #Measurement Completion
-                        if x == (int(self.params["noofloop"]) - 1):   
-                            self.progress.emit("✅Measurement is complete !")
 
-                            #Export Data to CSV
-                            if self.checkbox_states["DataReport"]:
+                                        #Export Data to CSV
+                                        #if self.checkbox_states["DataReport"]:
 
-                                #Export data to CSV and Graph (Refer data.py for details)
-                                powerinstrumentData(self.params["PSU"], self.params["DMM"], self.params["DMM2"], self.params["ELoad"])
-                                datatoCSV_PowerAccuracy(infoList, dataList, dataList2)
-                                datatoGraph3(infoList, dataList,dataList2)
-                                datatoGraph3.scatterComparePower(self, float(self.params["Power_Programming_Error_Gain"]), float(self.params["Power_Programming_Error_Offset"]), float(self.params["Power_Readback_Error_Gain"]), float(self.params["Power_Readback_Error_Offset"]), str(self.params["setFunction"]), float(self.params["P_Rating"]))
+                                        #Export data to CSV and Graph (Refer data.py for details)
+                                        instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                        datatoCSV_Accuracy(infoList, dataList, dataList2)
+                                        datatoGraph(infoList, dataList,dataList2)
+                                        datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
+
+                                        #Export to config.csv from dict (Refer pandas.py for details)
+                                        df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                        df.index.name = "Parameter"
+                                        df.columns = ["Value"]
+                                        df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                                        #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
+                                        A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                        A.run()
+                                        self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
+                                        self.progress.emit("")
+
+                            elif self.checkbox_states.get("CurrentChange(LoadChange)"):
+                                if self.dict["Instrument"] == "Keysight":
+                                    for ch in self.dict["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change(self, self.dict, ch, worker=self)
+
+                                        #Measurement Completion
+                                        if (int(self.params["noofloop"]) - 1) <= 0:
+                                            self.progress.emit("✅Measurement is complete !")
+
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
+
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy(infoList, dataList, dataList2)
+                                                datatoGraph(infoList, dataList,dataList2)
+                                                datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
+
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                                                #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
+                                                self.progress.emit("")
+
+                            elif self.checkbox_states.get("CurrentStatic(VoltageChange) with Oscilloscope"):
+                                if self.dict["Instrument"] == "Keysight":
+                                    for ch in self.dict["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change(self, self.dict, ch, worker=self)
+
+                                        #Measurement Completion
+                                        if (int(self.params["noofloop"]) - 1) <= 0:
+                                            self.progress.emit("✅Measurement is complete !")
+
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
+
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy(infoList, dataList, dataList2)
+                                                datatoGraph(infoList, dataList,dataList2)
+                                                datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
+
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                                                #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savelocation"]))
+                                                self.progress.emit("")
+                        
+                        #Voltage Load Regulation
+                        if self.checkbox_states.get("VoltageLoadRegulation"):
+                            if self.params["Instrument"] == "Keysight":
+                                for ch in self.params["PSU_Channel"]:
+                                    self.results = NewLoadRegulation.executeCV_LoadRegulation(self, self.dict)
+                                    os.system('cls')
+                                    datatoCSV_LoadRegulation(self.results, self.params)
+
+                        #Transient Recovery       
+                        if self.checkbox_states.get("TransientRecovery"):
+                            if self.checkbox_states["SpecialCase"]:
+                                RiseFallTime.executeC(self, self.dict)
+                            
+                            if self.checkbox_states["NormalCase"]:
+                                RiseFallTime.executeC(self, self.dict)
+                        
+                        #OVP Accuracy Test
+                        if self.checkbox_states.get("OVP_Test"):
+                            self.results = OVP_Test.Execute_OVP(self,self.dict)
+                            os.system('cls')
+                            datatoCSV_OVP_Accuracy(self.results, self.params)
+                            
+                        #Voltage Line RegulationW
+                        if self.checkbox_states.get("VoltageLineRegulation"):
+                            self.results = LineRegulation.executeCV_LoadRegulation(self, self.dict)
+                            #os.system('cls')
+                            datatoCSV_Line_Regulation(self.results, self.params)
+                        
+                        #Programming Responses
+                        if self.checkbox_states.get("ProgrammingSpeed"):
+                            test = ProgrammingResponse()
+                            self.results, self.currenttime = test.execute(self.dict)
+                            os.system('cls')    
+                            datatoCSV_Programming_Response(self.results,self.currenttime,self.params)
+                        
+                    elif self.checkbox_states["Current_Test"]:
+                        #Current Accuracy Test
+                        if self.checkbox_states.get("CurrentAccuracy"):
+                            if self.checkbox_states.get("CurrentAccuracy_20A_Range"):
+                                if self.dict["Instrument"] == "Keysight":
+                                    for ch in self.params["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2) = NewCurrentMeasurement.executeCurrentMeasurementA(self, self.dict, ch)
+
+                                        #Measurement Completion
+                                        if x == (int(self.params["noofloop"]) - 1):   
+                                            self.progress.emit("✅Measurement is complete !")
+
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
+
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy2(infoList, dataList, dataList2)
+                                                datatoGraph2(infoList, dataList,dataList2)
+                                                datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
+
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                                                #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
+                                                self.progress.emit("")
+
+                                        if self.force_exit:
+                                            self.progress.emit("Operation aborted")
+                                            return  # Exit immediately                         
+                            elif self.checkbox_states.get("CurrentAccuracy_2A_Range"):
+                                if self.dict["Instrument"] == "Keysight":
+                                    for ch in self.params["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2) = NewCurrentMeasurement.executeCurrentMeasurementA(self, self.dict, ch)
+
+                                        #Measurement Completion
+                                        if x == (int(self.params["noofloop"]) - 1):   
+                                            self.progress.emit("✅Measurement is complete !")
+
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
+
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy2(infoList, dataList, dataList2)
+                                                datatoGraph2(infoList, dataList,dataList2)
+                                                datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
+
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                                                #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
+                                                self.progress.emit("")
+
+                                        if self.force_exit:
+                                            self.progress.emit("Operation aborted")
+                                            return  # Exit immediately                
+                            elif self.checkbox_states.get("CurrentAccuracy_200mA_Range"):
+                                if self.dict["Instrument"] == "Keysight":
+                                    for ch in self.params["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2) = NewCurrentMeasurement.executeCurrentMeasurementA(self, self.dict, ch)
+
+                                        #Measurement Completion
+                                        if x == (int(self.params["noofloop"]) - 1):   
+                                            self.progress.emit("✅Measurement is complete !")
+
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
+
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy2(infoList, dataList, dataList2)
+                                                datatoGraph2(infoList, dataList,dataList2)
+                                                datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
+
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                                                #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
+                                                self.progress.emit("")
+
+                                        if self.force_exit:
+                                            self.progress.emit("Operation aborted")
+                                            return  # Exit immediately                
+                            elif self.checkbox_states.get("CurrentAccuracy_20mA_Range"):
+                                if self.dict["Instrument"] == "Keysight":
+                                    for ch in self.params["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2) = NewCurrentMeasurement.executeCurrentMeasurementA(self, self.dict, ch)
+
+                                        #Measurement Completion
+                                        if x == (int(self.params["noofloop"]) - 1):   
+                                            self.progress.emit("✅Measurement is complete !")
+
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
+
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy2(infoList, dataList, dataList2)
+                                                datatoGraph2(infoList, dataList,dataList2)
+                                                datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
+
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                                                #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
+                                                self.progress.emit("")
+
+                                        if self.force_exit:
+                                            self.progress.emit("Operation aborted")
+                                            return  # Exit immediately                
+                            elif self.checkbox_states.get("CurrentAccuracy_2mA_Range"):
+                                if self.dict["Instrument"] == "Keysight":
+                                    for ch in self.params["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2) = HornbillCurrentMeasurementwithELoad_IMON_2mA.Execute_Current_Accuracy_Current_Static(self, self.dict, ch)
+
+                                        #Measurement Completion
+                                        if x == (int(self.params["noofloop"]) - 1):   
+                                            self.progress.emit("✅Measurement is complete !")
+
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
+
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy2(infoList, dataList, dataList2)
+                                                datatoGraph2(infoList, dataList,dataList2)
+                                                datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
+
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                                                #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
+                                                self.progress.emit("")
+
+                                        if self.force_exit:
+                                            self.progress.emit("Operation aborted")
+                                            return  # Exit immediately                
+                            elif self.checkbox_states.get("CurrentAccuracy_200uA_Range"):
+                                if self.dict["Instrument"] == "Keysight":
+                                    for ch in self.params["PSU_Channel"]:
+                                        (infoList,
+                                        dataList,
+                                        dataList2) = HornbillCurrentMeasurementwithELoad_IMON_200uA.Execute_Current_Accuracy_Current_Static(self, self.dict, ch)
+
+                                        #Measurement Completion
+                                        if x == (int(self.params["noofloop"]) - 1):   
+                                            self.progress.emit("✅Measurement is complete !")
+
+                                            #Export Data to CSV
+                                            if self.checkbox_states["DataReport"]:
+
+                                                #Export data to CSV and Graph (Refer data.py for details)
+                                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
+                                                datatoCSV_Accuracy2(infoList, dataList, dataList2)
+                                                datatoGraph2(infoList, dataList,dataList2)
+                                                datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
+
+                                                #Export to config.csv from dict (Refer pandas.py for details)
+                                                df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                                df.index.name = "Parameter"
+                                                df.columns = ["Value"]
+                                                df.to_csv(os.path.join(csv_folder,"config.csv"))
+
+                                                #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
+                                                A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
+                                                A.run()
+                                                self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
+                                                self.progress.emit("")
+
+                                        if self.force_exit:
+                                            self.progress.emit("Operation aborted")
+                                            return  # Exit immediately                
+                        
+                        #Current Load Regulation Test
+                        if self.checkbox_states.get("CurrentLoadRegulation"):
+                            if self.params["Instrument"] == "Keysight":
+                                for ch in self.params["PSU_Channel"]:
+                                    self.results = NewLoadRegulation.executeCC_LoadRegulation(self, self.dict)
+                                    os.system('cls')
+                                    datatoCSV_LoadRegulation(self.results, self.params)
+
+                        #Power Accuracy Test
+                        if self.checkbox_states.get("PowerAccuracy"):
+                            if self.checkbox_states["Voltage_Test"]:
+                                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementB(self, self.dict)  # Power CC
                                 
-                                #Export to config.csv from dict (Refer pandas.py for details)
-                                df = pd.DataFrame.from_dict(self.dict, orient="index")
-                                df.index.name = "Parameter"
-                                df.columns = ["Value"]
-                                df.to_csv(os.path.join(csv_folder,"powerconfig.csv"))
+                            elif self.checkbox_states["Current_Test"]:
+                                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementA(self, self.dict)  # Power CV
+                            
+                            #Measurement Completion
+                            if x == (int(self.params["noofloop"]) - 1):   
+                                self.progress.emit("✅Measurement is complete !")
 
-                                #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
-                                file_name = "Power_CV" if self.params["setFunction"] == "Current" else "Power_CC"
-                                A = xlreportpower(save_directory=self.params["savedir"], file_name=file_name)
-                                A.run()
+                                #Export Data to CSV
+                                if self.checkbox_states["DataReport"]:
+
+                                    #Export data to CSV and Graph (Refer data.py for details)
+                                    powerinstrumentData(self.params["PSU"], self.params["DMM"], self.params["DMM2"], self.params["ELoad"])
+                                    datatoCSV_PowerAccuracy(infoList, dataList, dataList2)
+                                    datatoGraph3(infoList, dataList,dataList2)
+                                    datatoGraph3.scatterComparePower(self, float(self.params["Power_Programming_Error_Gain"]), float(self.params["Power_Programming_Error_Offset"]), float(self.params["Power_Readback_Error_Gain"]), float(self.params["Power_Readback_Error_Offset"]), str(self.params["setFunction"]), float(self.params["P_Rating"]))
+                                    
+                                    #Export to config.csv from dict (Refer pandas.py for details)
+                                    df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                    df.index.name = "Parameter"
+                                    df.columns = ["Value"]
+                                    df.to_csv(os.path.join(csv_folder,"powerconfig.csv"))
+
+                                    #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
+                                    file_name = "Power_CV" if self.params["setFunction"] == "Current" else "Power_CC"
+                                    A = xlreportpower(save_directory=self.params["savedir"], file_name=file_name)
+                                    A.run()
+                                    
+                                    self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
+                                    self.progress.emit("")
+
+                        #Current Line Regulation
+                        if self.checkbox_states.get("CurrentLineRegulation"):
+                            self.results = LineRegulation.executeCC_LoadRegulation(self, self.dict)
+                            datatoCSV_Line_Regulation(self.results, self.params)
+                            
+                        #OCP Accuracy Test
+                        if self.checkbox_states.get("OCP_Test"):
+                            
+                            #Accuracy Test 1st
+                            #OCP_test = OCP_Accuracy()
+                            #self.results = OCP_test.Execute_OCP(dict)
+                            #os.system('cls')
+                            # OCP_data_export = datatoCSV_OCP_Test(params)
+                            #OCP_data_export.AccuracyTest(self.results)
+
+                            self.results =[]
+                            
+                            #Activation Time Test
+                            OCP_test2 = OCP_Activation_Time()
+                            self.results = OCP_test2.Execute_OCP(self.dict)
+                            OCP_data_export2 = datatoCSV_OCP_Test(self.params)
+                            OCP_data_export2.ActivationTime(self.results)
+
+                        #Peak Power Test
+                        if self.checkbox_states.get("Peak_Power_Test"):
+                            if self.checkbox_states["Voltage_Test"]:
+                                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementB(self, self.dict)  # Power CC
                                 
-                                self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-                                self.progress.emit("")
+                            elif self.checkbox_states["Current_Test"]:
+                                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementA(self, self.dict)  # Power CV
+                            
+                            #Measurement Completion
+                            if x == (int(self.params["noofloop"]) - 1):   
+                                self.progress.emit("✅Measurement is complete !")
 
-                # Final progress (only if completed)
-                if not self.force_exit:
-                    self.progress_value.emit(100)
-                    self.progress.emit("All measurements completed!")
-                self.progress.emit("No DUT selected. Please select a DUT to perform the test.")
+                                #Export Data to CSV
+                                if self.checkbox_states["DataReport"]:
 
-            
-                                   
+                                    #Export data to CSV and Graph (Refer data.py for details)
+                                    powerinstrumentData(self.params["PSU"], self.params["DMM"], self.params["DMM2"], self.params["ELoad"])
+                                    datatoCSV_PowerAccuracy(infoList, dataList, dataList2)
+                                    datatoGraph3(infoList, dataList,dataList2)
+                                    datatoGraph3.scatterComparePower(self, float(self.params["Power_Programming_Error_Gain"]), float(self.params["Power_Programming_Error_Offset"]), float(self.params["Power_Readback_Error_Gain"]), float(self.params["Power_Readback_Error_Offset"]), str(self.params["setFunction"]), float(self.params["P_Rating"]))
+                                    
+                                    #Export to config.csv from dict (Refer pandas.py for details)
+                                    df = pd.DataFrame.from_dict(self.dict, orient="index")
+                                    df.index.name = "Parameter"
+                                    df.columns = ["Value"]
+                                    df.to_csv(os.path.join(csv_folder,"powerconfig.csv"))
+
+                                    #Read error,config and instrumentData files, then combine to (self.unit) file (Refer xlreport for details)
+                                    file_name = "Power_CV" if self.params["setFunction"] == "Current" else "Power_CC"
+                                    A = xlreportpower(save_directory=self.params["savedir"], file_name=file_name)
+                                    A.run()
+                                    
+                                    self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
+                                    self.progress.emit("")
+
+                    # Final progress (only if completed)
+                    if not self.force_exit:
+                        self.progress_value.emit(100)
+                        self.progress.emit("All measurements completed!")
+                    else:
+                        self.progress.emit("No DUT selected. Please select a DUT to perform the test.")
+
+                
+                                    
         except Exception as e:
             tb = traceback.format_exc()
             self.error.emit(e, tb)
