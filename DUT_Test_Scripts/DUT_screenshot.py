@@ -2,6 +2,7 @@ import sys
 import  shutil
 import os
 import pyvisa
+from SCPI_Library.simulation import create_resource_manager
 from PIL import Image, ImageDraw, ImageFont
 from time import sleep
 
@@ -18,7 +19,6 @@ from pathlib import Path
 # globals                                                                     #
 # --------------------------------------------------------------------------- #
 hadU2004AReset  = False                     # so U2004A reset is done only once.
-rm              = pyvisa.ResourceManager()
 
 # *************************************************************************** #
 # functions                                                                   #
@@ -169,6 +169,7 @@ def WriteFile(result,fileName):
 
 def GetScreenShot(instrType,visaId):
     # first connect to the instrument
+    rm = create_resource_manager()
     instr = rm.open_resource(visaId,chunk_size=8000,timeout=20000)
     # NO reset or something similar
     
@@ -611,7 +612,7 @@ def GetKeysightU2004ADeviceScreenShot(instr):
 
 def GetVisaSCPIResources():
     """Return a list of only *connected* USB VISA instruments."""
-    rm = pyvisa.ResourceManager()
+    rm = create_resource_manager()
     resource_list = rm.list_resources()
 
     available_visa_ids = []
@@ -656,6 +657,7 @@ def GetVisaSCPIResources():
 def SendScpiCommand(visaId,commandString):
 
     # first connect to the instrument
+    rm = create_resource_manager()
     instr = rm.open_resource(visaId,chunk_size=8000,timeout=20000)
 
     try:
@@ -670,6 +672,7 @@ def SendScpiCommand(visaId,commandString):
 def SendScpiQuery(visaId,commandString):
 
     # first connect to the instrument
+    rm = create_resource_manager()
     instr = rm.open_resource(visaId,chunk_size=8000,timeout=20000)
 
     try:

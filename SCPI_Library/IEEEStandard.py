@@ -7,6 +7,7 @@
 """
 
 import pyvisa
+from SCPI_Library.session_manager import get_visa_resource
 
 
 class IEEE_488(object):
@@ -32,14 +33,7 @@ class IEEE_488(object):
 
         self.VISA_ADDRESS = VISA_ADDRESS
         #print(f"Initializing IEEE_488 with: {self.VISA_ADDRESS}")
-        # ResourceManager Setup
-        rm = pyvisa.ResourceManager()
-        try:
-            # Visa Address is found under Keysight Connection Expert
-            self.instr = rm.open_resource(self.VISA_ADDRESS)
-
-        except pyvisa.VisaIOError as e:
-            print(e.args)
+        self.instr = get_visa_resource(self.VISA_ADDRESS)
 
 
 class CLS(IEEE_488):

@@ -14,7 +14,9 @@ import sys
 import csv
 import pandas as pd
 from datetime import datetime
-from time import sleep, time
+from time import time
+from DUT_Test_Scripts.execution_control import sleep
+from SCPI_Library.visa_config import configure_visa_resource
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 import traceback
@@ -105,6 +107,10 @@ class Dimport:
             DMM_3458A,
             ELOAD_E367XXA
         )
+
+    def getClasses(module_name):
+        classes = Dimport.getClasses_Keysight(module_name)
+        return (*classes[:19], classes[21], classes[19], classes[20])
     
     def getClasses_Chroma(module_name):
         module_full_name = f"SCPI_Library.{module_name}"
@@ -150,7 +156,7 @@ class VisaResourceManager:
         """
         try:
             for i in range(len(args)):
-                instr = self.rm.open_resource(args[i])
+                instr = configure_visa_resource(self.rm.open_resource(args[i]))
                 instr.baud_rate = 9600
 
             return 1, None
@@ -161,6 +167,11 @@ class VisaResourceManager:
     def closeRM(self):
         """Closes the Visa Resources when not in used"""
         self.rm.close()
+
+
+def _execution_checkpoint(worker):
+    if worker is not None:
+        worker.checkpoint()
 
 ######################################################################
 class HornbillVoltageMeasurementwithELoad:
@@ -298,6 +309,7 @@ class HornbillVoltageMeasurementwithELoad:
 
         #Run Test (Voltage Loop in Current Loop)
         while i < current_iter:
+            _execution_checkpoint(worker)
             j = 0
             V = float(dict["minVoltage"])
             psu.sourVoltageLevelImmediateAmplitude(float(dict["minVoltage"]), ch)
@@ -331,6 +343,7 @@ class HornbillVoltageMeasurementwithELoad:
 
             #Voltage Iteration
             while j < voltage_iter:
+                _execution_checkpoint(worker)
                 #Set Voltage and Current
                 if V > float(dict["maxVoltage"]):
                     V = float(dict["maxVoltage"])
@@ -357,6 +370,7 @@ class HornbillVoltageMeasurementwithELoad:
                     status = float(dmm.operationCondition())
                     TRG(dict["DMM"])
                     while 1:
+                        _execution_checkpoint(worker)
                         status = float(Status(dict["DMM"]).operationCondition())
                         
                         #Measure Voltage with Error Flag Rised
@@ -569,6 +583,7 @@ class HornbillVoltageMeasurementwithELoad:
     
         #Voltage Iteration
         while j < voltage_iter:
+            _execution_checkpoint(worker)
             i=0
             I_fixed = float(dict["minCurrent"])
             eload.setOutputCurrent(I_fixed)
@@ -595,6 +610,7 @@ class HornbillVoltageMeasurementwithELoad:
             
         
             while i < current_iter:
+                _execution_checkpoint(worker)
                 Iset = dict["maxCurrent"]
                 sleep(2)
                 WAI(dict["PSU"])
@@ -635,6 +651,7 @@ class HornbillVoltageMeasurementwithELoad:
                     status = float(dmm.operationCondition())
                     TRG(dict["DMM"])
                     while 1:
+                        _execution_checkpoint(worker)
                         status = float(Status(dict["DMM"]).operationCondition())
                         
                         #Measure Voltage with Error Flag Rised
@@ -1569,7 +1586,7 @@ class HornbillCurrentMeasurementwithELoad_IMON_FULL :
         elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
             VshuntdropMax = 3.5
         elif self.rshunt == 1: #(10A)  (10V + cable loss)
-            VshuntdropMax == 11
+            VshuntdropMax = 11
 
         current_iter = (
             (float(dict["maxCurrent"]) - float(dict["minCurrent"]))
@@ -1904,7 +1921,7 @@ class HornbillCurrentMeasurementwithELoad_IMON_200uA :
         elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
             VshuntdropMax = 3.5
         elif self.rshunt == 1: #(10A)  (10V + cable loss)
-            VshuntdropMax == 11
+            VshuntdropMax = 11
 
         current_iter = (
             (float(dict["maxCurrent"]) - float(dict["minCurrent"]))
@@ -2239,7 +2256,7 @@ class HornbillCurrentMeasurementwithELoad_IMON_2mA :
         elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
             VshuntdropMax = 3.5
         elif self.rshunt == 1: #(10A)  (10V + cable loss)
-            VshuntdropMax == 11
+            VshuntdropMax = 11
 
         current_iter = (
             (float(dict["maxCurrent"]) - float(dict["minCurrent"]))

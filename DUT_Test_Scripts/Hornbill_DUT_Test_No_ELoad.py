@@ -14,7 +14,9 @@ import sys
 import csv
 import pandas as pd
 from datetime import datetime
-from time import sleep, time
+from time import time
+from DUT_Test_Scripts.execution_control import sleep
+from SCPI_Library.visa_config import configure_visa_resource
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 import traceback
@@ -128,7 +130,7 @@ class VisaResourceManager:
         """
         try:
             for i in range(len(args)):
-                instr = self.rm.open_resource(args[i])
+                instr = configure_visa_resource(self.rm.open_resource(args[i]))
                 instr.baud_rate = 9600
 
             return 1, None
