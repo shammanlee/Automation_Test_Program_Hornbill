@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import unittest
+from io import BytesIO, TextIOWrapper
 from pathlib import Path
 from unittest.mock import patch
 
@@ -115,6 +116,18 @@ class GuiWorkflowTests(unittest.TestCase):
         self.dialog.deleteLater()
         self.application.processEvents()
         self.queue_directory.cleanup()
+
+    def test_console_output_replaces_unsupported_windows_characters(self):
+        raw_stream = BytesIO()
+        stream = TextIOWrapper(raw_stream, encoding="cp1252")
+
+        GUI.print_console_safe("✅ Measurement complete", stream=stream)
+        stream.flush()
+
+        self.assertEqual(
+            raw_stream.getvalue().decode("cp1252").strip(),
+            "? Measurement complete",
+        )
 
     def test_state_controls_follow_worker_state(self):
         self.dialog.set_test_state(GUI.TestState.RUNNING)

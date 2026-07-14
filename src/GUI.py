@@ -127,6 +127,13 @@ desp_font = QFont("Times New Roman", 14, QFont.Bold)
 AdvancedSettingsList = []
 
 
+def print_console_safe(message, stream=None):
+    destination = stream or sys.stdout
+    encoding = getattr(destination, "encoding", None) or "utf-8"
+    safe_message = str(message).encode(encoding, errors="replace").decode(encoding)
+    print(safe_message, file=destination)
+
+
 def run_tabulated_excel_file(output_file, state, wb=None):
  
     if state == "open":
@@ -11832,7 +11839,7 @@ class AllTestMeasurement(QDialog):
     def update_output(self, msg):
         self.OutputBox.append(msg)
         self.write_run_log(msg)
-        print(msg)
+        print_console_safe(msg)
 
     def update_progress_bar(self, value):
         """Update the progress bar value"""
