@@ -1,6 +1,7 @@
 """VISA instrument discovery and model-to-role assignment."""
 
 import ipaddress
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pyvisa
@@ -16,6 +17,18 @@ DEFAULT_ROLE_MAP = (
     / "Instrument_Config_Files"
     / "instrument_role.txt"
 )
+
+
+@dataclass
+class DiscoveryResult:
+    addresses: list[str] = field(default_factory=list)
+    identities: list[str] = field(default_factory=list)
+    roles: dict[str, str] = field(default_factory=dict)
+
+    def extend(self, other: "DiscoveryResult") -> None:
+        self.addresses.extend(other.addresses)
+        self.identities.extend(other.identities)
+        self.roles.update(other.roles)
 
 
 def load_model_role_map(path=None):
@@ -87,9 +100,7 @@ def _discover_resources(
 ):
     factory = resource_manager_factory or create_resource_manager
     manager = factory()
-    addresses = []
-    identities = []
-    roles = {}
+    result = DiscoveryResult()
     model_roles = load_model_role_map(role_map_path)
     try:
         for address in manager.list_resources():
@@ -113,9 +124,9 @@ def _discover_resources(
                 )
                 if not identity or (require_comma and "," not in identity):
                     continue
-                addresses.append(address)
-                identities.append(identity)
-                _assign_role(roles, model_roles, identity, address)
+                result.addresses.append(address)
+                result.identities.append(identity)
+                _assign_role(result.roles, model_roles, identity, address)
             except pyvisa.errors.VisaIOError as exception:
                 if exception.error_code not in IGNORED_VISA_ERROR_CODES:
                     print_console_safe(f"VISA error on {address}: {exception}")
@@ -132,7 +143,7 @@ def _discover_resources(
             manager.close()
         except Exception:
             pass
-    return addresses, identities, roles
+    return result
 
 
 def _query_identity(instrument, address, *, gpib_fallback):

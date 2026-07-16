@@ -10,6 +10,7 @@ for import_path in (SRC, ROOT):
         sys.path.insert(0, str(import_path))
 
 from instrument_discovery import (
+    DiscoveryResult,
     get_visa_hostname_resources,
     get_visa_tcpip_resources,
     load_model_role_map,
@@ -47,6 +48,25 @@ class DiscoveryManager:
 
 
 class InstrumentDiscoveryTests(unittest.TestCase):
+    def test_discovery_result_combines_scans(self):
+        result = DiscoveryResult(
+            addresses=["USB0::MODEL::INSTR"],
+            identities=["VENDOR,MODEL-USB,SERIAL,1.0"],
+            roles={"PSU": "USB0::MODEL::INSTR"},
+        )
+
+        result.extend(
+            DiscoveryResult(
+                addresses=["TCPIP0::scope-lab::inst0::INSTR"],
+                identities=["VENDOR,MODEL-HOST,SERIAL,1.0"],
+                roles={"SCOPE": "TCPIP0::scope-lab::inst0::INSTR"},
+            )
+        )
+
+        self.assertEqual(len(result.addresses), 2)
+        self.assertEqual(len(result.identities), 2)
+        self.assertEqual(set(result.roles), {"PSU", "SCOPE"})
+
     def test_load_model_role_map_ignores_comments_and_normalizes_models(self):
         with tempfile.TemporaryDirectory() as directory:
             role_map = Path(directory) / "roles.txt"
@@ -77,15 +97,17 @@ class InstrumentDiscoveryTests(unittest.TestCase):
                 "MODEL-IP: PSU\nMODEL-HOST: SCOPE\n",
                 encoding="utf-8",
             )
-            ip_addresses, _, ip_roles = get_visa_tcpip_resources(factory, role_map)
-            host_addresses, _, host_roles = get_visa_hostname_resources(
-                factory, role_map
-            )
+            ip_result = get_visa_tcpip_resources(factory, role_map)
+            host_result = get_visa_hostname_resources(factory, role_map)
 
-        self.assertEqual(ip_addresses, ["TCPIP0::192.0.2.1::inst0::INSTR"])
-        self.assertEqual(ip_roles, {"PSU": ip_addresses[0]})
-        self.assertEqual(host_addresses, ["TCPIP0::scope-lab::inst0::INSTR"])
-        self.assertEqual(host_roles, {"SCOPE": host_addresses[0]})
+        self.assertEqual(
+            ip_result.addresses, ["TCPIP0::192.0.2.1::inst0::INSTR"]
+        )
+        self.assertEqual(ip_result.roles, {"PSU": ip_result.addresses[0]})
+        self.assertEqual(
+            host_result.addresses, ["TCPIP0::scope-lab::inst0::INSTR"]
+        )
+        self.assertEqual(host_result.roles, {"SCOPE": host_result.addresses[0]})
         self.assertTrue(all(manager.closed for manager in managers))
         self.assertTrue(
             all(

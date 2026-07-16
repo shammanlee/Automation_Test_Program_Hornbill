@@ -750,7 +750,10 @@ class MultiThreadVoltageMeasurementDialog(QDialog):
             self.QLineEdit_DMM_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
             
-            self.visaIdList, self.nameList, instrument_roles = NewGetVisaSCPIResources()
+            discovery = NewGetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
+            instrument_roles = discovery.roles
             
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
