@@ -3,6 +3,7 @@ target-version = "py311"
 include = [
     "src/configuration_service.py",
     "src/diagnostics.py",
+    "src/instrument_discovery.py",
     "src/output_logging.py",
     "src/preflight.py",
     "src/queue_persistence.py",
