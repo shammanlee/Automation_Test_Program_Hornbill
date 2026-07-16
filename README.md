@@ -108,6 +108,8 @@ are loaded through `src/configuration_service.py`.
 Queue-template serialization and reconstruction are isolated in
 `src/queue_template_service.py`; encoding-safe console and run-log writes live in
 `src/output_logging.py`.
+VISA enumeration, identity queries, IP/hostname classification, model-role mapping,
+and discovery-resource cleanup live in `src/instrument_discovery.py`.
 
 Use **Add to Queue** to snapshot the current setup without starting it. Pending rows
 can be reordered or removed, and **Run Queue** executes them sequentially. Every row
