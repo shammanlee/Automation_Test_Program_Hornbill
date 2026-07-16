@@ -4,17 +4,43 @@ from openpyxl.formatting.rule import FormulaRule
 import pandas as pd
 import datetime
 import os
+from pathlib import Path
+
+
+_csv_folder = None
+_chart_directory = None
+
+
+def configure_run_storage(raw_directory, chart_directory):
+    global _csv_folder, _chart_directory
+    _csv_folder = Path(raw_directory)
+    _chart_directory = Path(chart_directory)
 
 
 class xlreportpower:
     """Generates an Excel report for voltage/current accuracy tests with conditional formatting and embedded images."""
 
-    def __init__(self, save_directory, file_name=None):
+    def __init__(
+        self,
+        save_directory,
+        file_name=None,
+        raw_directory=None,
+        chart_directory=None,
+    ):
         """Initialize formatting parameters and set file path for Excel report."""
         self.red_font = Font(size=14, bold=True, color="ffffff")
         self.red_fill = PatternFill(start_color="ffcccc", end_color="ffcccc", fill_type="solid")
         self.green_font = Font(size=14, bold=True, color="013220")
         self.green_fill = PatternFill(start_color="FFAAFF00", end_color="FFAAFF00", fill_type="solid")
+        run_root = Path(save_directory).parent
+        inferred_raw = run_root / "raw"
+        inferred_charts = run_root / "charts"
+        self.csv_folder = Path(raw_directory) if raw_directory else (
+            inferred_raw if inferred_raw.exists() else _csv_folder
+        )
+        self.chart_directory = Path(chart_directory) if chart_directory else (
+            inferred_charts if inferred_charts.exists() else _chart_directory
+        )
 
         # Ensure the save directory exists
         if not os.path.exists(save_directory):
@@ -43,8 +69,9 @@ class xlreportpower:
         # Define chart_path for image insertion
         current_dir = os.path.dirname(os.path.abspath(__file__))  # src/
         project_root = os.path.abspath(os.path.join(current_dir, ".."))
-        csv_folder = os.path.join(project_root, "csv")
-        chart_path = os.path.join(csv_folder, "images", "powerChart.png")
+        csv_folder = self.csv_folder or Path(project_root) / "csv"
+        chart_directory = self.chart_directory or Path(csv_folder) / "images"
+        chart_path = chart_directory / "powerChart.png"
 
         try:
             with pd.ExcelWriter(self.path, engine="openpyxl") as writer:

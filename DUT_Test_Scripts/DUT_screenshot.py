@@ -2,6 +2,7 @@ import sys
 import  shutil
 import os
 import pyvisa
+from SCPI_Library.simulation import create_resource_manager
 from PIL import Image, ImageDraw, ImageFont
 from time import sleep
 
@@ -10,12 +11,14 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushBut
                            QSplitter, QFrame, QGroupBox, QGridLayout, QWidget, QApplication, QMessageBox, QFileDialog)
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QPixmap
+from pathlib import Path
+
+
 
 # --------------------------------------------------------------------------- #
 # globals                                                                     #
 # --------------------------------------------------------------------------- #
 hadU2004AReset  = False                     # so U2004A reset is done only once.
-rm              = pyvisa.ResourceManager()
 
 # *************************************************************************** #
 # functions                                                                   #
@@ -24,7 +27,7 @@ rm              = pyvisa.ResourceManager()
 # =========================================================================== #
 # infer the instrument type class from the instrument name                    #
 # =========================================================================== #
-def GetInstrumentTypeFromName(instrName):
+"""def GetInstrumentTypeFromName(instrName):
     
     # do this by a loaded dictionary. hardcoded for the moment.
     
@@ -111,7 +114,42 @@ def GetInstrumentTypeFromName(instrName):
         result = instrDict[instrName]
     except:
         result = ''
-    return result
+    return result"""
+
+
+def GetInstrumentTypeFromName(instrName):
+
+    # When running an EXE:
+    #   sys.executable → the EXE file in "Executable/"
+    # When running as .py:
+    #   __file__ → .../src/yourfile.py
+    if hasattr(sys, '_MEIPASS'):
+        # Running as PyInstaller EXE → use EXE directory
+        base_dir = Path(sys.executable).resolve().parent
+    else:
+        # Running normally → go up from /src/ to project root
+        base_dir = Path(__file__).resolve().parent.parent
+
+    # Build external folder path
+    filename = base_dir / "Instrument_Config_Files" / "instrument.txt"
+
+    instrDict = {}
+
+    try:
+        with open(filename, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    instrDict[key.strip()] = value.strip()
+
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        return ""
+
+    return instrDict.get(instrName, "")
 
 # =========================================================================== #
 # get a screenshot depending on instrument type class                         #
@@ -131,6 +169,7 @@ def WriteFile(result,fileName):
 
 def GetScreenShot(instrType,visaId):
     # first connect to the instrument
+    rm = create_resource_manager()
     instr = rm.open_resource(visaId,chunk_size=8000,timeout=20000)
     # NO reset or something similar
     
@@ -158,6 +197,7 @@ def GetScreenShot(instrType,visaId):
     if instrType == 'Scope Keysight': 
         try:
             instr.write(':STOP; *WAI')
+            instr.write(':HARDcopy:INKSaver OFF')
             result = instr.query_binary_values(':DISP:DATA? PNG',datatype='B',container=bytearray)
             WriteFile(result,fileName)
         except:
@@ -568,41 +608,56 @@ def GetKeysightU2004ADeviceScreenShot(instr):
 # --------------------------------------------------------------------------- #
 # get all VISA resources responding to a *IDN? query                          #
 # --------------------------------------------------------------------------- #
+
+
 def GetVisaSCPIResources():
+    """Return a list of only *connected* USB VISA instruments."""
+    rm = create_resource_manager()
+    resource_list = rm.list_resources()
 
-    # enumerate all resources VISA finds
-    rm                  = pyvisa.ResourceManager()
-    resourceList        = rm.list_resources()
-    availableVisaIdList = []
-    availableNameList   = []
+    available_visa_ids = []
+    available_names = []
 
-    # go thru this list and ask an *IDN? to see what instrument it is
-    for i in range(len(resourceList)):
-        resourceReply = ''
+    for resource in resource_list:
+        # Only look for USB instruments (skip GPIB, TCPIP, etc.)
+        if not resource.startswith("USB"):
+            continue
+
         try:
-            if (resourceList[i][:4] == 'ASRL'):         # serial resource
-                instrument          = rm.open_resource(resourceList[i],
-                                                        timeout=2000,
-                                                        access_mode=1)
-                # instrument.lock_excl()
-                resourceReply       = instrument.query('*IDN?').upper()
-            else:
-                instrument          = rm.open_resource(resourceList[i])
-                resourceReply       = instrument.query('*IDN?').upper()
-            if (resourceReply != ''):
-                availableVisaIdList.append(resourceList[i])
-                availableNameList.append(resourceReply)
-        except:
-            pass
-            
-    return availableVisaIdList, availableNameList
+            # Try to open the resource
+            instrument = rm.open_resource(resource)
+            instrument.timeout = 2000  # shorter timeout for faster scanning
 
+            # Check connectivity with *IDN? (identify command)
+            idn = instrument.query("*IDN?").strip().upper()
+
+            # Only add if response looks valid
+            if idn and "," in idn:
+                available_visa_ids.append(resource)
+                available_names.append(idn)
+
+        except pyvisa.errors.VisaIOError as e:
+            # Filter out common errors for disconnected devices
+            if e.error_code in (-1073807343, -1073807339, -1073807298):
+                # -1073807343: Resource not found
+                # -1073807339: Timeout
+                # -1073807298: I/O error
+                continue  # Skip silently
+            else:
+                print(f"VISA I/O Error ({e.error_code}) on {resource}: {e}")
+                continue
+        except Exception as e:
+            print(f"Unexpected error with {resource}: {e}")
+            continue
+
+    return available_visa_ids, available_names
 # --------------------------------------------------------------------------- #
 # send a SCPI command                                                         #
 # --------------------------------------------------------------------------- #
 def SendScpiCommand(visaId,commandString):
 
     # first connect to the instrument
+    rm = create_resource_manager()
     instr = rm.open_resource(visaId,chunk_size=8000,timeout=20000)
 
     try:
@@ -617,6 +672,7 @@ def SendScpiCommand(visaId,commandString):
 def SendScpiQuery(visaId,commandString):
 
     # first connect to the instrument
+    rm = create_resource_manager()
     instr = rm.open_resource(visaId,chunk_size=8000,timeout=20000)
 
     try:
