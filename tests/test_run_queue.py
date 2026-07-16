@@ -120,6 +120,42 @@ class TestRunQueueTests(unittest.TestCase):
         self.assertTrue(self.controller.remove_pending(first.run_id))
         self.assertEqual(self.controller.pending_count, 2)
 
+    def test_duplicate_creates_an_independent_pending_snapshot(self):
+        source = self.controller.enqueue(
+            {"Voltage_Test": True},
+            {"DUT": "Dolphin", "limits": {"maximum": 5}},
+            {"noofloop": "1"},
+            label="Voltage accuracy",
+            auto_start=False,
+        )
+
+        duplicate = self.controller.duplicate(source.run_id)
+        source.configuration["limits"]["maximum"] = 10
+
+        self.assertIsNotNone(duplicate)
+        self.assertNotEqual(duplicate.run_id, source.run_id)
+        self.assertEqual(duplicate.label, "Voltage accuracy (Copy)")
+        self.assertEqual(duplicate.configuration["limits"]["maximum"], 5)
+        self.assertEqual(self.controller.pending_count, 2)
+
+    def test_retry_accepts_only_failed_or_aborted_history(self):
+        request = self.controller.start(
+            {"Voltage_Test": True},
+            {"DUT": "Dolphin"},
+            {"noofloop": "1"},
+            label="Failed voltage accuracy",
+        )
+        worker = self.workers[0]
+        worker.running = False
+        worker.error.emit(RuntimeError("failed"), "traceback")
+
+        retry = self.controller.retry(request.run_id)
+
+        self.assertIsNotNone(retry)
+        self.assertEqual(retry.label, "Failed voltage accuracy (Retry)")
+        self.assertEqual(self.controller.status_for(request.run_id), "Failed")
+        self.assertIsNone(self.controller.retry(retry.run_id))
+
     def test_prepare_and_status_events_follow_each_request(self):
         prepared = []
         statuses = []

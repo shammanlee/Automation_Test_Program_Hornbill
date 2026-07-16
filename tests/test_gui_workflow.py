@@ -332,6 +332,36 @@ class GuiWorkflowTests(unittest.TestCase):
             restored_dialog.deleteLater()
             self.application.processEvents()
 
+    def test_queue_template_save_and_load_appends_new_requests(self):
+        template_path = Path(self.queue_directory.name) / "template.json"
+        self.dialog.run_controller.enqueue(
+            {"Voltage_Test": True},
+            {"DUT": "Dolphin"},
+            GUI.ParameterSnapshot(noofloop="4", savelocation="output"),
+            label="Template voltage test",
+            prepare=self.dialog._prepare_queued_run,
+            auto_start=False,
+        )
+        with patch.object(
+            GUI.QFileDialog,
+            "getSaveFileName",
+            return_value=(str(template_path), "Queue Template (*.json)"),
+        ):
+            self.dialog._save_queue_template()
+
+        self.dialog.run_controller.clear_pending()
+        with patch.object(
+            GUI.QFileDialog,
+            "getOpenFileName",
+            return_value=(str(template_path), "Queue Template (*.json)"),
+        ):
+            self.dialog._load_queue_template()
+
+        self.assertEqual(self.dialog.run_controller.pending_count, 1)
+        loaded = self.dialog.run_controller.pending_requests[0]
+        self.assertEqual(loaded.label, "Template voltage test")
+        self.assertEqual(loaded.parameters.noofloop, "4")
+
     def test_terminal_handlers_cleanup_worker(self):
         completed_worker = DummyWorker()
         self.dialog.worker = completed_worker

@@ -1,6 +1,7 @@
 """Lifecycle and queue orchestration for background test workers."""
 
 from collections import deque
+from copy import deepcopy
 from dataclasses import dataclass
 import traceback
 from uuid import uuid4
@@ -37,6 +38,8 @@ class TestRunController(QObject):
         super().__init__(parent)
         self._worker_factory = worker_factory
         self._queue = deque()
+        self._requests_by_id = {}
+        self._statuses_by_id = {}
         self.active_worker = None
         self.active_request = None
 
@@ -83,9 +86,10 @@ class TestRunController(QObject):
             run_id=run_id,
         )
         self._queue.append(request)
+        self._requests_by_id[request.run_id] = request
         self.queue_changed.emit(len(self._queue))
         self.request_queued.emit(request)
-        self.request_status_changed.emit(request, "Pending")
+        self._set_status(request, "Pending")
         if auto_start:
             self.start_queue()
         return request
@@ -100,7 +104,7 @@ class TestRunController(QObject):
                 requests.pop(index)
                 self._queue = deque(requests)
                 self.queue_changed.emit(len(self._queue))
-                self.request_status_changed.emit(request, "Removed")
+                self._set_status(request, "Removed")
                 return True
         return False
 
@@ -125,7 +129,41 @@ class TestRunController(QObject):
         self._queue.clear()
         self.queue_changed.emit(0)
         for request in removed:
-            self.request_status_changed.emit(request, "Removed")
+            self._set_status(request, "Removed")
+
+    def request_for(self, run_id):
+        return self._requests_by_id.get(run_id)
+
+    def status_for(self, run_id):
+        return self._statuses_by_id.get(run_id)
+
+    def duplicate(self, run_id, auto_start=False):
+        source = self.request_for(run_id)
+        if source is None:
+            return None
+        return self.enqueue(
+            deepcopy(source.checkbox_states),
+            deepcopy(source.configuration),
+            deepcopy(source.parameters),
+            label=f"{source.label} (Copy)",
+            prepare=source.prepare,
+            auto_start=auto_start,
+        )
+
+    def retry(self, run_id, auto_start=False):
+        if self.status_for(run_id) not in {"Failed", "Aborted"}:
+            return None
+        source = self.request_for(run_id)
+        if source is None:
+            return None
+        return self.enqueue(
+            deepcopy(source.checkbox_states),
+            deepcopy(source.configuration),
+            deepcopy(source.parameters),
+            label=f"{source.label} (Retry)",
+            prepare=source.prepare,
+            auto_start=auto_start,
+        )
 
     def pause(self):
         if self.is_running:
@@ -156,7 +194,7 @@ class TestRunController(QObject):
                 request.prepare(request)
         except Exception as exception:
             traceback_text = traceback.format_exc()
-            self.request_status_changed.emit(request, "Failed")
+            self._set_status(request, "Failed")
             self.request_setup_failed.emit(request, exception, traceback_text)
             self.active_request = None
             QTimer.singleShot(0, self._start_next)
@@ -173,14 +211,18 @@ class TestRunController(QObject):
             lambda *_: self._worker_ended(request, "Failed")
         )
         self.request_started.emit(request)
-        self.request_status_changed.emit(request, "Running")
+        self._set_status(request, "Running")
         self.worker_created.emit(worker)
         worker.start()
 
     def _worker_ended(self, request, status):
         if request is not self.active_request:
             return
-        self.request_status_changed.emit(request, status)
+        self._set_status(request, status)
         self.active_worker = None
         self.active_request = None
         QTimer.singleShot(0, self._start_next)
+
+    def _set_status(self, request, status):
+        self._statuses_by_id[request.run_id] = status
+        self.request_status_changed.emit(request, status)

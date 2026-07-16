@@ -58,19 +58,12 @@ The dependencies for this program has been listed in `requirements.txt`. If you 
 pip install -r requirements.txt
 ```
 
-If requirements.txt does not exist
-Install the following manually:
+The supported development runtime is Python 3.11.0, recorded in
+`.python-version`. `requirements.txt` pins direct application dependencies.
+For an exact copy of the environment used by CI and regression testing, install:
 
 ```cmd
-pip install PyVISA==1.14.1
-pip install matplotlib==3.10.5
-pip install numpy==2.3.2
-pip install openpyxl==3.1.5
-pip install pandas==2.3.1
-pip install Pillow==11.3.0
-pip install PyQt5==5.15.11
-pip install PyQt5_sip==12.17.0
-
+pip install -r requirements-lock.txt
 ```
 
 ### VISA timeout
@@ -118,6 +111,10 @@ can be reordered or removed, and **Run Queue** executes them sequentially. Every
 receives its own run directory and reports `Pending`, `Running`, `Completed`,
 `Failed`, or `Aborted`. Aborting an active row leaves the remaining queue available;
 **Clear Pending** removes waiting rows.
+**Duplicate** creates an independent copy of any selected row. **Retry Failed**
+requeues failed or aborted rows using their original parameter snapshot. **Save
+Template** stores pending rows in portable JSON, and **Load Template** appends new
+queue entries without reusing old run IDs.
 Pending items are saved atomically to
 `Instrument_Config_Files/test_queue.json` and restored when the test dialog opens
 again. Active, completed, failed, and aborted rows are not restored.
@@ -146,6 +143,8 @@ python -B -m unittest discover -s tests -v
 ```
 
 The suite uses mocked VISA resources and does not communicate with real instruments.
+The Windows CI workflow in `.github/workflows/tests.yml` installs the locked
+dependencies and runs this command for every push and pull request.
 
 ### Simulation Mode
 

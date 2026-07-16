@@ -19,6 +19,10 @@ class TestQueueWidget(QGroupBox):
     remove_requested = pyqtSignal(str)
     move_requested = pyqtSignal(str, int)
     clear_requested = pyqtSignal()
+    duplicate_requested = pyqtSignal(str)
+    retry_requested = pyqtSignal(str)
+    save_template_requested = pyqtSignal()
+    load_template_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__("Test Queue", parent)
@@ -41,11 +45,19 @@ class TestQueueWidget(QGroupBox):
         self.up_button = QPushButton("Move Up")
         self.down_button = QPushButton("Move Down")
         self.clear_button = QPushButton("Clear Pending")
+        self.duplicate_button = QPushButton("Duplicate")
+        self.retry_button = QPushButton("Retry Failed")
+        self.save_template_button = QPushButton("Save Template")
+        self.load_template_button = QPushButton("Load Template")
         self.run_button.setToolTip("Start pending tests in displayed order")
         self.remove_button.setToolTip("Remove the selected pending test")
         self.up_button.setToolTip("Move the selected pending test earlier")
         self.down_button.setToolTip("Move the selected pending test later")
         self.clear_button.setToolTip("Remove every test that has not started")
+        self.duplicate_button.setToolTip("Copy the selected run into the queue")
+        self.retry_button.setToolTip("Retry the selected failed or aborted run")
+        self.save_template_button.setToolTip("Save pending runs as a reusable template")
+        self.load_template_button.setToolTip("Append runs from a saved template")
 
         controls = QGridLayout()
         controls.addWidget(self.run_button, 0, 0, 1, 2)
@@ -53,6 +65,10 @@ class TestQueueWidget(QGroupBox):
         controls.addWidget(self.remove_button, 1, 0)
         controls.addWidget(self.up_button, 1, 1)
         controls.addWidget(self.down_button, 1, 2, 1, 2)
+        controls.addWidget(self.duplicate_button, 2, 0, 1, 2)
+        controls.addWidget(self.retry_button, 2, 2, 1, 2)
+        controls.addWidget(self.save_template_button, 3, 0, 1, 2)
+        controls.addWidget(self.load_template_button, 3, 2, 1, 2)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.table)
@@ -63,6 +79,14 @@ class TestQueueWidget(QGroupBox):
         self.up_button.clicked.connect(lambda: self._request_move(-1))
         self.down_button.clicked.connect(lambda: self._request_move(1))
         self.clear_button.clicked.connect(self.clear_requested)
+        self.duplicate_button.clicked.connect(
+            lambda: self._request_selected(self.duplicate_requested)
+        )
+        self.retry_button.clicked.connect(
+            lambda: self._request_selected(self.retry_requested)
+        )
+        self.save_template_button.clicked.connect(self.save_template_requested)
+        self.load_template_button.clicked.connect(self.load_template_requested)
 
     def add_request(self, request):
         row = self.table.rowCount()
@@ -133,3 +157,8 @@ class TestQueueWidget(QGroupBox):
         run_id = self.selected_run_id()
         if run_id:
             self.move_requested.emit(run_id, offset)
+
+    def _request_selected(self, signal):
+        run_id = self.selected_run_id()
+        if run_id:
+            signal.emit(run_id)

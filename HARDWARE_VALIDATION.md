@@ -3,6 +3,9 @@
 > Status: pending until supported instruments are physically available. Automated
 > simulation and offscreen tests do not replace the checks in this document.
 
+Calibration development remains gated until the baseline hardware checks below
+pass with the intended DUT and instrument setup.
+
 Use this checklist after worker, VISA, shutdown, or measurement changes. Automated
 tests use mocked instruments and do not replace this validation.
 

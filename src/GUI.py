@@ -47,6 +47,7 @@ from path import (
 )
 from preflight import validate_preflight
 from diagnostics import append_diagnostic, exception_details
+from output_logging import append_timestamped_line, print_console_safe
 
 from DUT_Test_Scripts.DUT_Test import NewCurrentMeasurement, NewVoltageMeasurement
 from SCPI_Library.visa_config import configure_visa_resource
@@ -125,13 +126,6 @@ from External_Auxiliary_Equipment.Relay_Control import (
 x=0
 desp_font = QFont("Times New Roman", 14, QFont.Bold) 
 AdvancedSettingsList = []
-
-
-def print_console_safe(message, stream=None):
-    destination = stream or sys.stdout
-    encoding = getattr(destination, "encoding", None) or "utf-8"
-    safe_message = str(message).encode(encoding, errors="replace").decode(encoding)
-    print(safe_message, file=destination)
 
 
 def run_tabulated_excel_file(output_file, state, wb=None):
@@ -10755,6 +10749,10 @@ class AllTestMeasurement(QDialog):
         self.queue_widget.remove_requested.connect(self._remove_queued_run)
         self.queue_widget.move_requested.connect(self._move_queued_run)
         self.queue_widget.clear_requested.connect(self.run_controller.clear_pending)
+        self.queue_widget.duplicate_requested.connect(self._duplicate_queued_run)
+        self.queue_widget.retry_requested.connect(self._retry_queued_run)
+        self.queue_widget.save_template_requested.connect(self._save_queue_template)
+        self.queue_widget.load_template_requested.connect(self._load_queue_template)
         QPushButton_Widget2.clicked.connect(self.openDialog)
         QPushButton_Widget3.clicked.connect(self.estimateTime)
         QPushButton_Widget4.clicked.connect(self.doFind)
@@ -10846,6 +10844,60 @@ class AllTestMeasurement(QDialog):
     def _move_queued_run(self, run_id, offset):
         if self.run_controller.move_pending(run_id, offset):
             self.queue_widget.reorder(self.run_controller.pending_requests)
+
+    def _duplicate_queued_run(self, run_id):
+        if self.run_controller.duplicate(run_id) is None:
+            self.OutputBox.append("Unable to duplicate the selected queue item")
+
+    def _retry_queued_run(self, run_id):
+        if self.run_controller.retry(run_id) is None:
+            self.OutputBox.append("Only failed or aborted queue items can be retried")
+
+    def _save_queue_template(self):
+        if not self.run_controller.pending_requests:
+            self.OutputBox.append("Queue template not saved: no pending items")
+            return
+        template_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Queue Template",
+            str(Path(config_folder) / "queue_template.json"),
+            "Queue Template (*.json)",
+        )
+        if not template_path:
+            return
+        try:
+            QueuePersistence(template_path).save(
+                self.run_controller.pending_requests
+            )
+            self.OutputBox.append(f"Queue template saved: {template_path}")
+        except QueuePersistenceError as exception:
+            self.OutputBox.append(f"Queue template save warning: {exception}")
+
+    def _load_queue_template(self):
+        template_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Queue Template",
+            str(config_folder),
+            "Queue Template (*.json)",
+        )
+        if not template_path:
+            return
+        try:
+            records = QueuePersistence(template_path).load()
+            for record in records:
+                self.run_controller.enqueue(
+                    record["checkbox_states"],
+                    record["configuration"],
+                    ParameterSnapshot(record["parameters"]),
+                    label=record.get("label", "Template Test Run"),
+                    prepare=self._prepare_queued_run,
+                    auto_start=False,
+                )
+            self.OutputBox.append(
+                f"Loaded {len(records)} queue template item(s)"
+            )
+        except (QueuePersistenceError, KeyError, TypeError) as exception:
+            self.OutputBox.append(f"Queue template load warning: {exception}")
 
     def _prepare_queued_run(self, request):
         self._cleanup_done = False
@@ -10945,11 +10997,9 @@ class AllTestMeasurement(QDialog):
         if not self.run_storage:
             return
         try:
-            timestamp = datetime.datetime.now().isoformat(timespec="seconds")
-            with self.run_storage.log_file.open("a", encoding="utf-8") as log_file:
-                log_file.write(f"{timestamp} {message}\n")
+            append_timestamped_line(self.run_storage.log_file, message)
         except OSError as exception:
-            print(f"Run log write failed: {exception}")
+            print_console_safe(f"Run log write failed: {exception}")
 
     def write_diagnostic(self, event, level="INFO", message=None,
                          exception=None, traceback_text=None, **context):
@@ -10966,7 +11016,7 @@ class AllTestMeasurement(QDialog):
                 **context,
             )
         except OSError as diagnostic_error:
-            print(f"Diagnostic log write failed: {diagnostic_error}")
+            print_console_safe(f"Diagnostic log write failed: {diagnostic_error}")
     
     def stop_worker(self):
         if hasattr(self, 'worker') and self.worker.isRunning():
@@ -11899,7 +11949,7 @@ class AllTestMeasurement(QDialog):
         if self._cleanup_done:
             return
         self._cleanup_done = True
-        print(f"Cleaning up test due to: {reason}")
+        print_console_safe(f"Cleaning up test due to: {reason}")
 
         if self.active_run_context:
             try:
@@ -12001,7 +12051,7 @@ class AllTestMeasurement(QDialog):
 
         self.cleanup_test(reason="completed")
                  
-        print("Test operation finished")
+        print_console_safe("Test operation finished")
 
     def test_aborted(self):
         """Called when the test is aborted"""
@@ -12025,7 +12075,7 @@ class AllTestMeasurement(QDialog):
 
         self.cleanup_test(reason="aborted") #Shamman changes 
         
-        print("Test operation aborted")
+        print_console_safe("Test operation aborted")
 
     def show_popup_plot(self):      #Shamman changes to call back the plot_window
         self.plot_window.show()
