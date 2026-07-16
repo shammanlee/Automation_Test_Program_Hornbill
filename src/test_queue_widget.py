@@ -136,6 +136,11 @@ class TestQueueWidget(QGroupBox):
             for column, item in enumerate(items):
                 self.table.setItem(row, column, item)
 
+    def remove_run(self, run_id):
+        row = self._row_for(run_id)
+        if row is not None:
+            self.table.removeRow(row)
+
     def selected_run_id(self):
         row = self.table.currentRow()
         if row < 0 or not self.table.item(row, 0):

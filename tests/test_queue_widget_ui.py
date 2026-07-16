@@ -42,6 +42,8 @@ class TestQueueWidgetTests(unittest.TestCase):
         self.assertEqual(retried, ["run-1"])
         self.assertEqual(saved, [True])
         self.assertEqual(loaded, [True])
+        widget.remove_run("run-1")
+        self.assertEqual(widget.table.rowCount(), 0)
         widget.deleteLater()
         self.application.processEvents()
 
