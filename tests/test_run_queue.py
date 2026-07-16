@@ -31,6 +31,7 @@ class DummyWorker:
         self.finished = DummySignal()
         self.aborted = DummySignal()
         self.error = DummySignal()
+        self.state_changed = DummySignal()
         self.running = False
         self.pause_calls = 0
         self.resume_calls = 0
@@ -44,12 +45,15 @@ class DummyWorker:
 
     def pause(self):
         self.pause_calls += 1
+        self.state_changed.emit("PAUSED")
 
     def resume(self):
         self.resume_calls += 1
+        self.state_changed.emit("RUNNING")
 
     def request_stop(self):
         self.stop_calls += 1
+        self.state_changed.emit("STOPPING")
 
 
 class TestRunQueueTests(unittest.TestCase):
@@ -88,12 +92,15 @@ class TestRunQueueTests(unittest.TestCase):
         self.assertEqual(self.workers[1].checkbox_states["name"], "second")
 
     def test_pause_resume_and_stop_delegate_to_worker(self):
-        self.controller.start({}, {}, {})
+        request = self.controller.start({}, {}, {})
         worker = self.workers[0]
 
         self.controller.pause()
+        self.assertEqual(self.controller.status_for(request.run_id), "Paused")
         self.controller.resume()
+        self.assertEqual(self.controller.status_for(request.run_id), "Running")
         self.controller.request_stop()
+        self.assertEqual(self.controller.status_for(request.run_id), "Stopping")
 
         self.assertEqual(worker.pause_calls, 1)
         self.assertEqual(worker.resume_calls, 1)
