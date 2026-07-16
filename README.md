@@ -151,6 +151,19 @@ The suite uses mocked VISA resources and does not communicate with real instrume
 The Windows CI workflow in `.github/workflows/tests.yml` installs the locked
 dependencies and runs this command for every push and pull request.
 
+### Run Static Analysis
+
+Ruff checks undefined names and unused imports in the modernized modules and test
+suite. Install development dependencies and run:
+
+```cmd
+pip install -r requirements-dev.txt
+python -m ruff check .
+```
+
+The initial scope is listed in `pyproject.toml`. Expand it gradually as legacy GUI
+and measurement modules are refactored; do not hide new findings with broad ignores.
+
 ### Simulation Mode
 
 When instruments are unavailable, launch the application with the explicit
