@@ -31,16 +31,16 @@ class SimulationTests(unittest.TestCase):
 
     def test_simulated_manager_exposes_expected_instrument_roles(self):
         with patch.dict(os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False):
-            addresses, identities, roles = GUI.NewGetVisaSCPIResources()
+            result = GUI.NewGetVisaSCPIResources()
 
-        self.assertEqual(set(addresses), set(SIMULATED_INSTRUMENTS))
-        self.assertEqual(len(identities), len(SIMULATED_INSTRUMENTS))
-        self.assertEqual(roles["PSU"], "USB0::SIM::PSU::INSTR")
-        self.assertEqual(roles["DMM"], "USB0::SIM::DMM::INSTR")
-        self.assertEqual(roles["DMM2"], "USB0::SIM::DMM2::INSTR")
-        self.assertEqual(roles["ELOAD"], "USB0::SIM::ELOAD::INSTR")
-        self.assertEqual(roles["SCOPE"], "USB0::SIM::SCOPE::INSTR")
-        self.assertEqual(roles["ACSource"], "USB0::SIM::ACSOURCE::INSTR")
+        self.assertEqual(set(result.addresses), set(SIMULATED_INSTRUMENTS))
+        self.assertEqual(len(result.identities), len(SIMULATED_INSTRUMENTS))
+        self.assertEqual(result.roles["PSU"], "USB0::SIM::PSU::INSTR")
+        self.assertEqual(result.roles["DMM"], "USB0::SIM::DMM::INSTR")
+        self.assertEqual(result.roles["DMM2"], "USB0::SIM::DMM2::INSTR")
+        self.assertEqual(result.roles["ELOAD"], "USB0::SIM::ELOAD::INSTR")
+        self.assertEqual(result.roles["SCOPE"], "USB0::SIM::SCOPE::INSTR")
+        self.assertEqual(result.roles["ACSource"], "USB0::SIM::ACSOURCE::INSTR")
 
     def test_session_pool_uses_shared_simulated_measurement_state(self):
         with patch.dict(os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False):

@@ -48,6 +48,7 @@ from preflight import validate_preflight
 from diagnostics import append_diagnostic, exception_details
 from output_logging import append_timestamped_line, print_console_safe
 from instrument_discovery import (
+    DiscoveryResult,
     get_all_visa_resources as NewGetVisaSCPIResources,
     get_visa_hostname_resources as GetVisaHostnameResources,
     get_visa_scpi_resources as GetVisaSCPIResources,
@@ -192,29 +193,18 @@ def resource_path(relative_path: str) -> str:
     return str(Path(__file__).resolve().parent.parent / relative_path)
 
 def ScanSelectedVisaResources(self):
-    visa_ids = []
-    names = []
-    roles = {}
+    result = DiscoveryResult()
 
     if self.QCheckBox_USB_Widget.isChecked():
-        ids, nms, rls = GetVisaSCPIResources()
-        visa_ids += ids
-        names += nms
-        roles.update(rls)
+        result.extend(GetVisaSCPIResources())
 
     if self.QCheckBox_IP_Widget.isChecked():
-        ids, nms, rls = GetVisaTCPIPResources()
-        visa_ids += ids
-        names += nms
-        roles.update(rls)
+        result.extend(GetVisaTCPIPResources())
 
     if self.QCheckBox_Hostname_Widget.isChecked():
-        ids, nms, rls = GetVisaHostnameResources()
-        visa_ids += ids
-        names += nms
-        roles.update(rls)
+        result.extend(GetVisaHostnameResources())
 
-    return visa_ids, names, roles
+    return result
 
 def classify_visa_resource(visa_id):   #Shamman changes (makes program slower due to scanning)
     if visa_id.startswith("USB"):
@@ -1257,7 +1247,10 @@ class VoltageMeasurementDialog(QDialog):
             self.QLineEdit_DMM_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
             
-            self.visaIdList, self.nameList, instrument_roles = NewGetVisaSCPIResources()
+            discovery = NewGetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
+            instrument_roles = discovery.roles
             
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
@@ -2273,7 +2266,9 @@ class CurrentMeasurementDialog(QDialog):
             self.QLineEdit_DMM_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
             
-            self.visaIdList, self.nameList = GetVisaSCPIResources()
+            discovery = GetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
             
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
@@ -3024,7 +3019,9 @@ class CV_LoadRegulationDialog(QDialog):
             self.QLineEdit_DMM_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
             
-            self.visaIdList, self.nameList = GetVisaSCPIResources()
+            discovery = GetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
             
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
@@ -3616,7 +3613,9 @@ class CC_LoadRegulationDialog(QDialog):
             self.QLineEdit_DMM_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
             
-            self.visaIdList, self.nameList = GetVisaSCPIResources()
+            discovery = GetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
             
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
@@ -4125,7 +4124,9 @@ class TransientRecoveryTime(QDialog):
             self.QLineEdit_OSC_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
             
-            self.visaIdList, self.nameList = GetVisaSCPIResources()
+            discovery = GetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
             
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
@@ -5037,7 +5038,10 @@ class TransientRecoveryTimeWithCurrentSensor(QDialog):
             self.QLineEdit_OSC_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
 
-            self.visaIdList, self.nameList, instrument_roles = NewGetVisaSCPIResources()
+            discovery = NewGetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
+            instrument_roles = discovery.roles
 
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
@@ -5859,7 +5863,10 @@ class ProgrammingSpeed(QDialog):
             self.QLineEdit_OSC_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
 
-            self.visaIdList, self.nameList, instrument_roles = NewGetVisaSCPIResources()
+            discovery = NewGetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
+            instrument_roles = discovery.roles
 
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
@@ -6465,7 +6472,9 @@ class PowerMeasurementDialog(QDialog):
             self.QLineEdit_DMM_VisaAddressforCurrent.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
             
-            self.visaIdList, self.nameList = GetVisaSCPIResources()
+            discovery = GetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
             
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
@@ -7428,7 +7437,9 @@ class BundleMeasurementVoltageDialog(QDialog):
             self.QLineEdit_DMM_VisaAddress.clear()
             self.QLineEdit_OSC_VisaAddress.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
-            self.visaIdList, self.nameList = NewGetVisaSCPIResources()
+            discovery = NewGetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
                 
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
@@ -8383,7 +8394,9 @@ class BundleMeasurementCurrentandPowerDialog(QDialog):
             self.QLineEdit_DMM_VisaAddressforCurrent.clear()
             self.QLineEdit_ELoad_VisaAddress.clear()
             
-            self.visaIdList, self.nameList = GetVisaSCPIResources()
+            discovery = GetVisaSCPIResources()
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
             
             for i in range(len(self.nameList)):
                 self.OutputBox.append(str(self.nameList[i]) + str(self.visaIdList[i]))
@@ -10934,7 +10947,10 @@ class AllTestMeasurement(QDialog):
             self.OutputBox.clear()
 
             # 🔑 Call the dispatcher
-            self.visaIdList, self.nameList, instrument_roles = ScanSelectedVisaResources(self)
+            discovery = ScanSelectedVisaResources(self)
+            self.visaIdList = discovery.addresses
+            self.nameList = discovery.identities
+            instrument_roles = discovery.roles
 
             for visa_id, name in zip(self.visaIdList, self.nameList):
                 self.OutputBox.append(f"{name}  {visa_id}")
@@ -12023,7 +12039,10 @@ class ACSourceSetting(QDialog):
         self.QLineEdit_Frequency =  QLineEdit()
 
         self.QComboBox_ACSource_VisaAddress.clear()
-        self.visaIdList, self.nameList, instrument_roles = GetVisaSCPIResources()
+        discovery = GetVisaSCPIResources()
+        self.visaIdList = discovery.addresses
+        self.nameList = discovery.identities
+        instrument_roles = discovery.roles
         for i in range(len(self.nameList)):
             self.QComboBox_ACSource_VisaAddress.addItems([str(self.visaIdList[i])])
         
