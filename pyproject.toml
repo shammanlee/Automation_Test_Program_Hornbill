@@ -1,0 +1,26 @@
+[tool.ruff]
+target-version = "py311"
+include = [
+    "src/configuration_service.py",
+    "src/diagnostics.py",
+    "src/output_logging.py",
+    "src/preflight.py",
+    "src/queue_persistence.py",
+    "src/run_context.py",
+    "src/run_storage.py",
+    "src/test_configuration.py",
+    "src/test_queue_widget.py",
+    "src/test_run_controller.py",
+    "src/test_selection.py",
+    "src/test_worker.py",
+    "SCPI_Library/instrument_errors.py",
+    "SCPI_Library/session_manager.py",
+    "SCPI_Library/simulation.py",
+    "SCPI_Library/visa_config.py",
+    "DUT_Test_Scripts/execution_control.py",
+    "DUT_Test_Scripts/instrument_shutdown.py",
+    "tests/*.py",
+]
+
+[tool.ruff.lint]
+select = ["F401", "F821"]
