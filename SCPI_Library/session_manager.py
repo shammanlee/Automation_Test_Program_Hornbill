@@ -2,8 +2,6 @@ import threading
 import traceback
 from dataclasses import dataclass
 
-import pyvisa
-
 from SCPI_Library.simulation import create_resource_manager
 from SCPI_Library.visa_config import configure_visa_resource, open_visa_resource
 
