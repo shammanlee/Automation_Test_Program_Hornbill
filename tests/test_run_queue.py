@@ -156,6 +156,32 @@ class TestRunQueueTests(unittest.TestCase):
         self.assertEqual(self.controller.status_for(request.run_id), "Failed")
         self.assertIsNone(self.controller.retry(retry.run_id))
 
+    def test_terminal_history_prunes_old_requests_at_configured_limit(self):
+        workers = []
+
+        def factory(*args):
+            worker = DummyWorker(*args)
+            workers.append(worker)
+            return worker
+
+        controller = TestRunController(worker_factory=factory, history_limit=2)
+        pruned = []
+        controller.request_history_pruned.connect(pruned.append)
+        requests = []
+        for sequence in range(3):
+            request = controller.start({}, {"sequence": sequence}, {})
+            requests.append(request)
+            workers[-1].running = False
+            workers[-1].finished.emit()
+
+        self.assertEqual(controller.history_count, 2)
+        self.assertEqual(pruned, [requests[0].run_id])
+        self.assertIsNone(controller.request_for(requests[0].run_id))
+        self.assertEqual(
+            controller.status_for(requests[-1].run_id),
+            "Completed",
+        )
+
     def test_prepare_and_status_events_follow_each_request(self):
         prepared = []
         statuses = []

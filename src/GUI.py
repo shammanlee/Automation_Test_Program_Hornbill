@@ -146,8 +146,8 @@ def show_error_dialog(parent, e, traceback_str=None):
         import traceback
         traceback_str = traceback.format_exc()
 
-    print("=== CRASH LOG ===")
-    print(traceback_str)
+    print_console_safe("=== CRASH LOG ===")
+    print_console_safe(traceback_str)
 
     msg_box = QMessageBox(parent)
     msg_box.setIcon(QMessageBox.Critical)
@@ -213,7 +213,7 @@ def resource_path(relative_path: str) -> str:
                 availableVisaIdList.append(resourceList[i])
                 availableNameList.append(resourceReply)
         except Exception as e:
-            print(f"Error querying resource {resourceList[i]}: {e}")
+            print_console_safe(f"Error querying resource {resourceList[i]}: {e}")
             pass  # Ignore errors and continue to the next resource
 
     return availableVisaIdList, availableNameList"""
@@ -252,10 +252,10 @@ def resource_path(relative_path: str) -> str:
                 # -1073807298: I/O error
                 continue  # Skip silently
             else:
-                print(f"VISA I/O Error ({e.error_code}) on {resource}: {e}")
+                print_console_safe(f"VISA I/O Error ({e.error_code}) on {resource}: {e}")
                 continue
         except Exception as e:
-            print(f"Unexpected error with {resource}: {e}")
+            print_console_safe(f"Unexpected error with {resource}: {e}")
             continue
 
     return available_visa_ids, available_names"""
@@ -278,7 +278,7 @@ def load_model_role_map(filename="instrument_role.txt"):
                     model, role = [x.strip() for x in line.split(":", 1)]
                     model_role_map[model] = role
     except Exception as e:
-        print(f"Error reading {filename}: {e}")
+        print_console_safe(f"Error reading {filename}: {e}")
 
     return model_role_map
     
@@ -338,10 +338,10 @@ def GetVisaSCPIResources(): #USB
             if e.error_code in (-1073807343, -1073807339, -1073807298):
                 continue  # Ignore common disconnect/timeout errors
             else:
-                print(f"VISA I/O Error ({e.error_code}) on {resource}: {e}")
+                print_console_safe(f"VISA I/O Error ({e.error_code}) on {resource}: {e}")
                 continue
         except Exception as e:
-            print(f"Unexpected error with {resource}: {e}")
+            print_console_safe(f"Unexpected error with {resource}: {e}")
             continue
 
     return available_visa_ids, available_names, instrument_roles
@@ -433,15 +433,15 @@ def GetVisaTCPIPResources():  #IP   #Shamman changes
                         instrument_roles[role] = resource
                         break
 
-                print(f"[TCPIP-IP] {resource} → {idn}")
+                print_console_safe(f"[TCPIP-IP] {resource} → {idn}")
 
         except pyvisa.errors.VisaIOError as e:
             if e.error_code in (-1073807343, -1073807339, -1073807298):
                 continue
             else:
-                print(f"VISA I/O Error ({e.error_code}) on {resource}: {e}")
+                print_console_safe(f"VISA I/O Error ({e.error_code}) on {resource}: {e}")
         except Exception as e:
-            print(f"Unexpected error on {resource}: {e}")
+            print_console_safe(f"Unexpected error on {resource}: {e}")
 
     return available_visa_ids, available_names, instrument_roles
 
@@ -491,16 +491,16 @@ def GetVisaHostnameResources():  #Hostname #Shamman changes
                         instrument_roles[role] = resource
                         break
 
-                print(f"[HOSTNAME] {resource} → {idn}")
+                print_console_safe(f"[HOSTNAME] {resource} → {idn}")
 
         except pyvisa.errors.VisaIOError as e:
             # Ignore common VISA timeouts / disconnects
             if e.error_code in (-1073807343, -1073807339, -1073807298):
                 continue
-            print(f"VISA error on {resource}: {e}")
+            print_console_safe(f"VISA error on {resource}: {e}")
 
         except Exception as e:
-            print(f"Unexpected error on {resource}: {e}")
+            print_console_safe(f"Unexpected error on {resource}: {e}")
 
     return available_visa_ids, available_names, instrument_roles
 
@@ -849,7 +849,7 @@ class MainWindow(QMainWindow):
     def currentTabChanged(self, index):
         """Slot to update the current tab index."""
         self.CurrentTab = index
-        print(f"Current tab changed to: {index}")
+        print_console_safe(f"Current tab changed to: {index}")
 
     def PushBtnClicked(self):
         """Open the appropriate dialog based on the selected tab."""
@@ -862,7 +862,7 @@ class MainWindow(QMainWindow):
                     test_index = current_item.data(Qt.UserRole)
                     self.open_test_by_index(test_index)
                 else:
-                    print("Please select a test from the list first.")
+                    print_console_safe("Please select a test from the list first.")
 
     def open_test_by_index(self, index):
         """Open dialog based on index - placeholder for actual dialog implementations"""
@@ -920,7 +920,7 @@ class MainWindow(QMainWindow):
                 self.multithread_voltage_dialog = MultiThreadVoltageMeasurementDialog()
                 self.multithread_voltage_dialog.show()
         else:
-            print(f"Invalid dialog index: {index}")
+            print_console_safe(f"Invalid dialog index: {index}")
 
 #######------------------------Standalone Test Scripts in Tab 3-----------------------------#####################
 class VoltageMeasurementDialog(QDialog):
@@ -1455,7 +1455,7 @@ class VoltageMeasurementDialog(QDialog):
                     setattr(self, key, value)
 
         except FileNotFoundError:
-            print("Config file not found. Using default values.")
+            print_console_safe("Config file not found. Using default values.")
 
         return config_data"""
     
@@ -1505,7 +1505,7 @@ class VoltageMeasurementDialog(QDialog):
                     setattr(self, key, value)
 
         except FileNotFoundError:
-            print(f"⚠️ Config file not found: {self.config_file}. Using default values.")
+            print_console_safe(f"⚠️ Config file not found: {self.config_file}. Using default values.")
 
         return config_data"""
     
@@ -1526,7 +1526,7 @@ class VoltageMeasurementDialog(QDialog):
         self.config_file = str(config_folder / filename)
 
         if not os.path.exists(self.config_file):
-            print(f"⚠ Config file not found: {self.config_file}")
+            print_console_safe(f"⚠ Config file not found: {self.config_file}")
             return {}
 
         try:
@@ -1538,7 +1538,7 @@ class VoltageMeasurementDialog(QDialog):
                         continue
 
                     if "=" not in line:
-                        print("⚠ Skipping invalid line:", repr(line))
+                        print_console_safe("⚠ Skipping invalid line:", repr(line))
                         continue
 
                     key, value = line.split("=", 1)
@@ -1555,7 +1555,7 @@ class VoltageMeasurementDialog(QDialog):
                     setattr(self, key, value)
 
         except Exception as e:
-            print(f"ERROR reading config: {e}")
+            print_console_safe(f"ERROR reading config: {e}")
 
         return config_data
 
@@ -1824,7 +1824,7 @@ class VoltageMeasurementDialog(QDialog):
             # Check for missing parameters
             missing = self.check_missing_params(dict)
             if missing:
-                print(f"The following parameters are missing or empty: {missing}")
+                print_console_safe(f"The following parameters are missing or empty: {missing}")
                 return
 
             if self.simulation_mode == 2:
@@ -1865,7 +1865,7 @@ class VoltageMeasurementDialog(QDialog):
 
                         if self.selected_text == "Dolphin":
                             if self.ELoad != "None" and self.DMM != "None":
-                                print("ELoad connected and DMM connected") #All connected
+                                print_console_safe("ELoad connected and DMM connected") #All connected
                                 try:(
                                     self.infoList,
                                     self.dataList,
@@ -1877,7 +1877,7 @@ class VoltageMeasurementDialog(QDialog):
                                     return
 
                             elif self.ELoad == "None" and self.DMM != "None":
-                                print("No ELoad connected and DMM connected") #No Eload connected but DMM connected
+                                print_console_safe("No ELoad connected and DMM connected") #No Eload connected but DMM connected
                                 try:(
                                     self.infoList,
                                     self.dataList,
@@ -1889,7 +1889,7 @@ class VoltageMeasurementDialog(QDialog):
                                     return
                             
                             elif self.ELoad != "None" and self.DMM == "None":
-                                print("ELoad connected and No DMM connected") #Eload connected but no DMM connected
+                                print_console_safe("ELoad connected and No DMM connected") #Eload connected but no DMM connected
                                 try:(
                                     self.infoList,
                                     self.dataList,
@@ -1899,7 +1899,7 @@ class VoltageMeasurementDialog(QDialog):
                                     QMessageBox.warning(self, "Error", str(e))
                                     return
                             else :
-                                print("No ELoad connected and No DMM connected") #No Eload connected and no DMM connected
+                                print_console_safe("No ELoad connected and No DMM connected") #No Eload connected and no DMM connected
                                 try:(
                                     self.infoList,
                                     self.dataList,
@@ -1943,7 +1943,7 @@ class VoltageMeasurementDialog(QDialog):
                         elif self.selected_text == "Hornbill":                                          #referring
                             if self.ELoad != "None" and self.DMM != "None":
                                 if self.checkbox_Voltage_Accuracy_Voltage_Mode == 2:
-                                    print("ELoad connected and DMM connected") #All connected
+                                    print_console_safe("ELoad connected and DMM connected") #All connected
                                     try:(
                                         self.infoList,   
                                         self.dataList,
@@ -1953,7 +1953,7 @@ class VoltageMeasurementDialog(QDialog):
                                         QMessageBox.warning(self, "Error", str(e))
                                         return
                                 elif self.checkbox_Voltage_Accuracy_Current_Mode == 2:
-                                    print("ELoad connected and DMM connected") #All connected
+                                    print_console_safe("ELoad connected and DMM connected") #All connected
                                     try:(
                                         self.infoList,
                                         self.dataList,
@@ -1963,7 +1963,7 @@ class VoltageMeasurementDialog(QDialog):
                                         QMessageBox.warning(self, "Error", str(e))
                                         return
                             else:
-                                print("No ELoad connected and DMM connected") #No Eload connected but DMM connected
+                                print_console_safe("No ELoad connected and DMM connected") #No Eload connected but DMM connected
                                 
                     """if self.relay_voltage == "RELAY":
                         relay_voltage.relay_off()
@@ -2570,7 +2570,7 @@ class CurrentMeasurementDialog(QDialog):
                     setattr(self, key, value)
 
         except FileNotFoundError:
-            print("Config file not found. Using default values.")
+            print_console_safe("Config file not found. Using default values.")
 
         return config_data
     
@@ -2814,7 +2814,7 @@ class CurrentMeasurementDialog(QDialog):
             """ # Check for missing parameters
             missing = self.check_missing_params(dict)
             if missing:
-                print(f"The following parameters are missing or empty: {missing}")
+                print_console_safe(f"The following parameters are missing or empty: {missing}")
                 return"""
 
             """#Function: Visa Address Check & Run Test
@@ -2869,7 +2869,7 @@ class CurrentMeasurementDialog(QDialog):
 
                     if self.selected_text == "Dolphin":
                         if self.ELoad != "None" and self.DMM2 != "None":
-                            print("ELoad connected and DMM connected") #All connected
+                            print_console_safe("ELoad connected and DMM connected") #All connected
                             try:(
                                 self.infoList,
                                 self.dataList,
@@ -2881,7 +2881,7 @@ class CurrentMeasurementDialog(QDialog):
                                 return
 
                         elif self.ELoad == "None" and self.DMM2 != "None":
-                            print("No ELoad connected and DMM connected") #No Eload connected but DMM connected
+                            print_console_safe("No ELoad connected and DMM connected") #No Eload connected but DMM connected
                             try:(
                                 self.infoList,
                                 self.dataList,
@@ -2893,7 +2893,7 @@ class CurrentMeasurementDialog(QDialog):
                                 return
                         
                         elif self.ELoad != "None" and self.DMM2 == "None":
-                            print("ELoad connected and No DMM connected") #Eload connected but no DMM connected
+                            print_console_safe("ELoad connected and No DMM connected") #Eload connected but no DMM connected
                             try:(
                                 self.infoList,
                                 self.dataList,
@@ -2903,7 +2903,7 @@ class CurrentMeasurementDialog(QDialog):
                                 QMessageBox.warning(self, "Error", str(e))
                                 return
                         else :
-                            print("No ELoad connected and No DMM connected") #No Eload connected and
+                            print_console_safe("No ELoad connected and No DMM connected") #No Eload connected and
                             try:(
                                 self.infoList,
                                 self.dataList,
@@ -2916,7 +2916,7 @@ class CurrentMeasurementDialog(QDialog):
                     elif self.selected_text == "Hornbill":
                         if self.ELoad != "None" and self.DMM != "None":
                             if self.checkbox_Current_Accuracy_FULL == 2:
-                                print("ELoad connected and DMM connected") #All connected
+                                print_console_safe("ELoad connected and DMM connected") #All connected
                                 try:(
                                     self.infoList,   
                                     self.dataList,
@@ -2926,7 +2926,7 @@ class CurrentMeasurementDialog(QDialog):
                                     QMessageBox.warning(self, "Error", str(e))
                                     return
                             if self.checkbox_Current_Accuracy_200uA == 2:
-                                print("ELoad connected and DMM connected") #All connected
+                                print_console_safe("ELoad connected and DMM connected") #All connected
                                 try:(
                                     self.infoList,   
                                     self.dataList,
@@ -2936,7 +2936,7 @@ class CurrentMeasurementDialog(QDialog):
                                     QMessageBox.warning(self, "Error", str(e))
                                     return   
                             if self.checkbox_Current_Accuracy_2mA == 2:
-                                print("ELoad connected and DMM connected") #All connected
+                                print_console_safe("ELoad connected and DMM connected") #All connected
                                 try:(
                                     self.infoList,   
                                     self.dataList,
@@ -2947,7 +2947,7 @@ class CurrentMeasurementDialog(QDialog):
                                     return 
                             
                         else:
-                            print("No ELoad connected and DMM connected") #No Eload connected but DMM connected
+                            print_console_safe("No ELoad connected and DMM connected") #No Eload connected but DMM connected
                             
                 #relay_current.relay_off()
                             
@@ -3317,7 +3317,7 @@ class CV_LoadRegulationDialog(QDialog):
                     setattr(self, key, value)
 
         except FileNotFoundError:
-            print("Config file not found. Using default values.")
+            print_console_safe("Config file not found. Using default values.")
 
         return config_data
 
@@ -3909,7 +3909,7 @@ class CC_LoadRegulationDialog(QDialog):
                     setattr(self, key, value)
 
         except FileNotFoundError:
-            print("Config file not found. Using default values.")
+            print_console_safe("Config file not found. Using default values.")
 
         return config_data
 
@@ -4607,7 +4607,7 @@ class TransientRecoveryTime(QDialog):
         
         if self.selected_text == "Dolphin":
             if self.ELoad != "None" and self.OSC != "None":
-                print("ELoad connected and DMM connected") #All connected 
+                print_console_safe("ELoad connected and DMM connected") #All connected
                 try:
                     if self.checkbox_SpecialCase == 2:
                         DolphinRiseFallTimewithELoad.executeA(self, dict)
@@ -4617,7 +4617,7 @@ class TransientRecoveryTime(QDialog):
 
                 
                 except Exception as e:
-                    print(e)
+                    print_console_safe(e)
                     QMessageBox.warning(self, "Error", str(e))
                     exit()
 
@@ -5309,7 +5309,7 @@ class TransientRecoveryTimeWithCurrentSensor(QDialog):
                     setattr(self, key, value)
 
         except FileNotFoundError:
-            print("Config file not found. Using default values.")
+            print_console_safe("Config file not found. Using default values.")
 
         return config_data
 
@@ -5588,7 +5588,7 @@ class TransientRecoveryTimeWithCurrentSensor(QDialog):
                 DolphinRiseFallTimewithELoad.executeC(self, dict)
 
         except Exception as e:
-            print(e)
+            print_console_safe(e)
             QMessageBox.warning(self, "Error", str(e))
             exit()
 
@@ -6137,7 +6137,7 @@ class ProgrammingSpeed(QDialog):
                     setattr(self, key, value)
 
         except FileNotFoundError:
-            print("Config file not found. Using default values.")
+            print_console_safe("Config file not found. Using default values.")
 
         return config_data
 
@@ -6347,7 +6347,7 @@ class ProgrammingSpeed(QDialog):
             DolphinProgrammingResponse.execute(self, dict)
         
         except Exception as e:
-            print(e)
+            print_console_safe(e)
             QMessageBox.warning(self, "Error", str(e))
             exit()
 
@@ -8114,7 +8114,7 @@ class BundleMeasurementVoltageDialog(QDialog):
                             RiseFallTime.executeB(self, dict)
 
                     except Exception as e:
-                        print(e)
+                        print_console_safe(e)
                         QMessageBox.warning(self, "Error", str(e))
                         exit()
 
@@ -9870,7 +9870,7 @@ class Parameters:
         try:
             config_data = load_configuration(self.config_file)
         except FileNotFoundError:
-            print("Config file not found. Using default values.")
+            print_console_safe("Config file not found. Using default values.")
             return {}
 
         apply_configuration(self, config_data)
@@ -9895,6 +9895,7 @@ from configuration_service import (
 )
 from test_queue_widget import TestQueueWidget
 from queue_persistence import QueuePersistence, QueuePersistenceError
+from queue_template_service import append_queue_template, save_queue_template
 from run_context import RunContext
 
 class AllTestMeasurement(QDialog):
@@ -10753,6 +10754,9 @@ class AllTestMeasurement(QDialog):
         self.queue_widget.retry_requested.connect(self._retry_queued_run)
         self.queue_widget.save_template_requested.connect(self._save_queue_template)
         self.queue_widget.load_template_requested.connect(self._load_queue_template)
+        self.run_controller.request_history_pruned.connect(
+            self.queue_widget.remove_run
+        )
         QPushButton_Widget2.clicked.connect(self.openDialog)
         QPushButton_Widget3.clicked.connect(self.estimateTime)
         QPushButton_Widget4.clicked.connect(self.doFind)
@@ -10866,9 +10870,7 @@ class AllTestMeasurement(QDialog):
         if not template_path:
             return
         try:
-            QueuePersistence(template_path).save(
-                self.run_controller.pending_requests
-            )
+            save_queue_template(template_path, self.run_controller.pending_requests)
             self.OutputBox.append(f"Queue template saved: {template_path}")
         except QueuePersistenceError as exception:
             self.OutputBox.append(f"Queue template save warning: {exception}")
@@ -10883,18 +10885,13 @@ class AllTestMeasurement(QDialog):
         if not template_path:
             return
         try:
-            records = QueuePersistence(template_path).load()
-            for record in records:
-                self.run_controller.enqueue(
-                    record["checkbox_states"],
-                    record["configuration"],
-                    ParameterSnapshot(record["parameters"]),
-                    label=record.get("label", "Template Test Run"),
-                    prepare=self._prepare_queued_run,
-                    auto_start=False,
-                )
+            loaded_count = append_queue_template(
+                template_path,
+                self.run_controller,
+                prepare=self._prepare_queued_run,
+            )
             self.OutputBox.append(
-                f"Loaded {len(records)} queue template item(s)"
+                f"Loaded {loaded_count} queue template item(s)"
             )
         except (QueuePersistenceError, KeyError, TypeError) as exception:
             self.OutputBox.append(f"Queue template load warning: {exception}")
@@ -11864,7 +11861,7 @@ class AllTestMeasurement(QDialog):
                     else:
                         self.run_controller.start_queue()
                 else:
-                    print("Test canceled by user")
+                    print_console_safe("Test canceled by user")
 
         except Exception as e:
             traceback_str = traceback.format_exc()
@@ -12369,19 +12366,19 @@ class ACSourceSetting(QDialog):
 
     def ACSource_VisaAddress_changed (self,s):
         self.params.ACSource = s
-        print(self.params.ACSource)
+        print_console_safe(self.params.ACSource)
 
     def AC_CurrentLimit_changed (self,s):
         self.params.AC_CurrentLimit = s
-        print(self.params.AC_CurrentLimit)
+        print_console_safe(self.params.AC_CurrentLimit)
 
     def AC_VoltageOutput_changed (self,s):
         self.params.AC_VoltageOutput = s
-        print(self.params.AC_VoltageOutput)
+        print_console_safe(self.params.AC_VoltageOutput)
     
     def Frequency_changed (self,s):
         self.params.Frequency = s
-        print(self.params.Frequency)
+        print_console_safe(self.params.Frequency)
 
     def ActivateACPower(self):
         global globalvv

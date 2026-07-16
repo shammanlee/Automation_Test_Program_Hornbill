@@ -105,6 +105,9 @@ queued runs therefore do not share output files. Report generators infer their o
 sequential runs. Test-selection widgets/state and worker parameter construction are
 isolated in `src/test_selection.py` and `src/test_configuration.py`. DUT setup files
 are loaded through `src/configuration_service.py`.
+Queue-template serialization and reconstruction are isolated in
+`src/queue_template_service.py`; encoding-safe console and run-log writes live in
+`src/output_logging.py`.
 
 Use **Add to Queue** to snapshot the current setup without starting it. Pending rows
 can be reordered or removed, and **Run Queue** executes them sequentially. Every row
@@ -115,6 +118,8 @@ receives its own run directory and reports `Pending`, `Running`, `Completed`,
 requeues failed or aborted rows using their original parameter snapshot. **Save
 Template** stores pending rows in portable JSON, and **Load Template** appends new
 queue entries without reusing old run IDs.
+Completed, failed, aborted, and removed history is limited to the newest 200 rows
+per dialog session so long-running stations do not accumulate unbounded objects.
 Pending items are saved atomically to
 `Instrument_Config_Files/test_queue.json` and restored when the test dialog opens
 again. Active, completed, failed, and aborted rows are not restored.
