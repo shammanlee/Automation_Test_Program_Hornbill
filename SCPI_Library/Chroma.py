@@ -10,6 +10,7 @@
 """
 
 import pyvisa
+from SCPI_Library.session_manager import get_visa_resource
 
 
 class Subsystem(object):
@@ -34,14 +35,7 @@ class Subsystem(object):
         """
 
         self.VISA_ADDRESS = VISA_ADDRESS
-        # ResourceManager Setup
-        rm = pyvisa.ResourceManager()
-        try:
-            # Visa Address is found under Keysight Connection Expert
-            self.instr = rm.open_resource(self.VISA_ADDRESS)
-
-        except pyvisa.VisaIOError as e:
-            print(e.args)
+        self.instr = get_visa_resource(self.VISA_ADDRESS)
 
 
 class Channel(Subsystem):

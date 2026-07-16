@@ -1,9 +1,12 @@
 import pyvisa
+from SCPI_Library.visa_config import configure_visa_resource
 
 class RelayController_Voltage:
     def __init__(self):
         rm = pyvisa.ResourceManager()
-        self.relay_device = rm.open_resource("USB0::0x2A8D::0x8F01::CN60460015::0::INSTR")
+        self.relay_device = configure_visa_resource(
+            rm.open_resource("USB0::0x2A8D::0x8F01::CN60460015::0::INSTR")
+        )
         self.relay_device.write("*RST")  # optional reset
 
     def relay_on(self):
@@ -29,7 +32,9 @@ class RelayController_Voltage:
 class RelayController_Current:
     def __init__(self):
         rm = pyvisa.ResourceManager()
-        self.relay_device = rm.open_resource("USB0::0x2A8D::0x8F01::CN60460015::0::INSTR")
+        self.relay_device = configure_visa_resource(
+            rm.open_resource("USB0::0x2A8D::0x8F01::CN60460015::0::INSTR")
+        )
         self.relay_device.write("*RST")  # optional reset
 
     def relay_on(self):

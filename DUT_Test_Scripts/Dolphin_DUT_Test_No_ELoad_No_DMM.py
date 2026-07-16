@@ -14,7 +14,9 @@ import sys
 import csv
 import pandas as pd
 from datetime import datetime
-from time import sleep, time
+from time import time
+from DUT_Test_Scripts.execution_control import sleep
+from SCPI_Library.visa_config import configure_visa_resource
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 import traceback
@@ -112,7 +114,7 @@ class VisaResourceManager:
         try:
             self.instruments.clear()
             for addr in args:
-                instr = self.rm.open_resource(addr)
+                instr = configure_visa_resource(self.rm.open_resource(addr))
                 try:
                     instr.baud_rate = 9600  # only for serial devices
                 except AttributeError:
@@ -452,7 +454,7 @@ class DolphinNewCurrentMeasurementNoELoadNoDMM:
         elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
             VshuntdropMax = 3.5
         elif self.rshunt == 1: #(10A)  (10V + cable loss)
-            VshuntdropMax == 11
+            VshuntdropMax = 11
 
         current_iter = (
             (float(dict["maxCurrent"]) - float(dict["minCurrent"]))
@@ -958,7 +960,7 @@ class LoadRegulation:
         elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
             VshuntdropMax = 3.5
         elif self.rshunt == 1: #(10A)  (10V + cable loss)
-            VshuntdropMax == 11
+            VshuntdropMax = 11
 
         ############################################################################################################
         #No Load Test (Light Load) - Test For High Current Low Voltage
@@ -3954,7 +3956,7 @@ class NewLoadRegulation:
         elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
             VshuntdropMax = 3.5
         elif self.rshunt == 1: #(10A)  (10V + cable loss)
-            VshuntdropMax == 11
+            VshuntdropMax = 11
     
         #Clear the Error Status
         CLS(dict["PSU"])
@@ -4577,7 +4579,7 @@ class LineRegulation:
             elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
                 VshuntdropMax = 3.5
             elif self.rshunt == 1: #(10A)  (10V + cable loss)
-                VshuntdropMax == 11
+                VshuntdropMax = 11
         
             #Clear the Error Status
             CLS(dict["PSU"])
@@ -5885,15 +5887,16 @@ class RESET:
             WAI(dict_reset["PSU"])
             Current(dict_reset["PSU"]).setOutputCurrent(0)
             WAI(dict_reset["PSU"])
-            Voltage(dict_reset["ELoad"]).setOutputVoltage(0)
-            WAI(dict_reset["ELoad"])
             Output(dict_reset["PSU"]).setOutputState("OFF")
             WAI(dict_reset["PSU"])
-            Output(dict_reset["ELoad"]).setOutputState("OFF")
-            WAI(dict_reset["ELoad"])
+            if dict_reset.get("ELoad"):
+                Voltage(dict_reset["ELoad"]).setOutputVoltage(0)
+                WAI(dict_reset["ELoad"])
+                Output(dict_reset["ELoad"]).setOutputState("OFF")
+                WAI(dict_reset["ELoad"])
             Output(dict_reset["PSU"]).SPModeConnection("OFF")
             WAI(dict_reset["PSU"])
 
             print("reset")
-        except:
-            pass
+        except Exception as exception:
+            raise RuntimeError("Instrument reset sequence failed") from exception

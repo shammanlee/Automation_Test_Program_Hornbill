@@ -58,28 +58,117 @@ The dependencies for this program has been listed in `requirements.txt`. If you 
 pip install -r requirements.txt
 ```
 
-If requirements.txt does not exist
-Install the following manually:
+The supported development runtime is Python 3.11.0, recorded in
+`.python-version`. `requirements.txt` pins direct application dependencies.
+For an exact copy of the environment used by CI and regression testing, install:
 
 ```cmd
-pip install PyVISA==1.14.1
-pip install matplotlib==3.10.5
-pip install numpy==2.3.2
-pip install openpyxl==3.1.5
-pip install pandas==2.3.1
-pip install Pillow==11.3.0
-pip install PyQt5==5.15.11
-pip install PyQt5_sip==12.17.0
-
+pip install -r requirements-lock.txt
 ```
+
+### VISA timeout
+
+Instrument communication uses a 15-second timeout by default. Set the
+`VISA_TIMEOUT_MS` environment variable to a positive millisecond value to
+override it for normal SCPI and test-preflight connections.
+
+### Test result folders
+
+Each confirmed test run creates a unique timestamped folder inside the selected
+save location:
+
+```text
+YYYYMMDD_HHMMSS_microseconds_DUT/
+â”œâ”€â”€ raw/       Intermediate CSV files and parameters.json
+â”œâ”€â”€ charts/    Generated chart images
+â”œâ”€â”€ reports/   Excel reports
+â””â”€â”€ logs/      Persistent run.log
+```
+
+`logs/run.log` is the readable execution log. `logs/diagnostics.jsonl` stores
+structured state, instrument, command, cleanup, and traceback details for debugging.
+
+Successful completion, abort, execution failure, and test-window close requests all
+use the same cooperative shutdown path. ELoad, PSU, AC source, and oscilloscope
+shutdown actions run independently so one instrument failure does not skip the rest.
+
+During a test run, SCPI wrappers reuse one VISA session per instrument address.
+Sessions are isolated to the worker thread, closed before final hardware shutdown,
+and remain independent from GUI discovery and preflight connections.
+Production test execution and cooperative pause, resume, and abort behavior live in
+`src/test_worker.py`; `src/GUI.py` owns presentation and signal wiring.
+Each execution receives a `RunContext` from `src/run_context.py`. It owns the run
+tree, parameter snapshot, realtime CSV, chart paths, and diagnostics destinations;
+queued runs therefore do not share output files. Report generators infer their own
+`raw/` and `charts/` directories from the requested `reports/` directory.
+`src/test_run_controller.py` owns worker lifecycle and provides a FIFO queue for
+sequential runs. Test-selection widgets/state and worker parameter construction are
+isolated in `src/test_selection.py` and `src/test_configuration.py`. DUT setup files
+are loaded through `src/configuration_service.py`.
+
+Use **Add to Queue** to snapshot the current setup without starting it. Pending rows
+can be reordered or removed, and **Run Queue** executes them sequentially. Every row
+receives its own run directory and reports `Pending`, `Running`, `Completed`,
+`Failed`, or `Aborted`. Aborting an active row leaves the remaining queue available;
+**Clear Pending** removes waiting rows.
+**Duplicate** creates an independent copy of any selected row. **Retry Failed**
+requeues failed or aborted rows using their original parameter snapshot. **Save
+Template** stores pending rows in portable JSON, and **Load Template** appends new
+queue entries without reusing old run IDs.
+Pending items are saved atomically to
+`Instrument_Config_Files/test_queue.json` and restored when the test dialog opens
+again. Active, completed, failed, and aborted rows are not restored.
+
+The old multithread voltage prototype is retained under `src/experiments/` and is
+loaded only when its legacy dialog is explicitly opened.
+
 ---
 
 ### 4. Run the Application
 Inside the activated virtual environment, run:
 
 ```cmd
-python GUI.py
+python src/GUI.py
 ```
+
+Before validating changes with connected instruments, follow
+[`HARDWARE_VALIDATION.md`](HARDWARE_VALIDATION.md).
+
+### Run Automated Tests
+
+From the project root, run the dependency-free regression suite with:
+
+```cmd
+python -B -m unittest discover -s tests -v
+```
+
+The suite uses mocked VISA resources and does not communicate with real instruments.
+The Windows CI workflow in `.github/workflows/tests.yml` installs the locked
+dependencies and runs this command for every push and pull request.
+
+### Simulation Mode
+
+When instruments are unavailable, launch the application with the explicit
+simulation flag:
+
+```cmd
+python src/GUI.py --simulate
+```
+
+Simulation mode provides fake PSU, DMM, DMM2, ELoad, oscilloscope, and AC-source
+VISA resources. The window title, status bar, run directory, parameter file, marker
+file, and generated Excel report names identify simulated data. Simulation mode is
+disabled by default and must not be used as hardware-validation evidence.
+
+The automated suite covers Dolphin and Hornbill voltage/current worker workflows
+and verifies that simulated outputs and setpoints return to a safe state afterward.
+It also executes one-point voltage/current accuracy measurements through the real
+Dolphin and Hornbill measurement classes with hardware delays disabled.
+Temporary-directory integration tests generate simulated voltage/current CSV data,
+two chart images, instrument metadata, configuration data, and labeled Excel reports.
+An end-to-end queue test runs real `TestWorker` instances for Dolphin and Hornbill,
+checks per-run artifact isolation and restart persistence, and verifies that pause,
+resume, and abort can continue safely to the next queued run.
 
 ---
 

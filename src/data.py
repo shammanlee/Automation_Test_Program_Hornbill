@@ -20,6 +20,26 @@ from SCPI_Library.IEEEStandard import IDN
 from SCPI_Library.Keysight import System
 from path import csv_folder, IMAGE_DIR, IMAGE_PATH, IMAGE_PATH_2
 
+
+def configure_run_storage(raw_directory, chart_directory):
+    global csv_folder, IMAGE_DIR, DATA_CSV_PATH, ERROR_CSV_PATH
+    global ERROR_CSV_PATH_PERCENT, INSTRUMENT_DATA_PATH, IMAGE_PATH, IMAGE_PATH_2
+    global POWER_DATA_CSV_PATH, POWER_ERROR_CSV_PATH
+    global POWER_INSTRUMENT_DATA_PATH, POWER_IMAGE_PATH
+
+    csv_folder = raw_directory
+    IMAGE_DIR = chart_directory
+    DATA_CSV_PATH = raw_directory / "data.csv"
+    ERROR_CSV_PATH = raw_directory / "error.csv"
+    ERROR_CSV_PATH_PERCENT = raw_directory / "error_percent.csv"
+    INSTRUMENT_DATA_PATH = raw_directory / "instrumentData.csv"
+    IMAGE_PATH = chart_directory / "Chart.png"
+    IMAGE_PATH_2 = chart_directory / "Chart2.png"
+    POWER_DATA_CSV_PATH = raw_directory / "powerdata.csv"
+    POWER_ERROR_CSV_PATH = raw_directory / "powererror.csv"
+    POWER_INSTRUMENT_DATA_PATH = raw_directory / "powerinstrumentData.csv"
+    POWER_IMAGE_PATH = chart_directory / "powerChart.png"
+
 #------------------Instrument Data Collection---------------------
 class instrumentData(object):
     """Stores instrument IDN and SCPI version, safely handling missing or invalid addresses."""
@@ -208,6 +228,9 @@ class datatoCSV_Accuracy2:
                     Ireadback = pd.Series(self.column(dataList2, 1))
 
                     Ireadback_error = (Ireadback - Imeasured) 
+                    Ireadback_percent_error = (
+                        Ireadback_error / Imeasured.replace(0, float("nan"))
+                    ) * 100
 
 
 
@@ -216,8 +239,8 @@ class datatoCSV_Accuracy2:
                     
                         "PSU Readback Voltage": Vreadback,"PSU Readback Current" : Ireadback,
                         "Load Voltage Set": Vset, "PSU Current Set": Iset,"DMM Current Measured": Imeasured, 
-                        "key": Key, "Programming/Current Absolute Error (A)": ProgrammingI_error, "Relative/Current Percentage Error (%)": Ipercent_error, 
-                        "PSU Readback Current Error (A)": Ireadback_error, "Relative/Current Percentage Error (%)": Ipercent_error
+                        "key": Key, "Programming/Current Absolute Error (A)": ProgrammingI_error, "Relative/Current Percentage Error (%)": Ipercent_error,
+                        "PSU Readback Current Error (A)": Ireadback_error, "PSU Readback Current Percentage Error (%)": Ireadback_percent_error
 
                     }
                     CSV1 = pd.DataFrame(columns)
@@ -314,6 +337,8 @@ class datatoGraph(datatoCSV_Accuracy):
                 def __init__(self, infoList, dataList, dataList2):
                     super().__init__(infoList, dataList, dataList2)
                     self.data = pd.read_csv(DATA_CSV_PATH)
+                    self.ProgrammingV_percent_error_list = []
+                    self.ReadbackV_percent_error_list = []
                     
                     # Ensure that the images directory exists
                     if not os.path.exists(IMAGE_DIR):
@@ -773,6 +798,8 @@ class datatoGraph2(datatoCSV_Accuracy2):
                 def __init__(self, infoList, dataList, dataList2):
                     super().__init__(infoList, dataList, dataList2)
                     self.data = pd.read_csv(DATA_CSV_PATH)
+                    self.ProgrammingI_percent_error_list = []
+                    self.ReadbackI_percent_error_list = []
                     
                     # Ensure that the images directory exists
                     if not os.path.exists(IMAGE_DIR):
@@ -1371,6 +1398,7 @@ class datatoCSV_OVP_Accuracy:
         #Find DUT model
         DUT_Test_Model = params.get("PSU")
         save_location = params.get("savedir")
+        raw_location = params.get("rawdir", save_location)
         Model_Num = DUT_Test_Model.split("::")[-3]  # Gets the part before the last colon
 
         # True enable all parameters to be export
@@ -1409,7 +1437,7 @@ class datatoCSV_OVP_Accuracy:
         # === Save paths ===
         self.save_path = str(save_location)
         excel_file = f"{self.save_path}/OVP_{Model_Num}_{current_time}.xlsx"
-        csv_file = f"{self.save_path}/OVP_{Model_Num}_{current_time}.csv"
+        csv_file = f"{raw_location}/OVP_{Model_Num}_{current_time}.csv"
 
         with pd.ExcelWriter(excel_file, engine='openpyxl') as writer:
             df_combined.to_excel(writer, index=False)
@@ -1442,6 +1470,7 @@ class datatoCSV_OCP_Test:
         #Find DUT model
         DUT_Test_Model = params.get("PSU")
         self.save_path = str(params.get("savedir"))
+        self.raw_path = str(params.get("rawdir", self.save_path))
         self.Model_Num = DUT_Test_Model.split("::")[-3]  # Gets the part before the last colon
 
         # True enable all parameters to be export
@@ -1471,7 +1500,7 @@ class datatoCSV_OCP_Test:
   
         # === Save paths for Accuracy Test ===
         excel_file = f"{self.save_path}/OCPAccuracy_{self.Model_Num}_{self.current_time}.xlsx"
-        csv_file = f"{self.save_path}/OCPAccuracy_{self.Model_Num}_{self.current_time}.csv"
+        csv_file = f"{self.raw_path}/OCPAccuracy_{self.Model_Num}_{self.current_time}.csv"
 
         #Excel file
         with pd.ExcelWriter(excel_file, engine="openpyxl") as writer:
@@ -1501,7 +1530,7 @@ class datatoCSV_OCP_Test:
         
          # === Save paths for Activation Time Test ===
         excel_file = f"{self.save_path}/OCPActivationTime_{self.Model_Num}_{self.current_time}.xlsx"
-        csv_file = f"{self.save_path}/OCPActivationTime_{self.Model_Num}_{self.current_time}.csv"
+        csv_file = f"{self.raw_path}/OCPActivationTime_{self.Model_Num}_{self.current_time}.csv"
 
         #Excel file
         with pd.ExcelWriter(excel_file, engine="openpyxl") as writer:

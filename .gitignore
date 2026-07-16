@@ -3,3 +3,12 @@
 *.pkg
 /build/
 /Executable/
+
+# Python runtime and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local GUI state
+/Instrument_Config_Files/test_queue.json
+/Instrument_Config_Files/test_queue.json.tmp

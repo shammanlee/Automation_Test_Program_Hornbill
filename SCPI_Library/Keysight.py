@@ -11,6 +11,7 @@
 
 import pyvisa
 from time import sleep
+from SCPI_Library.session_manager import get_visa_resource
 
 #########################################################################################################################################################
 #########################################################################################################################################################
@@ -27,29 +28,18 @@ class Subsystem(object):
         state: A boolean representing if the function should be enabled or disabled.
     """
 
-    def __init__(self, VISA_ADDRESS, timeout=15000):
+    def __init__(self, VISA_ADDRESS, timeout=None):
         """Initialize the VISA instrument with proper VXI-11 support."""
         self.VISA_ADDRESS = VISA_ADDRESS
 
-        rm = pyvisa.ResourceManager()
+        self.instr = get_visa_resource(self.VISA_ADDRESS, timeout)
 
-        try:
-            # Open resource normally (VXI-11 or USB or GPIB)
-            self.instr = rm.open_resource(self.VISA_ADDRESS)
+        # --- Important for VXI-11 ---
+        self.instr.write_termination = '\n'
+        self.instr.read_termination  = '\n'
 
-            # --- Important for VXI-11 ---
-            self.instr.write_termination = '\n'
-            self.instr.read_termination  = '\n'
-
-            # Timeout (ms)
-            self.instr.timeout = timeout     # one place only
-
-            # Recommended: increase buffer if reading large block data
-            self.instr.read_buffer_size = 20000
-
-        except pyvisa.VisaIOError as e:
-            print(f"VISA IO Error: {e}")
-            self.instr = None
+        # Recommended: increase buffer if reading large block data
+        self.instr.read_buffer_size = 20000
 
 
 class Abort(Subsystem):
@@ -1118,6 +1108,12 @@ class Hornbill(Subsystem):
     def diag_PEEK_CurrentReadback_IMON_FULL_100k(self):
         resp = self.instr.query("DIAG:PEEK? 20,7,100000")
         return resp
+
+    def diagVoltageReadback_VMON_100k(self):
+        return self.diag_PEEK_VoltageReadback_VMON_100k().encode("ascii")
+
+    def diagCurrentReadback_IMON_FULL_100k(self):
+        return self.diag_PEEK_CurrentReadback_IMON_FULL_100k().encode("ascii")
     
 
 class SMU_N67XX(Subsystem):
@@ -1351,6 +1347,12 @@ class DMM_344XXA(Subsystem):
     def operationCondition(self):
         return self.instr.query("STAT:OPER:COND?")
 
+    def setTriggerSource(self, source):
+        self.instr.write(f"TRIG:SOUR {source}")
+
+    def setVoltageResolutionDC(self, resolution):
+        self.instr.write(f"SENS:VOLT:DC:RES {resolution}")
+
     def setFunction(self, mode):
         self.instr.write(f"FUNC {mode}")
 
@@ -1381,11 +1383,5 @@ class ELOAD_E367XXA(Subsystem):
     def setOutputState(self, state):
         self.instr.write(f"OUTP {state}")
 
-    
 
-    
-
-
-
-
-  
+SMU = SMU_N67XX

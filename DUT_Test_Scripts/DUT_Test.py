@@ -14,7 +14,9 @@ import sys
 import csv
 import pandas as pd
 from datetime import datetime
-from time import sleep, time
+from time import time
+from DUT_Test_Scripts.execution_control import sleep
+from SCPI_Library.visa_config import configure_visa_resource
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 import traceback
@@ -128,7 +130,7 @@ class VisaResourceManager:
         """
         try:
             for i in range(len(args)):
-                instr = self.rm.open_resource(args[i])
+                instr = configure_visa_resource(self.rm.open_resource(args[i]))
                 instr.baud_rate = 9600
 
             return 1, None
@@ -139,6 +141,11 @@ class VisaResourceManager:
     def closeRM(self):
         """Closes the Visa Resources when not in used"""
         self.rm.close()
+
+
+def _execution_checkpoint(worker):
+    if worker is not None:
+        worker.checkpoint()
 
 ######################################################################
 class NewVoltageMeasurement:
@@ -285,6 +292,7 @@ class NewVoltageMeasurement:
         
         #Run Test (Voltage Loop in Current Loop)
         while i < current_iter:
+            _execution_checkpoint(worker)
             j = 0
             V = float(dict["minVoltage"])
             Iset = float(Current(dict["PSU"]).SourceCurrentLevel()) #Query Current Level
@@ -309,6 +317,7 @@ class NewVoltageMeasurement:
 
             #Voltage Iteration
             while j < voltage_iter:
+                _execution_checkpoint(worker)
 
                 #Set Voltage and Current
                 if V > float(dict["maxVoltage"]):
@@ -340,6 +349,7 @@ class NewVoltageMeasurement:
                 TRG(dict["DMM"])
 
                 while 1:
+                    _execution_checkpoint(worker)
                     status = float(Status(dict["DMM"]).operationCondition())
                     
                     #Measure Voltage with Error Flag Rised
@@ -550,6 +560,7 @@ class NewVoltageMeasurement:
         V = float(dict["minVoltage"])
         #Voltage Iteration
         while j < voltage_iter:
+            _execution_checkpoint(worker)
             i=0
             I_fixed = float(dict["minCurrent"])
             Current(dict["ELoad"]).setOutputCurrent(I_fixed)
@@ -570,6 +581,7 @@ class NewVoltageMeasurement:
             sleep(float(self.updatedelay))
 
             while i < current_iter:
+                _execution_checkpoint(worker)
                 Iset = dict["maxCurrent"]
                 #Iset = float(psu.askSourCurrentLimitPOSImmediateAmplitude("MAX", ch)) #Query Current Level
                 #Iset = float(psu.askSourCurrentLimitPOSImmediateAmplitude("MAX", ch)) #Query Current Level
@@ -603,6 +615,7 @@ class NewVoltageMeasurement:
       
 
                 while 1:
+                    _execution_checkpoint(worker)
                     status = float(Status(dict["DMM"]).operationCondition())
                     
                     #Measure Voltage with Error Flag Rised
@@ -846,7 +859,7 @@ class NewCurrentMeasurement:
         elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
             VshuntdropMax = 3.5
         elif self.rshunt == 1: #(10A)  (10V + cable loss)
-            VshuntdropMax == 11
+            VshuntdropMax = 11
 
         current_iter = (
             (float(dict["maxCurrent"]) - float(dict["minCurrent"]))
@@ -877,6 +890,7 @@ class NewCurrentMeasurement:
         WAI(dict["DMM"])
         
         while i < voltage_iter:
+            _execution_checkpoint(worker)
 
             j = 0
             I = float(dict["minCurrent"])
@@ -902,6 +916,7 @@ class NewCurrentMeasurement:
             sleep(1)
 
             while j < current_iter:
+                _execution_checkpoint(worker)
 
                 if I> float(dict["maxCurrent"]):
                     I = float(dict["maxCurrent"])
@@ -930,6 +945,7 @@ class NewCurrentMeasurement:
                 TRG(dict["DMM2"])
 
                 while 1:
+                    _execution_checkpoint(worker)
                     status = float(Status(dict["DMM2"]).operationCondition())
                     
                     if status == 8704.0:
@@ -1417,7 +1433,7 @@ class LoadRegulation:
         elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
             VshuntdropMax = 3.5
         elif self.rshunt == 1: #(10A)  (10V + cable loss)
-            VshuntdropMax == 11
+            VshuntdropMax = 11
 
         ############################################################################################################
         #No Load Test (Light Load) - Test For High Current Low Voltage
@@ -4413,7 +4429,7 @@ class NewLoadRegulation:
         elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
             VshuntdropMax = 3.5
         elif self.rshunt == 1: #(10A)  (10V + cable loss)
-            VshuntdropMax == 11
+            VshuntdropMax = 11
     
         #Clear the Error Status
         CLS(dict["PSU"])
@@ -5036,7 +5052,7 @@ class LineRegulation:
             elif self.rshunt == 0.05:#(50A) (2.5V + cable loss)
                 VshuntdropMax = 3.5
             elif self.rshunt == 1: #(10A)  (10V + cable loss)
-                VshuntdropMax == 11
+                VshuntdropMax = 11
         
             #Clear the Error Status
             CLS(dict["PSU"])
