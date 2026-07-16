@@ -33,11 +33,16 @@ class TestRunController(QObject):
     request_started = pyqtSignal(object)
     request_status_changed = pyqtSignal(object, str)
     request_setup_failed = pyqtSignal(object, object, str)
+    request_history_pruned = pyqtSignal(str)
 
-    def __init__(self, worker_factory=TestWorker, parent=None):
+    TERMINAL_STATUSES = {"Completed", "Failed", "Aborted", "Removed"}
+
+    def __init__(self, worker_factory=TestWorker, parent=None, history_limit=200):
         super().__init__(parent)
         self._worker_factory = worker_factory
+        self._history_limit = max(0, int(history_limit))
         self._queue = deque()
+        self._terminal_history = deque()
         self._requests_by_id = {}
         self._statuses_by_id = {}
         self.active_worker = None
@@ -137,6 +142,10 @@ class TestRunController(QObject):
     def status_for(self, run_id):
         return self._statuses_by_id.get(run_id)
 
+    @property
+    def history_count(self):
+        return len(self._terminal_history)
+
     def duplicate(self, run_id, auto_start=False):
         source = self.request_for(run_id)
         if source is None:
@@ -226,3 +235,13 @@ class TestRunController(QObject):
     def _set_status(self, request, status):
         self._statuses_by_id[request.run_id] = status
         self.request_status_changed.emit(request, status)
+        if status not in self.TERMINAL_STATUSES:
+            return
+        if request.run_id in self._terminal_history:
+            self._terminal_history.remove(request.run_id)
+        self._terminal_history.append(request.run_id)
+        while len(self._terminal_history) > self._history_limit:
+            expired_run_id = self._terminal_history.popleft()
+            self._requests_by_id.pop(expired_run_id, None)
+            self._statuses_by_id.pop(expired_run_id, None)
+            self.request_history_pruned.emit(expired_run_id)
