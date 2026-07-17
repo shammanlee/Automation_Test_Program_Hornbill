@@ -85,6 +85,49 @@ class WorkerControlTests(unittest.TestCase):
         current.assert_called_once_with(5)
         voltage.assert_not_called()
 
+    def test_dut_voltage_handlers_run_shared_auxiliary_tests(self):
+        cases = (
+            ("_run_dolphin_voltage_tests", "_run_dolphin_voltage_accuracy"),
+            ("_run_hornbill_voltage_tests", "_run_hornbill_voltage_accuracy"),
+        )
+
+        for handler_name, accuracy_name in cases:
+            with self.subTest(handler=handler_name):
+                worker = create_worker()
+                with patch.object(
+                    worker,
+                    accuracy_name,
+                    return_value=False,
+                ) as accuracy, patch.object(
+                    worker,
+                    "_run_voltage_auxiliary_tests",
+                ) as auxiliary:
+                    getattr(worker, handler_name)(3)
+
+                accuracy.assert_called_once_with(3)
+                auxiliary.assert_called_once_with()
+
+    def test_aborted_voltage_accuracy_skips_auxiliary_tests(self):
+        cases = (
+            ("_run_dolphin_voltage_tests", "_run_dolphin_voltage_accuracy"),
+            ("_run_hornbill_voltage_tests", "_run_hornbill_voltage_accuracy"),
+        )
+
+        for handler_name, accuracy_name in cases:
+            with self.subTest(handler=handler_name):
+                worker = create_worker()
+                with patch.object(
+                    worker,
+                    accuracy_name,
+                    return_value=True,
+                ), patch.object(
+                    worker,
+                    "_run_voltage_auxiliary_tests",
+                ) as auxiliary:
+                    getattr(worker, handler_name)(3)
+
+                auxiliary.assert_not_called()
+
     def test_voltage_modes_use_configured_accuracy_runner(self):
         cases = (
             (

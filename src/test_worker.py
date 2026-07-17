@@ -294,6 +294,9 @@ class TestWorker(QThread):
         if self._run_dolphin_voltage_accuracy(loop_index):
             return
 
+        self._run_voltage_auxiliary_tests()
+
+    def _run_voltage_auxiliary_tests(self):
         #Voltage Load Regulation
         if self.checkbox_states.get("VoltageLoadRegulation"):
             if self.params["Instrument"] == "Keysight":
@@ -409,40 +412,7 @@ class TestWorker(QThread):
         if self._run_hornbill_voltage_accuracy(loop_index):
             return
 
-        #Voltage Load Regulation
-        if self.checkbox_states.get("VoltageLoadRegulation"):
-            if self.params["Instrument"] == "Keysight":
-                for ch in self.params["PSU_Channel"]:
-                    self.results = NewLoadRegulation.executeCV_LoadRegulation(self, self.dict)
-                    os.system('cls')
-                    datatoCSV_LoadRegulation(self.results, self.params)
-
-        #Transient Recovery
-        if self.checkbox_states.get("TransientRecovery"):
-            if self.checkbox_states["SpecialCase"]:
-                RiseFallTime.executeC(self, self.dict)
-
-            if self.checkbox_states["NormalCase"]:
-                RiseFallTime.executeC(self, self.dict)
-
-        #OVP Accuracy Test
-        if self.checkbox_states.get("OVP_Test"):
-            self.results = OVP_Test.Execute_OVP(self,self.dict)
-            os.system('cls')
-            datatoCSV_OVP_Accuracy(self.results, self.params)
-
-        #Voltage Line RegulationW
-        if self.checkbox_states.get("VoltageLineRegulation"):
-            self.results = LineRegulation.executeCV_LoadRegulation(self, self.dict)
-            #os.system('cls')
-            datatoCSV_Line_Regulation(self.results, self.params)
-
-        #Programming Responses
-        if self.checkbox_states.get("ProgrammingSpeed"):
-            test = ProgrammingResponse()
-            self.results, self.currenttime = test.execute(self.dict)
-            os.system('cls')
-            datatoCSV_Programming_Response(self.results,self.currenttime,self.params)
+        self._run_voltage_auxiliary_tests()
 
     def _selected_voltage_accuracy_runner(self, runners):
         for selection, runner in runners.items():
