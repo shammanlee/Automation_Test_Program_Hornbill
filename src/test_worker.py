@@ -1,15 +1,12 @@
 """Background worker for production DUT test execution."""
 
-import os
 import threading
 import traceback
 from enum import Enum
 from time import monotonic as monotonic_time
 
-import pandas as pd
 from PyQt5.QtCore import QThread, pyqtSignal
 
-from path import csv_folder
 from current_test_executor import CurrentTestExecutor
 from DUT_Test_Scripts.execution_control import clear_execution_worker, set_execution_worker
 from DUT_Test_Scripts.instrument_shutdown import shutdown_instruments
@@ -20,6 +17,7 @@ from SCPI_Library.instrument_errors import (
     set_diagnostic_context,
 )
 from SCPI_Library.session_manager import begin_visa_session_scope, close_visa_session_scope
+from measurement_report_exporter import MeasurementReportExporter
 from voltage_test_executor import VoltageTestExecutor
 
 class TestState(Enum):
@@ -74,8 +72,9 @@ class TestWorker(QThread):
         self._stop_requested = False
         self.state = TestState.IDLE
         self.force_exit = False   # ✅ Add this line
-        self.voltage_executor = VoltageTestExecutor(self)
-        self.current_executor = CurrentTestExecutor(self)
+        self.report_exporter = MeasurementReportExporter(self)
+        self.voltage_executor = VoltageTestExecutor(self, self.report_exporter)
+        self.current_executor = CurrentTestExecutor(self, self.report_exporter)
 
     def _set_state(self, state):
         if state == self.state:
@@ -177,13 +176,7 @@ class TestWorker(QThread):
         self.decision = decision'''
 
     def _write_config_csv(self, file_name):
-        config_frame = pd.DataFrame.from_dict(self.dict, orient="index")
-        config_frame.index.name = "Parameter"
-        config_frame.columns = ["Value"]
-        output_directory = (
-            self.run_context.storage.raw if self.run_context else csv_folder
-        )
-        config_frame.to_csv(os.path.join(output_directory, file_name))
+        return self.report_exporter.write_config_csv(file_name)
 
     def _dispatch_dut_tests(self, loop_index):
         if self.params["DUT"] == "Dolphin":

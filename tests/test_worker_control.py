@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import GUI
 import current_test_executor
+import measurement_report_exporter
 import test_worker
 import voltage_test_executor
 from DUT_Test_Scripts.instrument_shutdown import ShutdownResult
@@ -28,6 +29,12 @@ class WorkerControlTests(unittest.TestCase):
         self.assertIs(GUI.TestWorker, TestWorker)
         self.assertIs(GUI.TestState, TestState)
         self.assertIs(GUI.TestCancelled, TestCancelled)
+
+    def test_worker_injects_shared_report_exporter(self):
+        worker = create_worker()
+
+        self.assertIs(worker.voltage_executor.report_exporter, worker.report_exporter)
+        self.assertIs(worker.current_executor.report_exporter, worker.report_exporter)
 
     def test_dut_dispatch_selects_dolphin_runner(self):
         worker = create_worker()
@@ -511,10 +518,13 @@ class WorkerControlTests(unittest.TestCase):
             worker.request_stop()
 
         with patch.object(
-            voltage_test_executor,
+            measurement_report_exporter,
             "instrumentData",
             side_effect=stop_after_instrument_data,
-        ), patch.object(voltage_test_executor, "datatoCSV_Accuracy") as export:
+        ), patch.object(
+            measurement_report_exporter,
+            "datatoCSV_Accuracy",
+        ) as export:
             with self.assertRaises(TestCancelled):
                 worker._export_voltage_accuracy(
                     ["info"],

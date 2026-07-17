@@ -3,18 +3,10 @@
 import os
 
 from data import (
-    datatoCSV_Accuracy2,
     datatoCSV_Line_Regulation,
     datatoCSV_LoadRegulation,
     datatoCSV_OCP_Test,
-    datatoCSV_PowerAccuracy,
-    datatoGraph2,
-    datatoGraph3,
-    instrumentData,
-    powerinstrumentData,
 )
-from xlreport import xlreport
-from xlreportpower import xlreportpower
 from DUT_Test_Scripts.DUT_Test import NewCurrentMeasurement
 from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
     LineRegulation,
@@ -26,7 +18,6 @@ from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
     HornbillCurrentMeasurementwithELoad_IMON_200uA,
     HornbillCurrentMeasurementwithELoad_IMON_2mA,
 )
-from SCPI_Library.simulation import is_simulation_mode
 
 
 HORNBILL_CURRENT_ACCURACY_RUNNERS = {
@@ -44,8 +35,9 @@ HORNBILL_CURRENT_ACCURACY_RUNNERS = {
 
 
 class CurrentTestExecutor:
-    def __init__(self, worker):
+    def __init__(self, worker, report_exporter):
         self.worker = worker
+        self.report_exporter = report_exporter
 
     def run_dolphin(self, loop_index):
         worker = self.worker
@@ -151,38 +143,11 @@ class CurrentTestExecutor:
         data_list,
         readback_list,
     ):
-        worker = self.worker
-        worker._execute_checkpointed(
-            powerinstrumentData,
-            worker.params["PSU"],
-            worker.params["DMM"],
-            worker.params["DMM2"],
-            worker.params["ELoad"],
-        )
-        worker._execute_checkpointed(
-            datatoCSV_PowerAccuracy,
+        return self.report_exporter.export_power_accuracy(
             info_list,
             data_list,
             readback_list,
         )
-        worker._execute_checkpointed(
-            datatoGraph3,
-            info_list,
-            data_list,
-            readback_list,
-        )
-        worker._execute_checkpointed(
-            datatoGraph3.scatterComparePower,
-            worker,
-            float(worker.params["Power_Programming_Error_Gain"]),
-            float(worker.params["Power_Programming_Error_Offset"]),
-            float(worker.params["Power_Readback_Error_Gain"]),
-            float(worker.params["Power_Readback_Error_Offset"]),
-            str(worker.params["setFunction"]),
-            float(worker.params["P_Rating"]),
-        )
-        worker._execute_checkpointed(worker._write_config_csv, "powerconfig.csv")
-        worker._execute_checkpointed(self.save_power_report)
 
     def run_dolphin_accuracy(self, loop_index):
         worker = self.worker
@@ -245,58 +210,11 @@ class CurrentTestExecutor:
         data_list,
         readback_list,
     ):
-        worker = self.worker
-        worker._execute_checkpointed(
-            instrumentData,
-            worker.params["PSU"],
-            worker.params["DMM"],
-            worker.params["ELoad"],
-        )
-        worker._execute_checkpointed(
-            datatoCSV_Accuracy2,
+        return self.report_exporter.export_current_accuracy(
             info_list,
             data_list,
             readback_list,
         )
-        worker._execute_checkpointed(
-            datatoGraph2,
-            info_list,
-            data_list,
-            readback_list,
-        )
-        worker._execute_checkpointed(
-            datatoGraph2.scatterCompareCurrent2,
-            worker,
-            float(worker.params["Programming_Error_Gain"]),
-            float(worker.params["Programming_Error_Offset"]),
-            float(worker.params["Readback_Error_Gain"]),
-            float(worker.params["Readback_Error_Offset"]),
-            str(worker.params["unit"]),
-            float(worker.params["I_Rating"]),
-        )
-        worker._execute_checkpointed(worker._write_config_csv, "config.csv")
-
-        report = xlreport(
-            save_directory=worker.params["savelocation"],
-            file_name=str(worker.params["unit"]),
-        )
-        worker._execute_checkpointed(report.run)
-        worker.progress.emit("Excel Report Saved: " + str(worker.params["savedir"]))
-        worker.progress.emit("")
 
     def save_power_report(self):
-        worker = self.worker
-        file_name = (
-            "Power_CV"
-            if worker.params["setFunction"] == "Current"
-            else "Power_CC"
-        )
-        if is_simulation_mode():
-            file_name = f"SIMULATED_{file_name}"
-        report = xlreportpower(
-            save_directory=worker.params["savedir"],
-            file_name=file_name,
-        )
-        report.run()
-        worker.progress.emit("Excel Report Saved: " + str(worker.params["savedir"]))
-        worker.progress.emit("")
+        return self.report_exporter.save_power_report()
