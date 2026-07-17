@@ -39,6 +39,7 @@ class TestWorker(QThread):
     progress_value = pyqtSignal(int) 
     finished = pyqtSignal()
     error = pyqtSignal(Exception, str)
+    failed = pyqtSignal()
     warning = pyqtSignal(Exception, str)
     aborted = pyqtSignal() 
     new_data = pyqtSignal(float, float, float, float, float, float, float, float, float, float, float, float, float, float, float)  #Shamman changes for Vset, Iset, PSU readback voltage, and PSU readback current 
@@ -349,6 +350,7 @@ class TestWorker(QThread):
             clear_diagnostic_context()
             if failed:
                 self._set_state(TestState.FAILED)
+                self.failed.emit()
             elif cancelled or self.was_aborted:
                 self._set_state(TestState.ABORTED)
                 self.aborted.emit()

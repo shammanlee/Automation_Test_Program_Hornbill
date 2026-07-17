@@ -1238,6 +1238,8 @@ class AllTestMeasurement(QDialog):
         worker.finished.connect(self.test_finished)
         worker.aborted.connect(self.test_aborted)
         worker.error.connect(self.handle_test_error)
+        if hasattr(worker, "failed"):
+            worker.failed.connect(self._failed_test_finished)
         worker.warning.connect(self.handle_test_warning)
         worker.new_data.connect(self.update_plot)
         worker.progress.connect(self.update_status)
@@ -2404,7 +2406,7 @@ class AllTestMeasurement(QDialog):
         # Log in output box (optional)
         self.OutputBox.append("❌ Test crashed due to an error")
 
-        # Perform the SAME cleanup as abort
+    def _failed_test_finished(self):
         self.cleanup_test(reason="crash")
 
     def handle_test_warning(self, exception, traceback_str):

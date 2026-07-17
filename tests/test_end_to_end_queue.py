@@ -15,10 +15,16 @@ from PyQt5.QtCore import QEventLoop, QTimer
 from PyQt5.QtWidgets import QApplication
 
 import GUI
+import all_test_dialog
 from DUT_Test_Scripts import DUT_Test as dut_measurements
 from DUT_Test_Scripts import Hornbill_DUT_Test_With_ELoad as hornbill_measurements
-from SCPI_Library.session_manager import close_visa_session_scope
-from SCPI_Library.simulation import get_simulation_state, reset_simulation
+from SCPI_Library.session_manager import close_visa_session_scope, get_visa_resource
+from SCPI_Library.simulation import (
+    clear_simulation_faults,
+    get_simulation_state,
+    inject_simulation_fault,
+    reset_simulation,
+)
 from test_configuration import ParameterSnapshot
 
 
@@ -108,6 +114,25 @@ class EndToEndQueueTests(unittest.TestCase):
         loop.exec_()
         timer.stop()
         self.assertFalse(timed_out, "simulated queue did not finish in time")
+
+    def _wait_for_signal(self, signal, starter, timeout_ms=20000):
+        loop = QEventLoop()
+        timed_out = []
+        signal.connect(loop.quit)
+
+        def timeout():
+            timed_out.append(True)
+            loop.quit()
+
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(timeout)
+        timer.start(timeout_ms)
+        starter()
+        loop.exec_()
+        timer.stop()
+        signal.disconnect(loop.quit)
+        self.assertFalse(timed_out, "expected queue signal was not emitted")
 
     def test_real_workers_run_two_duts_and_isolate_artifacts(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(
@@ -250,6 +275,77 @@ class EndToEndQueueTests(unittest.TestCase):
             self.assertIn(("Continue controlled run", "Completed"), statuses)
             self.assertEqual(dialog.run_controller.pending_count, 0)
             self.assertIsNone(dialog.run_controller.active_worker)
+
+            dialog.close()
+            dialog.deleteLater()
+            self.application.processEvents()
+
+    def test_timeout_halts_queue_then_recovers_after_fault_is_cleared(self):
+        dmm_address = "USB0::SIM::DMM::INSTR"
+        errors = []
+        statuses = []
+
+        def measurement_dispatch(worker, _loop_index):
+            psu = get_visa_resource(worker.params["PSU"])
+            dmm = get_visa_resource(worker.params["DMM"])
+            psu.write("VOLT 5")
+            psu.write("OUTP ON")
+            float(dmm.query("MEAS:VOLT:DC?"))
+
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False
+        ), patch.object(
+            GUI.TestWorker, "_dispatch_dut_tests", measurement_dispatch
+        ), patch.object(
+            all_test_dialog,
+            "show_error_dialog",
+            side_effect=lambda _, error, __: errors.append(error),
+        ):
+            dialog = GUI.AllTestMeasurement(
+                queue_file=Path(directory) / "recovery_queue.json"
+            )
+            dialog.run_controller.request_status_changed.connect(
+                lambda request, status: statuses.append((request.label, status))
+            )
+            for label in ("Faulted run", "Recovery run"):
+                selections, configuration, parameters = self._request_data(
+                    directory, "Dolphin", label.replace(" ", "_")
+                )
+                selections["DataReport"] = False
+                dialog.run_controller.enqueue(
+                    selections,
+                    configuration,
+                    parameters,
+                    label=label,
+                    prepare=dialog._prepare_queued_run,
+                    auto_start=False,
+                )
+
+            inject_simulation_fault(
+                "query", "timeout", resource_name=dmm_address
+            )
+            self._wait_for_signal(
+                dialog.run_controller.queue_halted,
+                dialog.run_controller.start_queue,
+            )
+
+            self.assertEqual(dialog.run_controller.pending_count, 1)
+            self.assertIsNone(dialog.run_controller.active_worker)
+            self.assertFalse(get_simulation_state().output_enabled)
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(errors[0].context["role"], "DMM")
+            self.assertEqual(errors[0].context["operation"], "query")
+
+            clear_simulation_faults()
+            self._wait_for_signal(
+                dialog.run_controller.queue_finished,
+                dialog.run_controller.start_queue,
+            )
+
+            self.assertIn(("Faulted run", "Failed"), statuses)
+            self.assertIn(("Recovery run", "Completed"), statuses)
+            self.assertEqual(dialog.run_controller.pending_count, 0)
+            self.assertFalse(get_simulation_state().output_enabled)
 
             dialog.close()
             dialog.deleteLater()

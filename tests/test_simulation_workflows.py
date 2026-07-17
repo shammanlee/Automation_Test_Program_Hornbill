@@ -1,4 +1,5 @@
 import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -11,6 +12,8 @@ from SCPI_Library.session_manager import (
 )
 from SCPI_Library.session_manager import get_visa_resource
 from SCPI_Library.simulation import get_simulation_state, reset_simulation
+from SCPI_Library.simulation import inject_simulation_fault
+from SCPI_Library.instrument_errors import CleanupError, ReportGenerationError
 
 
 class Parameters(dict):
@@ -190,6 +193,77 @@ class SimulationWorkflowTests(unittest.TestCase):
 
     def test_hornbill_current_workflow(self):
         self._run_workflow("Hornbill", "current")
+
+    def test_report_failure_emits_failed_only_after_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parameters = Parameters(
+                DUT="Dolphin",
+                noofloop=1,
+                PSU="USB0::SIM::PSU::INSTR",
+                DMM="USB0::SIM::DMM::INSTR",
+                ELoad="USB0::SIM::ELOAD::INSTR",
+                ELoad_Model="E367XXA",
+                unit="V",
+                savelocation=directory,
+            )
+            worker = GUI.TestWorker(
+                {"Voltage_Test": True, "Current_Test": False},
+                parameters,
+                parameters,
+            )
+            events = []
+            errors = []
+            worker.error.connect(lambda exception, _: errors.append(exception))
+            worker.warning.connect(lambda *_: events.append("warning"))
+            worker.failed.connect(lambda: events.append("failed"))
+            inject_simulation_fault("report", "report")
+
+            with patch.dict(
+                os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False
+            ), patch.object(
+                worker,
+                "_dispatch_dut_tests",
+                side_effect=lambda _: worker.report_exporter.save_voltage_report(),
+            ):
+                worker.run()
+
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], ReportGenerationError)
+        self.assertEqual(events[-1], "failed")
+        self.assertEqual(worker.state, GUI.TestState.FAILED)
+
+    def test_cleanup_failure_warns_and_still_disables_outputs(self):
+        parameters = Parameters(
+            DUT="Dolphin",
+            noofloop=1,
+            PSU="USB0::SIM::PSU::INSTR",
+            ELoad="USB0::SIM::ELOAD::INSTR",
+            ELoad_Model="E367XXA",
+        )
+        worker = GUI.TestWorker(
+            {"Voltage_Test": True, "Current_Test": False},
+            parameters,
+            parameters,
+        )
+        warnings = []
+        worker.warning.connect(lambda exception, _: warnings.append(exception))
+
+        def enable_output(_):
+            psu = get_visa_resource(parameters["PSU"])
+            psu.write("VOLT 5")
+            psu.write("OUTP ON")
+            inject_simulation_fault(
+                "close", "cleanup", resource_name=parameters["PSU"]
+            )
+
+        with patch.dict(
+            os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False
+        ), patch.object(worker, "_dispatch_dut_tests", side_effect=enable_output):
+            worker.run()
+
+        self.assertTrue(any(isinstance(item, CleanupError) for item in warnings))
+        self.assertFalse(get_simulation_state().output_enabled)
+        self.assertEqual(worker.state, GUI.TestState.COMPLETED)
 
 
 if __name__ == "__main__":
