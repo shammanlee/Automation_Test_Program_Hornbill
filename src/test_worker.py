@@ -356,38 +356,8 @@ class TestWorker(QThread):
 
     def _run_dolphin_current_tests(self, loop_index):
         x = loop_index
-        #Current Accuracy Test
-        if self.checkbox_states.get("CurrentAccuracy"):
-            if self.dict["Instrument"] == "Keysight":
-                for ch in self.params["PSU_Channel"]:
-                    (infoList,
-                    dataList,
-                    dataList2) = NewCurrentMeasurement.executeCurrentMeasurementA(self, self.dict, ch)
-
-                    #Measurement Completion
-                    if x == (int(self.params["noofloop"]) - 1):
-                        self.progress.emit("✅Measurement is complete !")
-
-                        #Export Data to CSV
-                        if self.checkbox_states["DataReport"]:
-
-                            #Export data to CSV and Graph (Refer data.py for details)
-                            instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                            datatoCSV_Accuracy2(infoList, dataList, dataList2)
-                            datatoGraph2(infoList, dataList,dataList2)
-                            datatoGraph2.scatterCompareCurrent2(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["I_Rating"]))
-
-                            self._write_config_csv("config.csv")
-
-                            #Read error,config and instrumentData files, then combine to (self.params.unit) file (Refer xlreport for details)
-                            A = xlreport(save_directory=self.params["savelocation"], file_name=str(self.params["unit"]))
-                            A.run()
-                            self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-                            self.progress.emit("")
-
-                    if self.force_exit:
-                        self.progress.emit("Operation aborted")
-                        return  # Exit immediately
+        if self._run_dolphin_current_accuracy(loop_index):
+            return
 
         #Current Load Regulation Test
         if self.checkbox_states.get("CurrentLoadRegulation"):
@@ -571,6 +541,37 @@ class TestWorker(QThread):
             os.system('cls')
             datatoCSV_Programming_Response(self.results,self.currenttime,self.params)
 
+    def _run_current_accuracy(self, loop_index, runner):
+        for channel in self.params["PSU_Channel"]:
+            info_list, data_list, readback_list = runner(
+                self, self.dict, channel
+            )
+            if loop_index == int(self.params["noofloop"]) - 1:
+                self.progress.emit("✅Measurement is complete !")
+                if self.checkbox_states["DataReport"]:
+                    self._export_current_accuracy(
+                        info_list,
+                        data_list,
+                        readback_list,
+                    )
+
+            if self.force_exit:
+                self.progress.emit("Operation aborted")
+                return True
+
+        return False
+
+    def _run_dolphin_current_accuracy(self, loop_index):
+        if not self.checkbox_states.get("CurrentAccuracy"):
+            return False
+        if self.dict["Instrument"] != "Keysight":
+            return False
+
+        return self._run_current_accuracy(
+            loop_index,
+            NewCurrentMeasurement.executeCurrentMeasurementA,
+        )
+
     def _selected_hornbill_current_accuracy_runner(self):
         for selection, runner in HORNBILL_CURRENT_ACCURACY_RUNNERS.items():
             if self.checkbox_states.get(selection):
@@ -587,26 +588,9 @@ class TestWorker(QThread):
         if runner is None:
             return False
 
-        for channel in self.params["PSU_Channel"]:
-            info_list, data_list, readback_list = runner(
-                self, self.dict, channel
-            )
-            if loop_index == int(self.params["noofloop"]) - 1:
-                self.progress.emit("✅Measurement is complete !")
-                if self.checkbox_states["DataReport"]:
-                    self._export_hornbill_current_accuracy(
-                        info_list,
-                        data_list,
-                        readback_list,
-                    )
+        return self._run_current_accuracy(loop_index, runner)
 
-            if self.force_exit:
-                self.progress.emit("Operation aborted")
-                return True
-
-        return False
-
-    def _export_hornbill_current_accuracy(
+    def _export_current_accuracy(
         self,
         info_list,
         data_list,
