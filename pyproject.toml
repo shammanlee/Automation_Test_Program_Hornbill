@@ -20,6 +20,7 @@ include = [
     "src/test_run_controller.py",
     "src/test_selection.py",
     "src/test_worker.py",
+    "src/voltage_test_executor.py",
     "SCPI_Library/instrument_errors.py",
     "SCPI_Library/session_manager.py",
     "SCPI_Library/simulation.py",
