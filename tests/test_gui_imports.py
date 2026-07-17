@@ -15,8 +15,9 @@ class GuiImportTests(unittest.TestCase):
         environment["PYTHONPATH"] = os.pathsep.join((str(SRC), str(ROOT)))
         environment["QT_QPA_PLATFORM"] = "offscreen"
         command = (
-            "import all_test_dialog; import GUI; "
-            "assert GUI.AllTestMeasurement is all_test_dialog.AllTestMeasurement"
+            "import all_test_dialog; import test_parameters; import GUI; "
+            "assert GUI.AllTestMeasurement is all_test_dialog.AllTestMeasurement; "
+            "assert GUI.Parameters is test_parameters.Parameters"
         )
 
         result = subprocess.run(

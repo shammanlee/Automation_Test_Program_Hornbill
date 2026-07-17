@@ -14,6 +14,7 @@ include = [
     "src/run_context.py",
     "src/run_storage.py",
     "src/test_configuration.py",
+    "src/test_parameters.py",
     "src/test_queue_widget.py",
     "src/test_run_controller.py",
     "src/test_selection.py",
