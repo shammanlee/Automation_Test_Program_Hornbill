@@ -118,6 +118,32 @@ class WorkerControlTests(unittest.TestCase):
 
                 self.assertEqual(channels, [1, 2])
 
+    def test_dolphin_current_accuracy_uses_shared_runner(self):
+        worker = TestWorker(
+            {
+                "CurrentAccuracy": True,
+                "DataReport": False,
+            },
+            {"Instrument": "Keysight"},
+            Parameters(
+                DUT="Dolphin",
+                noofloop=1,
+                PSU_Channel=[1],
+            ),
+        )
+
+        with patch.object(
+            worker,
+            "_run_current_accuracy",
+            return_value=False,
+        ) as run_accuracy:
+            worker._run_dolphin_current_accuracy(0)
+
+        run_accuracy.assert_called_once_with(
+            0,
+            test_worker.NewCurrentMeasurement.executeCurrentMeasurementA,
+        )
+
     def test_hornbill_current_accuracy_exports_only_on_final_loop(self):
         def runner(_worker, _configuration, _channel):
             return ["info"], ["measured"], ["readback"]
@@ -139,7 +165,7 @@ class WorkerControlTests(unittest.TestCase):
             test_worker.HORNBILL_CURRENT_ACCURACY_RUNNERS,
             {"CurrentAccuracy_20A_Range": runner},
             clear=True,
-        ), patch.object(worker, "_export_hornbill_current_accuracy") as export:
+        ), patch.object(worker, "_export_current_accuracy") as export:
             worker._run_hornbill_current_tests(0)
             export.assert_not_called()
 
