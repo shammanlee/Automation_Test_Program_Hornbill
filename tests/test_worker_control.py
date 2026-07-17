@@ -85,6 +85,72 @@ class WorkerControlTests(unittest.TestCase):
         current.assert_called_once_with(5)
         voltage.assert_not_called()
 
+    def test_hornbill_current_ranges_use_configured_accuracy_runner(self):
+        range_selections = tuple(test_worker.HORNBILL_CURRENT_ACCURACY_RUNNERS)
+
+        for selection in range_selections:
+            with self.subTest(selection=selection):
+                channels = []
+
+                def runner(_worker, _configuration, channel):
+                    channels.append(channel)
+                    return ["info"], ["measured"], ["readback"]
+
+                worker = TestWorker(
+                    {
+                        "CurrentAccuracy": True,
+                        selection: True,
+                        "DataReport": False,
+                    },
+                    {"Instrument": "Keysight"},
+                    Parameters(
+                        DUT="Hornbill",
+                        noofloop=1,
+                        PSU_Channel=[1, 2],
+                    ),
+                )
+                with patch.dict(
+                    test_worker.HORNBILL_CURRENT_ACCURACY_RUNNERS,
+                    {selection: runner},
+                    clear=True,
+                ):
+                    worker._run_hornbill_current_tests(0)
+
+                self.assertEqual(channels, [1, 2])
+
+    def test_hornbill_current_accuracy_exports_only_on_final_loop(self):
+        def runner(_worker, _configuration, _channel):
+            return ["info"], ["measured"], ["readback"]
+
+        worker = TestWorker(
+            {
+                "CurrentAccuracy": True,
+                "CurrentAccuracy_20A_Range": True,
+                "DataReport": True,
+            },
+            {"Instrument": "Keysight"},
+            Parameters(
+                DUT="Hornbill",
+                noofloop=2,
+                PSU_Channel=[1],
+            ),
+        )
+        with patch.dict(
+            test_worker.HORNBILL_CURRENT_ACCURACY_RUNNERS,
+            {"CurrentAccuracy_20A_Range": runner},
+            clear=True,
+        ), patch.object(worker, "_export_hornbill_current_accuracy") as export:
+            worker._run_hornbill_current_tests(0)
+            export.assert_not_called()
+
+            worker._run_hornbill_current_tests(1)
+
+        export.assert_called_once_with(
+            ["info"],
+            ["measured"],
+            ["readback"],
+        )
+
     def test_pause_resume_and_stop_checkpoint(self):
         worker = create_worker()
         worker.state = TestState.RUNNING
