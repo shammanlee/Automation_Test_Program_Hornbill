@@ -7,7 +7,15 @@
 # Python runtime and test artifacts
 __pycache__/
 *.py[cod]
+.venv*/
+venv/
+env/
+.ruff_cache/
 .pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+/dist/
 
 # Local GUI state
 /Instrument_Config_Files/test_queue.json
