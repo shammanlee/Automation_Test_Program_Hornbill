@@ -159,8 +159,7 @@ from test_worker import TestCancelled as TestCancelled, TestState, TestWorker
 from test_run_controller import TestRunController
 from test_configuration import (
     ParameterSnapshot,
-    build_test_parameters,
-    snapshot_parameters,
+    prepare_run_submission,
 )
 from test_selection import (
     collect_test_selections,
@@ -2142,100 +2141,95 @@ class AllTestMeasurement(QDialog):
 
         return True
     
-    def pre_test_check(self, dict):
+    def pre_test_check(self, configuration, selections=None):
+        self.checkbox_states = dict(
+            selections if selections is not None else collect_test_selections(self)
+        )
 
-        self.checkbox_states = collect_test_selections(self)
-
-        errors, required_roles = validate_preflight(dict, self.checkbox_states)
+        errors, required_roles = validate_preflight(
+            configuration, self.checkbox_states
+        )
         if errors:
             message = "Preflight validation failed:\n\n- " + "\n- ".join(errors)
             self.OutputBox.append(message.replace("\n", "<br>"))
             QMessageBox.warning(self, "Preflight Validation", message)
             return False
 
-        visa_addresses = [dict[role] for role in sorted(required_roles)]
-        A = VisaResourceManager()
+        visa_addresses = [
+            configuration[role] for role in sorted(required_roles)
+        ]
+        resource_manager = VisaResourceManager()
         try:
-            flag, args = A.openRM(*visa_addresses)
+            connected, errors = resource_manager.openRM(*visa_addresses)
         finally:
-            A.closeRM()
+            resource_manager.closeRM()
 
-        if flag == 0:
-            error_text = " ".join(str(item) for item in args)
+        if connected == 0:
+            error_text = " ".join(str(item) for item in errors)
             QMessageBox.warning(self, "VISA IO ERROR", error_text)
             return False
 
         return True
-    
-    def executeTest(self, queue_only=False):
-        global globalvv
-        if not queue_only and (self.run_controller.is_running or (
+
+    def _test_submission_is_blocked(self):
+        return self.run_controller.is_running or bool(
             self.worker and self.worker.isRunning()
-        )):
+        )
+
+    def _confirm_test_submission(self):
+        return QMessageBox.question(
+            self,
+            "Test Running",
+            "Test will be started.\nDo you still want to continue?",
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        ) == QMessageBox.Yes
+
+    def _enqueue_submission(self, submission, queue_only):
+        request = self.run_controller.enqueue(
+            submission.selections,
+            submission.configuration,
+            submission.parameters,
+            label=submission.label,
+            prepare=self._prepare_queued_run,
+            auto_start=False,
+        )
+        if queue_only:
+            self.OutputBox.append("Test added to queue")
+        else:
+            self.run_controller.start_queue()
+        return request
+
+    def executeTest(self, queue_only=False):
+        if not queue_only and self._test_submission_is_blocked():
             QMessageBox.warning(
                 self,
                 "Test Already Running",
                 "Wait for the active test to finish or stop it first.",
             )
             return
+
+        self.setEnabled(False)
+        self.OutputBox.clear()
         try:
-            
-            """The method begins by compiling all the parameters in a dictionary for ease of storage and calling,
-            then the parameters are looped through to check if any of them are empty or return NULL, a warning dialogue
-            will appear if the statement is true, and the users have to troubleshoot the issue. After so, the tests will
-            begin right after another warning dialogue prompting the user that the tests will begin very soon. When test
-            begins, the VISA_Addresses of the Instruments are passed through the VISA Resource Manager to make sure there
-            are connected. Then the actual DUT Tests will commence. Depending on the users selection, the method can
-            optionally export all the details into a CSV file or display a graph after the test is completed.
+            selections = collect_test_selections(self)
+            submission = prepare_run_submission(self.params, selections)
+            self.checkbox_states = submission.selections
+            self.dict_reset = submission.configuration
 
-            """
-            self.setEnabled(False)
-            self.OutputBox.clear()
+            if not self.pre_test_check(
+                submission.configuration, submission.selections
+            ):
+                return
+            if not self._confirm_test_submission():
+                print_console_safe("Test canceled by user")
+                return
 
-            #Default parameters to be check before test start
-            self.checkbox_states = collect_test_selections(self)
-            run_parameters = snapshot_parameters(self.params)
-            params = build_test_parameters(run_parameters, self.checkbox_states)
-
-            #Send the parameters to the dictionary in DUT_Test
-            dict = dictGenerator.input(**params)
-            self.dict_reset = dict
-
-            #Run Qthread after pre-test check
-            if self.pre_test_check(dict):
-                reply = QMessageBox.question(
-                    self,
-                    "Test Running",
-                    "Test will be started.\nDo you still want to continue?",
-                    QMessageBox.Yes | QMessageBox.Cancel,
-                    QMessageBox.Cancel  # Default button
-                )
-
-                if reply == QMessageBox.Yes:
-                    selected_names = [
-                        name for name, enabled in self.checkbox_states.items()
-                        if enabled and name not in {"DataReport", "DataImage"}
-                    ]
-                    label = f"{run_parameters.DUT}: " + ", ".join(selected_names)
-                    self.run_controller.enqueue(
-                        self.checkbox_states,
-                        dict,
-                        run_parameters,
-                        label=label,
-                        prepare=self._prepare_queued_run,
-                        auto_start=False,
-                    )
-                    if queue_only:
-                        self.OutputBox.append("Test added to queue")
-                    else:
-                        self.run_controller.start_queue()
-                else:
-                    print_console_safe("Test canceled by user")
-
-        except Exception as e:
+            self._enqueue_submission(submission, queue_only)
+        except Exception as exception:
             traceback_str = traceback.format_exc()
             normalized_error = normalize_execution_error(
-                e,
+                exception,
                 traceback_str,
                 dut=self.params.get("DUT"),
             )
@@ -2246,8 +2240,6 @@ class AllTestMeasurement(QDialog):
                 traceback_text=traceback_str,
             )
             show_error_dialog(self, normalized_error, traceback_str)
-            return
-                    
         finally:
             self.setEnabled(True)
 

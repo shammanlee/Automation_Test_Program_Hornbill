@@ -8,7 +8,11 @@ for import_path in (SRC, ROOT):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))
 
-from test_configuration import build_test_parameters, snapshot_parameters
+from test_configuration import (
+    build_test_parameters,
+    prepare_run_submission,
+    snapshot_parameters,
+)
 
 
 class Parameters(dict):
@@ -84,6 +88,26 @@ class ConfigurationTests(unittest.TestCase):
 
         self.assertEqual(self.parameters.PSU_Channel, [1])
         self.assertEqual(snapshot.PSU_Channel, [1, 2])
+
+    def test_prepares_snapshot_and_label_for_submission(self):
+        selections = {
+            "Voltage_Test": True,
+            "VoltageAccuracy": True,
+            "DataReport": True,
+            "DataImage": False,
+        }
+
+        submission = prepare_run_submission(self.parameters, selections)
+        self.parameters.noofloop = 9
+        selections["VoltageAccuracy"] = False
+
+        self.assertEqual(submission.parameters.noofloop, 1)
+        self.assertTrue(submission.selections["VoltageAccuracy"])
+        self.assertEqual(
+            submission.label,
+            "Dolphin: Voltage_Test, VoltageAccuracy",
+        )
+        self.assertEqual(submission.configuration["DUT"], "Dolphin")
 
 
 if __name__ == "__main__":

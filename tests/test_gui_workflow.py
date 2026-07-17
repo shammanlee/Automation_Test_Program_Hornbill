@@ -307,6 +307,31 @@ class GuiWorkflowTests(unittest.TestCase):
         warning.assert_called_once()
         self.assertIn("Preflight validation failed", self.dialog.OutputBox.toPlainText())
 
+    def test_submission_uses_one_selection_snapshot_for_preflight(self):
+        self.dialog.params.DUT = "Dolphin"
+        selections = {
+            "Voltage_Test": True,
+            "VoltageAccuracy": True,
+            "DataReport": True,
+            "DataImage": False,
+        }
+        with patch.object(
+            all_test_dialog,
+            "collect_test_selections",
+            return_value=selections,
+        ), patch.object(
+            self.dialog,
+            "pre_test_check",
+            return_value=False,
+        ) as preflight:
+            self.dialog.executeTest()
+
+        preflight.assert_called_once()
+        configuration, preflight_selections = preflight.call_args.args
+        self.assertEqual(preflight_selections, selections)
+        self.assertEqual(configuration["DUT"], self.dialog.params.DUT)
+        self.assertTrue(self.dialog.isEnabled())
+
     def test_confirmed_start_creates_and_starts_worker(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             storage = create_run_storage(temporary_directory, "GUI_SIMULATION")
