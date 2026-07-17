@@ -15,6 +15,7 @@ for import_path in (SRC, ROOT):
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
 import GUI
+import all_test_dialog
 from run_storage import create_run_storage
 
 
@@ -173,7 +174,7 @@ class GuiWorkflowTests(unittest.TestCase):
         )
 
         with patch.object(
-            GUI, "ScanSelectedVisaResources", return_value=result
+            all_test_dialog, "ScanSelectedVisaResources", return_value=result
         ):
             self.dialog.doFind()
 
@@ -230,7 +231,7 @@ class GuiWorkflowTests(unittest.TestCase):
         self.dialog.worker = worker
         self.dialog.set_test_state(GUI.TestState.PAUSED)
 
-        with patch.object(GUI, "QMessageBox", TerminateMessageBox):
+        with patch.object(all_test_dialog, "QMessageBox", TerminateMessageBox):
             self.dialog.handle_test_failure()
 
         self.assertTrue(self.dialog.was_aborted)
@@ -283,11 +284,11 @@ class GuiWorkflowTests(unittest.TestCase):
             ), patch.object(
                 QMessageBox, "question", return_value=QMessageBox.Yes
             ), patch.object(
-                GUI, "VoltageAccuracyPlotWindow", DummyPlotWindow
+                all_test_dialog, "VoltageAccuracyPlotWindow", DummyPlotWindow
             ), patch.object(
-                GUI, "TestWorker", DummyWorker
+                all_test_dialog, "TestWorker", DummyWorker
             ), patch.object(
-                GUI, "show_error_dialog"
+                all_test_dialog, "show_error_dialog"
             ) as error_dialog:
                 self.dialog.executeTest()
 
@@ -318,9 +319,9 @@ class GuiWorkflowTests(unittest.TestCase):
             ), patch.object(
                 QMessageBox, "question", return_value=QMessageBox.Yes
             ), patch.object(
-                GUI, "VoltageAccuracyPlotWindow", DummyPlotWindow
+                all_test_dialog, "VoltageAccuracyPlotWindow", DummyPlotWindow
             ), patch.object(
-                GUI, "TestWorker", DummyWorker
+                all_test_dialog, "TestWorker", DummyWorker
             ):
                 self.dialog.executeTest(queue_only=True)
                 self.dialog.params.noofloop = "9"
@@ -361,9 +362,9 @@ class GuiWorkflowTests(unittest.TestCase):
             ), patch.object(
                 QMessageBox, "question", return_value=QMessageBox.Yes
             ), patch.object(
-                GUI, "VoltageAccuracyPlotWindow", DummyPlotWindow
+                all_test_dialog, "VoltageAccuracyPlotWindow", DummyPlotWindow
             ), patch.object(
-                GUI, "TestWorker", DummyWorker
+                all_test_dialog, "TestWorker", DummyWorker
             ):
                 self.dialog.params.noofloop = "1"
                 self.dialog.executeTest(queue_only=True)
@@ -462,7 +463,9 @@ class GuiWorkflowTests(unittest.TestCase):
             self.dialog.run_storage = create_run_storage(
                 temporary_directory, "FAILED_SIMULATION"
             )
-            with patch.object(GUI, "show_error_dialog") as error_dialog:
+            with patch.object(
+                all_test_dialog, "show_error_dialog"
+            ) as error_dialog:
                 self.dialog.handle_test_error(
                     RuntimeError("simulated VISA timeout"), "simulated traceback"
                 )

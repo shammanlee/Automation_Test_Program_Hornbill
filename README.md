@@ -97,6 +97,9 @@ Sessions are isolated to the worker thread, closed before final hardware shutdow
 and remain independent from GUI discovery and preflight connections.
 Production test execution and cooperative pause, resume, and abort behavior live in
 `src/test_worker.py`; `src/GUI.py` owns presentation and signal wiring.
+`src/GUI.py` remains the application entry point and legacy-dialog host, while the
+production `AllTestMeasurement` dialog and its direct UI helpers live in
+`src/all_test_dialog.py`.
 Each execution receives a `RunContext` from `src/run_context.py`. It owns the run
 tree, parameter snapshot, realtime CSV, chart paths, and diagnostics destinations;
 queued runs therefore do not share output files. Report generators infer their own
