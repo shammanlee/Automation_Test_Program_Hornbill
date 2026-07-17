@@ -185,6 +185,10 @@ class AllTestMeasurement(QDialog):
 
 
     """
+    DEFAULT_SAVE_LOCATION = (
+        "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Test Data/File Export Testing"
+    )
+
     def __init__(self, queue_file=None):
         super().__init__()
         self.params = Parameters()
@@ -1135,6 +1139,7 @@ class AllTestMeasurement(QDialog):
         self.QCheckBox_CurrentLoadRegulation_Widget.stateChanged.connect(self.checkbox_state_CurrentLoadRegulation)
         self.QCheckBox_PowerAccuracy_Widget.stateChanged.connect(self.checkbox_state_PowerAccuracy)
         self.QCheckBox_OVP_Test_Widget.stateChanged.connect(self.checkbox_state_OVP_Test)
+        self.QCheckBox_OCP_Test_Widget.stateChanged.connect(self.checkbox_state_OCP_Test)
         self.QCheckBox_CurrentLineRegulation_Widget.stateChanged.connect(self.checkbox_state_VoltageLine)
         self.QCheckBox_VoltageLineRegulation_Widget.stateChanged.connect(self.checkbox_state_CurrentLine)
         self.QCheckBox_ProgrammingSpeed_Widget.stateChanged.connect(self.checkbox_state_ProgrammingSpeed_Test)
@@ -1867,6 +1872,11 @@ class AllTestMeasurement(QDialog):
         self.InteractiveAction()
         self.Image_Label_Setup()
 
+    def checkbox_state_OCP_Test(self, state):
+        self.checkbox_test_OCP_Test = state
+        self.InteractiveAction()
+        self.Image_Label_Setup()
+
     def checkbox_state_VoltageLine (self):
         self.InteractiveAction()
         self.Image_Label_Setup()
@@ -1876,7 +1886,7 @@ class AllTestMeasurement(QDialog):
         self.Image_Label_Setup()
 
     def checkbox_state_ProgrammingSpeed_Test(self, s):
-        self.checkbox_test_OVP_Test = s
+        self.checkbox_test_ProgrammingSpeed = s
         self.InteractiveAction()
 
     def openDialog(self):
@@ -1987,107 +1997,77 @@ class AllTestMeasurement(QDialog):
 
     #Disable the INPUT when test changed
     def InteractiveAction(self):
-        
-        #Check Voltage or Current Measurement
+        self._update_measurement_mode()
+        self._update_test_option_visibility()
+        self._update_save_path_status()
+
+    def _update_measurement_mode(self):
         if self.QPushButton_Current_Widget.isChecked():
-           
-            self.QComboBox_set_Function.setCurrentText("Voltage Priority")
-            self.set_Function_changed("Voltage Priority")
-            self.params.unit = "CURRENT"
-
-            self.Voltage_Test_group.setVisible(False)
-            self.Current_Test_group.setVisible(True)
-
-            self.QLabel_DMM_VisaAddressforCurrent.setVisible(True)
-            self.QLineEdit_DMM_VisaAddressforCurrent.setVisible(True)
-            self.QLineEdit_rshunt.setEnabled(True)
-
+            unit = "CURRENT"
+            load_mode = "Voltage Priority"
         elif self.QPushButton_Voltage_Widget.isChecked():
-            
-            self.QComboBox_set_Function.setCurrentText("Current Priority")
-            self.set_Function_changed("Current Priority")
-            self.params.unit = "VOLTAGE"
-
-            self.Voltage_Test_group.setVisible(True)
-            self.Current_Test_group.setVisible(False)
-
-            self.QLabel_DMM_VisaAddressforCurrent.setVisible(False)
-            self.QLineEdit_DMM_VisaAddressforCurrent.setVisible(False)
-            self.QLineEdit_rshunt.setEnabled(False)
+            unit = "VOLTAGE"
+            load_mode = "Current Priority"
         else:
-            pass
+            return
 
-        #Voltage/Current Accuracy Test Selected
-        if not self.QCheckBox_CurrentAccuracy_Widget.isChecked() and \
-            not self.QCheckBox_VoltageAccuracy_Widget.isChecked():
-            self.programming_error_widget.setVisible(False)
-        else:
-            self.programming_error_widget.setVisible(True)
+        current_mode = unit == "CURRENT"
+        self.QComboBox_set_Function.setCurrentText(load_mode)
+        self.set_Function_changed(load_mode)
+        self.params.unit = unit
+        self.Voltage_Test_group.setVisible(not current_mode)
+        self.Current_Test_group.setVisible(current_mode)
+        self.QLabel_DMM_VisaAddressforCurrent.setVisible(current_mode)
+        self.QLineEdit_DMM_VisaAddressforCurrent.setVisible(current_mode)
+        self.QLineEdit_rshunt.setEnabled(current_mode)
 
-        #OVP Test Selected
-        if not self.QCheckBox_OVP_Test_Widget.isChecked():
-            self.QLineEdit_OVP_Level.setEnabled(False)
-            self.OVP_error_widget.setVisible(False)
-        else:
-            self.QLineEdit_OVP_Level.setEnabled(True)
-            self.OVP_error_widget.setVisible(True)
+    def _update_test_option_visibility(self):
+        accuracy_selected = (
+            self.QCheckBox_CurrentAccuracy_Widget.isChecked()
+            or self.QCheckBox_VoltageAccuracy_Widget.isChecked()
+        )
+        self.programming_error_widget.setVisible(accuracy_selected)
 
-        #OCP Test Selected
-        if not self.QCheckBox_OCP_Test_Widget.isChecked():
-            self.QLineEdit_OCP_Level.setEnabled(False)
-            self.oscilloscope_settings_widget.setVisible(False)        
-        else:
-            self.QLineEdit_OCP_Level.setEnabled(True)
-            self.oscilloscope_settings_widget.setVisible(True)
+        ovp_selected = self.QCheckBox_OVP_Test_Widget.isChecked()
+        self.QLineEdit_OVP_Level.setEnabled(ovp_selected)
+        self.OVP_error_widget.setVisible(ovp_selected)
 
-        #Power Accuracy Test Selected
-        if self.QCheckBox_PowerAccuracy_Widget.isChecked():
-            self.QComboBox_set_Function.setEnabled(True)
-            self.power_programming_error_widget.setVisible(True)
-            self.power_setting_widget.setVisible(True)
-        else:
-            self.QComboBox_set_Function.setEnabled(False)
-            self.power_programming_error_widget.setVisible(False)
-            self.power_setting_widget.setVisible(False)
+        ocp_selected = self.QCheckBox_OCP_Test_Widget.isChecked()
+        self.QLineEdit_OCP_Level.setEnabled(ocp_selected)
 
-        #Load Regulation Test Selected
-        if not self.QCheckBox_VoltageLoadRegulation_Widget.isChecked() and \
-            not self.QCheckBox_CurrentLoadRegulation_Widget.isChecked() and \
-            not self.QCheckBox_VoltageLineRegulation_Widget.isChecked() and \
-            not self.QCheckBox_CurrentLineRegulation_Widget.isChecked():
-            self.load_error_widget.setVisible(False)
-        else:
-            self.load_error_widget.setVisible(True)
+        power_selected = self.QCheckBox_PowerAccuracy_Widget.isChecked()
+        self.QComboBox_set_Function.setEnabled(power_selected)
+        self.power_programming_error_widget.setVisible(power_selected)
+        self.power_setting_widget.setVisible(power_selected)
 
-        #Transient Test Selected
-        if not self.QCheckBox_TransientRecovery_Widget.isChecked():
-            #self.QLabel_OSC_VisaAddress.setVisible(False)
-            #self.QLineEdit_OSC_VisaAddress.setVisible(False)
-            self.oscilloscope_settings_widget.setVisible(False)
-        else:
-            #self.QLabel_OSC_VisaAddress.setVisible(True)
-            #self.QLineEdit_OSC_VisaAddress.setVisible(True)
-            self.oscilloscope_settings_widget.setVisible(True)
+        load_regulation_selected = any(
+            checkbox.isChecked()
+            for checkbox in (
+                self.QCheckBox_VoltageLoadRegulation_Widget,
+                self.QCheckBox_CurrentLoadRegulation_Widget,
+                self.QCheckBox_VoltageLineRegulation_Widget,
+                self.QCheckBox_CurrentLineRegulation_Widget,
+            )
+        )
+        self.load_error_widget.setVisible(load_regulation_selected)
 
-        #Programming Speed Test Selected
-        if not self.QCheckBox_ProgrammingSpeed_Widget.isChecked():
-            #self.QLabel_OSC_VisaAddress.setVisible(False)
-            #self.QLineEdit_OSC_VisaAddress.setVisible(False)
-            self.Programming_Response_widget.setVisible(False)
-        else:
-            #self.QLabel_OSC_VisaAddress.setVisible(True)
-            #self.QLineEdit_OSC_VisaAddress.setVisible(True)
-            self.oscilloscope_settings_widget.setVisible(True)
-            self.Programming_Response_widget.setVisible(True)
-        
-        #Check Directory Change
-        if str(self.params.savelocation) != "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Test Data/File Export Testing":
+        transient_selected = self.QCheckBox_TransientRecovery_Widget.isChecked()
+        programming_response_selected = (
+            self.QCheckBox_ProgrammingSpeed_Widget.isChecked()
+        )
+        oscilloscope_required = (
+            ocp_selected or transient_selected or programming_response_selected
+        )
+        self.oscilloscope_settings_widget.setVisible(oscilloscope_required)
+        self.Programming_Response_widget.setVisible(programming_response_selected)
+
+    def _update_save_path_status(self):
+        save_location = str(self.params.savelocation)
+        if save_location != self.DEFAULT_SAVE_LOCATION:
             self.QPushButton_Widget0.setStyleSheet("color: darkgreen")
             self.QPushButton_Widget0.setText("Save Path Selected ✅")
-        elif str(self.params.savelocation) == "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Test Data/File Export Testing":
-            self.QPushButton_Widget0.setStyleSheet("color: orange")
         else:
-            self.QPushButton_Widget0.setStyleSheet("color: red")
+            self.QPushButton_Widget0.setStyleSheet("color: orange")
     
     def estimateTime(self, params: Parameters):
         """

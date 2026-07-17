@@ -139,6 +139,44 @@ class GuiWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(self.dialog.collection_group.layout())
         self.assertIsNotNone(self.dialog.queue_widget.parent())
 
+    def test_measurement_mode_updates_related_controls(self):
+        self.dialog.QPushButton_Current_Widget.click()
+
+        self.assertEqual(self.dialog.params.unit, "CURRENT")
+        self.assertEqual(
+            self.dialog.QComboBox_set_Function.currentText(), "Voltage Priority"
+        )
+        self.assertFalse(self.dialog.Current_Test_group.isHidden())
+        self.assertTrue(self.dialog.Voltage_Test_group.isHidden())
+        self.assertFalse(self.dialog.QLineEdit_DMM_VisaAddressforCurrent.isHidden())
+        self.assertTrue(self.dialog.QLineEdit_rshunt.isEnabled())
+
+        self.dialog.QPushButton_Voltage_Widget.click()
+
+        self.assertEqual(self.dialog.params.unit, "VOLTAGE")
+        self.assertFalse(self.dialog.Voltage_Test_group.isHidden())
+        self.assertTrue(self.dialog.Current_Test_group.isHidden())
+        self.assertTrue(self.dialog.QLineEdit_DMM_VisaAddressforCurrent.isHidden())
+        self.assertFalse(self.dialog.QLineEdit_rshunt.isEnabled())
+
+    def test_oscilloscope_visibility_combines_all_requiring_tests(self):
+        scope_checkboxes = (
+            self.dialog.QCheckBox_OCP_Test_Widget,
+            self.dialog.QCheckBox_TransientRecovery_Widget,
+            self.dialog.QCheckBox_ProgrammingSpeed_Widget,
+        )
+        for checkbox in scope_checkboxes:
+            checkbox.setChecked(False)
+        self.dialog.InteractiveAction()
+        self.assertTrue(self.dialog.oscilloscope_settings_widget.isHidden())
+
+        for checkbox in scope_checkboxes:
+            checkbox.setChecked(True)
+            self.assertFalse(self.dialog.oscilloscope_settings_widget.isHidden())
+            checkbox.setChecked(False)
+
+        self.assertTrue(self.dialog.oscilloscope_settings_widget.isHidden())
+
     def test_state_controls_follow_worker_state(self):
         self.dialog.set_test_state(GUI.TestState.RUNNING)
         self.assertFalse(self.dialog.QPushButton_Widget1.isEnabled())
