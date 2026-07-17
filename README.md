@@ -100,6 +100,8 @@ Production test execution and cooperative pause, resume, and abort behavior live
 `src/GUI.py` remains the application entry point and legacy-dialog host, while the
 production `AllTestMeasurement` dialog and its direct UI helpers live in
 `src/all_test_dialog.py`.
+Mutable GUI parameter state and setup-file loading live in
+`src/test_parameters.py`, keeping dialog construction separate from configuration data.
 Each execution receives a `RunContext` from `src/run_context.py`. It owns the run
 tree, parameter snapshot, realtime CSV, chart paths, and diagnostics destinations;
 queued runs therefore do not share output files. Report generators infer their own

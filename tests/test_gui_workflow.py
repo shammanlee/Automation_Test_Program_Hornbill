@@ -176,7 +176,7 @@ class GuiWorkflowTests(unittest.TestCase):
         with patch.object(
             all_test_dialog, "ScanSelectedVisaResources", return_value=result
         ):
-            self.dialog.doFind()
+            self.dialog.QPushButton_Widget4.click()
 
         widgets = (
             self.dialog.QLineEdit_PSU_VisaAddress,

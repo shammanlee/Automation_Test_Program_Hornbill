@@ -1,15 +1,13 @@
 """Production all-tests dialog and its direct UI helpers."""
 
 import datetime
-import os
 import traceback
 from pathlib import Path
 
 import pyqtgraph as pg
-from PyQt5.QtCore import QObject, Qt, pyqtSlot
+from PyQt5.QtCore import Qt, pyqtSlot
 from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtWidgets import (
-    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -43,15 +41,10 @@ from instrument_discovery_ui import present_discovery_result
 from output_logging import append_timestamped_line, print_console_safe
 from output_capture import my_result
 from path import (
-    DATA_CSV_PATH,
-    ERROR_CSV_PATH,
     IMAGE_PATH,
     IMAGE_PATH_2,
-    POWER_DATA_CSV_PATH,
-    POWER_ERROR_CSV_PATH,
     POWER_IMAGE_PATH,
     config_folder,
-    setup_img_folder,
 )
 from preflight import validate_preflight
 from SCPI_Library.instrument_errors import CleanupError, normalize_execution_error
@@ -74,17 +67,6 @@ def ScanSelectedVisaResources(dialog):
     if dialog.QCheckBox_Hostname_Widget.isChecked():
         result.extend(GetVisaHostnameResources())
     return result
-
-
-class ComboBoxWheelFilter(QObject):
-    def eventFilter(self, obj, event):
-        if (
-            isinstance(obj, QComboBox)
-            and event.type() == event.Wheel
-            and not obj.view().isVisible()
-        ):
-            return True
-        return super().eventFilter(obj, event)
 
 
 class image_Window(QDialog):
@@ -167,182 +149,10 @@ class image_Window2(QDialog):
 #########----------------------- New Bundle Test (with Parameters)--------------------######################
 
 # Class Parameters: Read Instrument Configuration Txt File (Gain etc..)
-class Parameters:
-    def __init__(self):
-        super().__init__() 
-
-        # Initialize default CSV path
-        self.image_dialog = None
-        self.DATA_CSV_PATH = DATA_CSV_PATH
-        self.IMAGE_PATH = IMAGE_PATH
-        self.ERROR_CSV_PATH = ERROR_CSV_PATH
-        self.POWER_DATA_CSV_PATH = POWER_DATA_CSV_PATH
-        self.POWER_IMAGE_PATH = POWER_IMAGE_PATH 
-        self.POWER_ERROR_CSV_PATH = POWER_ERROR_CSV_PATH
-        self.CONFIG_PATH = config_folder
-
-        # Ensure DATA_CSV_PATH is defined before use
-        if not hasattr(self, 'DATA_CSV_PATH') or not self.DATA_CSV_PATH:
-            QMessageBox.warning(self, "Error", "CSV path is not set.")
-
-        if not hasattr(self, 'POWER_DATA_CSV_PATH') or not self.POWER_DATA_CSV_PATH:
-            QMessageBox.warning(self, "Error", "POWER CSV path is not set.")
-
-        #Image Setup
-        self.image_connections_path = {
-            "VoltageAccuracy": os.path.join(setup_img_folder , "1.png"),
-            "CurrentAccuracy": os.path.join(setup_img_folder , "2.png"),
-            "VoltageLoadRegulation": os.path.join(setup_img_folder , "3.png"),
-            "CurrentLoadRegulation": os.path.join(setup_img_folder , "4.png"),
-            "PowerAccuracy": os.path.join(setup_img_folder , "5.png"),
-            "TransientRecovery": os.path.join(setup_img_folder , "6.png"),
-            "OVP_Test": os.path.join(setup_img_folder , "7.png"),
-            "TestB": os.path.join(setup_img_folder , "8.png"),
-            "TestC": os.path.join(setup_img_folder , "9.png"),
-        }
-
-        #Initial Values
-        self.Voltage_Rating = None
-        self.Current_Rating = None
-        self.Power_Rating = None
-        self.Power =  None
-        self.currloop = None
-        self.voltloop =  None
-        self.estimatetime =  None
-        self.readbackvoltage =  None
-        self.readbackcurrent =  None
-        self.savelocation =  None
-        self.noofloop =  None
-        self.updatedelay =  None
-        self.unit =  None
-
-        self.Programming_Error_Offset =  None
-        self.Programming_Error_Gain =  None
-        self.Readback_Error_Offset =  None
-        self.Readback_Error_Gain =  None
-        self.Load_Programming_Error_Offset =  None
-        self.Load_Programming_Error_Gain =  None
-
-        self.Programming_Response_Up_NoLoad = None
-        self.Programming_Response_Up_FullLoad = None
-        self.Programming_Response_Down_NoLoad = None
-        self.Programming_Response_Down_FullLoad = None
-
-        self.OVP_ErrorGain = None
-        self.OVP_ErrorOffset = None
-
-        self.minCurrent = 0
-        self.maxCurrent = 0
-        self.current_step_size =  0
-        self.minVoltage =  0
-        self.maxVoltage =  0
-        self.voltage_step_size =  0
-
-        self.powerfin = self.Power
-        self.powerini = None
-        self.power_step_size = None
-        self.Power_Programming_Error_Offset = None
-        self.Power_Programming_Error_Gain = None
-        self.Power_Readback_Error_Offset = None
-        self.Power_Readback_Error_Gain = None
-
-        self.PSU =  None
-        self.OSC = None
-        self.DMM =  None
-        self.DMM2 = None
-        self.ELoad =  None
-        self.ELoad_Channel = None
-        self.PSU_Channel =  None
-        self.OSC_Channel = None
-        self.DMM_Instrument =  None
-        self.rshunt = None
-        self.OVP_Level = None
-        self.OCP_Level = None
-        self.OCPActivationTime = None
-        self.SPOperationMode = "Independent"
-
-        self.DMM_Model = "3458A"
-        self.ELoad_Model = "E367XXA"
-
-        self.setFunction =  None
-        self.VoltageRes =  None
-        self.VoltageSense =  None
-
-        self.Range = None
-        self.Aperture = None
-        self.AutoZero = None
-        self.inputZ = None
-        self.UpTime = None
-        self.DownTime = None
-        self.selected_text = "Others"
-
-        self.Channel_CouplingMode = None
-        self.Trigger_CouplingMode = None
-        self.Trigger_Mode = None
-        self.Trigger_SweepMode = None
-        self.Trigger_SlopeMode = None
-        self.TimeScale = None
-        self.VerticalScale = None
-        self.I_Step = None
-        self.V_Settling_Band = None
-        self.T_Settling_Band = None
-        self.Probe_Setting = None
-        self.Acq_Type = None
-
-        self.checkbox_SpecialCase = None
-        self.checkbox_NormalCase = None
-
-        self.ACSource= None
-        self.AC_CurrentLimit= 10
-        self.AC_VoltageOutput= 230
-        self.Frequency= 50
-        self.AC_Supply_Type= "Plug"
-        self.Line_Reg_Range= [100,115,230]
-
-        self.x_data = []
-        self.prog_data = []
-        self.read_data = []
-        self.up_data = []
-        self.low_data = []
-        self.counter = 0
-
-        self.load_data()
-
-        #Disable wheel move when hover over combobox
-        self.filter = ComboBoxWheelFilter()
-        QApplication.instance().installEventFilter(self.filter)
-    
-        # === NEW ADDITIONS ===
-    def __getitem__(self, key):
-        """Allow dictionary-style access (self.params['key'])"""
-        if hasattr(self, key):
-            return getattr(self, key)
-        else:
-            raise KeyError(f"'{key}' not found in Parameters")
-
-    def __setitem__(self, key, value):
-        """Allow dictionary-style assignment (self.params['key'] = value)"""
-        setattr(self, key, value)
-
-    def get(self, key, default=None):
-        return getattr(self, key, default)
-    
-    def update_selection(self, selected_text):
-        """Update selected text and reload config file"""
-        self.selected_text = selected_text
-        self.load_data()
-
-    def load_data(self):
-        """Load setup defaults for the selected DUT."""
-        self.config_file = str(configuration_path(config_folder, self.selected_text))
-        try:
-            config_data = load_configuration(self.config_file)
-        except FileNotFoundError:
-            print_console_safe("Config file not found. Using default values.")
-            return {}
-
-        apply_configuration(self, config_data)
-        return config_data
+from test_parameters import (
+    ComboBoxWheelFilter as ComboBoxWheelFilter,
+    Parameters as Parameters,
+)
 
 from test_worker import TestCancelled as TestCancelled, TestState, TestWorker
 from test_run_controller import TestRunController
@@ -355,11 +165,6 @@ from test_selection import (
     collect_test_selections,
     create_current_selection_widget,
     create_voltage_selection_widget,
-)
-from configuration_service import (
-    apply_configuration,
-    configuration_path,
-    load_configuration,
 )
 from test_queue_widget import TestQueueWidget
 from queue_persistence import QueuePersistence, QueuePersistenceError
@@ -415,6 +220,16 @@ class AllTestMeasurement(QDialog):
         self.last_Iset = None               #Shamman changes
         self.fail_prompt_active = False
 
+        self._build_ui()
+        self._connect_signals()
+
+        #Voltage/Current Test Selection with Enable/Disable Input Fields
+        self.select_button()
+        self.InteractiveAction()
+        self.Image_Label_Setup()
+        self._restore_pending_queue()
+
+    def _build_ui(self):
         #Create find button 
         self.QPushButton_Widget0 = QPushButton()
         self.QPushButton_Widget0.setText("Save Path")
@@ -422,12 +237,12 @@ class AllTestMeasurement(QDialog):
         self.QPushButton_Widget1.setText("Execute Test")
         self.queue_test_button = QPushButton("Add to Queue")
         self.queue_widget = TestQueueWidget()
-        QPushButton_Widget2 = QPushButton()
-        QPushButton_Widget2.setText("Advanced Settings")
-        QPushButton_Widget3 = QPushButton()
-        QPushButton_Widget3.setText("Estimate Data Collection Time")
-        QPushButton_Widget4 = QPushButton()
-        QPushButton_Widget4.setText("Find Instruments")
+        self.QPushButton_Widget2 = QPushButton()
+        self.QPushButton_Widget2.setText("Advanced Settings")
+        self.QPushButton_Widget3 = QPushButton()
+        self.QPushButton_Widget3.setText("Estimate Data Collection Time")
+        self.QPushButton_Widget4 = QPushButton()
+        self.QPushButton_Widget4.setText("Find Instruments")
         QPushButton_Widget5 = QPushButton()
         QPushButton_Widget5.setText("Return Home")
         
@@ -453,8 +268,8 @@ class AllTestMeasurement(QDialog):
         self.QCheckBox_NormalCase_Widget = QCheckBox()
         self.QCheckBox_NormalCase_Widget.setText("Normal Case (50% <-> 100%)")
         self.QCheckBox_NormalCase_Widget.setCheckState(Qt.Checked)
-        QCheckBox_Lock_Widget = QCheckBox()
-        QCheckBox_Lock_Widget.setText("🔒Lock Widget")
+        self.QCheckBox_Lock_Widget = QCheckBox()
+        self.QCheckBox_Lock_Widget.setText("🔒Lock Widget")
         self.QCheckBox_USB_Widget = QCheckBox()
         self.QCheckBox_USB_Widget.setText("USB")
         self.QCheckBox_IP_Widget = QCheckBox()
@@ -883,7 +698,7 @@ class AllTestMeasurement(QDialog):
         #save_path_layout.addWidget(QLineEdit_Save_Path)  # QLineEdit for the path
         save_path_layout.addWidget(self.QCheckBox_Report_Widget)  # Checkbox for "Generate Excel Report"
         save_path_layout.addWidget(self.QCheckBox_Image_Widget)  # Checkbox for "Show Graph"
-        save_path_layout.addWidget(QCheckBox_Lock_Widget)  # Checkbox for "Show Graph"
+        save_path_layout.addWidget(self.QCheckBox_Lock_Widget)  # Checkbox for "Show Graph"
 
 #+++++++++++++++++++++++++Layout Organization Part --(Organize Layout of GUI here)++++++++++++++++++++++++++++++++++++++++++++++++++++
         Voltage_Current_Selection_Layout = QVBoxLayout()
@@ -902,7 +717,7 @@ class AllTestMeasurement(QDialog):
         self.Connection_group = QGroupBox()
         Connection_layout = QFormLayout(self.Connection_group)
         Checkbox_row = QHBoxLayout(self.Connection_group)
-        Connection_layout.addRow(QPushButton_Widget4)
+        Connection_layout.addRow(self.QPushButton_Widget4)
         Checkbox_row.addWidget(self.QCheckBox_USB_Widget)
         Checkbox_row.addWidget(self.QCheckBox_IP_Widget)
         Checkbox_row.addWidget(self.QCheckBox_Hostname_Widget)
@@ -1035,8 +850,8 @@ class AllTestMeasurement(QDialog):
         exec_layout.addWidget(self.OutputBox)
         exec_layout.addRow(self.QPushButton_Widget0)
 
-        exec_layout.addRow(QPushButton_Widget3)
-        exec_layout.addRow(QPushButton_Widget2)
+        exec_layout.addRow(self.QPushButton_Widget3)
+        exec_layout.addRow(self.QPushButton_Widget2)
         exec_layout.addRow(self.QPushButton_Widget1)  
         exec_layout.addRow(self.queue_test_button)
         exec_layout.addRow(self.abort_button) 
@@ -1103,6 +918,8 @@ class AllTestMeasurement(QDialog):
         Main_Layout.addLayout(Right_container,stretch = 1)
         self.setLayout(Main_Layout)
 
+
+    def _connect_signals(self):
         #Action when values changed-------------------------------------------------------------------------------------------------------
         self.QPushButton_Voltage_Widget.clicked.connect(self.select_button)
         self.QPushButton_Current_Widget.clicked.connect(self.select_button)
@@ -1195,7 +1012,7 @@ class AllTestMeasurement(QDialog):
         self.QCheckBox_SpecialCase_Widget.stateChanged.connect(self.checkbox_state_SpecialCase)
         self.QCheckBox_NormalCase_Widget.stateChanged.connect(self.checkbox_state_NormalCase)
         self.QCheckBox_Report_Widget.stateChanged.connect(self.checkbox_state_Report)
-        QCheckBox_Lock_Widget.stateChanged.connect(self.checkbox_state_lock)
+        self.QCheckBox_Lock_Widget.stateChanged.connect(self.checkbox_state_lock)
         self.QCheckBox_Image_Widget.stateChanged.connect(self.checkbox_state_Image)
         self.QCheckBox_VoltageAccuracy_Widget.stateChanged.connect(self.toggle_voltage_accuracy_branch)
         self.QCheckBox_VoltageLoadRegulation_Widget.stateChanged.connect(self.checkbox_state_VoltageLoadRegulation)
@@ -1225,15 +1042,9 @@ class AllTestMeasurement(QDialog):
         self.run_controller.request_history_pruned.connect(
             self.queue_widget.remove_run
         )
-        QPushButton_Widget2.clicked.connect(self.openDialog)
-        QPushButton_Widget3.clicked.connect(self.estimateTime)
-        QPushButton_Widget4.clicked.connect(self.doFind)
-
-        #Voltage/Current Test Selection with Enable/Disable Input Fields
-        self.select_button()
-        self.InteractiveAction()
-        self.Image_Label_Setup()
-        self._restore_pending_queue()
+        self.QPushButton_Widget2.clicked.connect(self.openDialog)
+        self.QPushButton_Widget3.clicked.connect(self.estimateTime)
+        self.QPushButton_Widget4.clicked.connect(self.doFind)
     
     def toggle_current_accuracy_branch(self):
         self.CurrentAccuracy_Branch_Widget.setVisible(
