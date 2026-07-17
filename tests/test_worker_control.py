@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import GUI
 import test_worker
+import voltage_test_executor
 from DUT_Test_Scripts.instrument_shutdown import ShutdownResult
 from SCPI_Library.instrument_errors import TestExecutionError as ExecutionFailure
 from test_worker import TestCancelled, TestState, TestWorker
@@ -88,20 +89,21 @@ class WorkerControlTests(unittest.TestCase):
 
     def test_dut_voltage_handlers_run_shared_auxiliary_tests(self):
         cases = (
-            ("_run_dolphin_voltage_tests", "_run_dolphin_voltage_accuracy"),
-            ("_run_hornbill_voltage_tests", "_run_hornbill_voltage_accuracy"),
+            ("_run_dolphin_voltage_tests", "run_dolphin_accuracy"),
+            ("_run_hornbill_voltage_tests", "run_hornbill_accuracy"),
         )
 
         for handler_name, accuracy_name in cases:
             with self.subTest(handler=handler_name):
                 worker = create_worker()
+                executor = worker.voltage_executor
                 with patch.object(
-                    worker,
+                    executor,
                     accuracy_name,
                     return_value=False,
                 ) as accuracy, patch.object(
-                    worker,
-                    "_run_voltage_auxiliary_tests",
+                    executor,
+                    "run_auxiliary",
                 ) as auxiliary:
                     getattr(worker, handler_name)(3)
 
@@ -110,20 +112,21 @@ class WorkerControlTests(unittest.TestCase):
 
     def test_aborted_voltage_accuracy_skips_auxiliary_tests(self):
         cases = (
-            ("_run_dolphin_voltage_tests", "_run_dolphin_voltage_accuracy"),
-            ("_run_hornbill_voltage_tests", "_run_hornbill_voltage_accuracy"),
+            ("_run_dolphin_voltage_tests", "run_dolphin_accuracy"),
+            ("_run_hornbill_voltage_tests", "run_hornbill_accuracy"),
         )
 
         for handler_name, accuracy_name in cases:
             with self.subTest(handler=handler_name):
                 worker = create_worker()
+                executor = worker.voltage_executor
                 with patch.object(
-                    worker,
+                    executor,
                     accuracy_name,
                     return_value=True,
                 ), patch.object(
-                    worker,
-                    "_run_voltage_auxiliary_tests",
+                    executor,
+                    "run_auxiliary",
                 ) as auxiliary:
                     getattr(worker, handler_name)(3)
 
@@ -225,12 +228,12 @@ class WorkerControlTests(unittest.TestCase):
         cases = (
             (
                 "Dolphin",
-                test_worker.DOLPHIN_VOLTAGE_ACCURACY_RUNNERS,
+                voltage_test_executor.DOLPHIN_VOLTAGE_ACCURACY_RUNNERS,
                 "_run_dolphin_voltage_accuracy",
             ),
             (
                 "Hornbill",
-                test_worker.HORNBILL_VOLTAGE_ACCURACY_RUNNERS,
+                voltage_test_executor.HORNBILL_VOLTAGE_ACCURACY_RUNNERS,
                 "_run_hornbill_voltage_accuracy",
             ),
         )
@@ -280,7 +283,7 @@ class WorkerControlTests(unittest.TestCase):
             {"Instrument": "Keysight"},
             Parameters(noofloop=2, PSU_Channel=[1]),
         )
-        with patch.object(worker, "_export_voltage_accuracy") as export:
+        with patch.object(worker.voltage_executor, "export_accuracy") as export:
             worker._run_voltage_accuracy(0, runner)
             export.assert_not_called()
 
@@ -301,7 +304,7 @@ class WorkerControlTests(unittest.TestCase):
             {"Instrument": "Keysight"},
             Parameters(noofloop=1, PSU_Channel=[1]),
         )
-        with patch.object(worker, "_export_voltage_accuracy") as export:
+        with patch.object(worker.voltage_executor, "export_accuracy") as export:
             worker._run_voltage_accuracy(0, runner)
 
         export.assert_not_called()
@@ -451,7 +454,7 @@ class WorkerControlTests(unittest.TestCase):
             {},
             Parameters(noofloop=1, PSU_Channel=[1, 2]),
         )
-        with patch.object(worker, "_export_voltage_accuracy") as export:
+        with patch.object(worker.voltage_executor, "export_accuracy") as export:
             with self.assertRaises(TestCancelled):
                 worker._run_voltage_accuracy(0, runner)
 
@@ -475,11 +478,14 @@ class WorkerControlTests(unittest.TestCase):
             return ["measurement"]
 
         with patch.object(
-            test_worker.NewLoadRegulation,
+            voltage_test_executor.NewLoadRegulation,
             "executeCV_LoadRegulation",
             side_effect=stop_after_measurement,
-        ), patch.object(test_worker, "datatoCSV_LoadRegulation") as export, patch.object(
-            test_worker.RiseFallTime,
+        ), patch.object(
+            voltage_test_executor,
+            "datatoCSV_LoadRegulation",
+        ) as export, patch.object(
+            voltage_test_executor.RiseFallTime,
             "executeC",
         ) as transient:
             with self.assertRaises(TestCancelled):
@@ -499,10 +505,10 @@ class WorkerControlTests(unittest.TestCase):
             worker.request_stop()
 
         with patch.object(
-            test_worker,
+            voltage_test_executor,
             "instrumentData",
             side_effect=stop_after_instrument_data,
-        ), patch.object(test_worker, "datatoCSV_Accuracy") as export:
+        ), patch.object(voltage_test_executor, "datatoCSV_Accuracy") as export:
             with self.assertRaises(TestCancelled):
                 worker._export_voltage_accuracy(
                     ["info"],

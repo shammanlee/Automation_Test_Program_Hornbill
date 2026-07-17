@@ -11,15 +11,11 @@ from PyQt5.QtCore import QThread, pyqtSignal
 
 from path import csv_folder
 from data import (
-    datatoCSV_Accuracy,
     datatoCSV_Accuracy2,
     datatoCSV_Line_Regulation,
     datatoCSV_LoadRegulation,
     datatoCSV_OCP_Test,
-    datatoCSV_OVP_Accuracy,
     datatoCSV_PowerAccuracy,
-    datatoCSV_Programming_Response,
-    datatoGraph,
     datatoGraph2,
     datatoGraph3,
     instrumentData,
@@ -27,20 +23,16 @@ from data import (
 )
 from xlreport import xlreport
 from xlreportpower import xlreportpower
-from DUT_Test_Scripts.DUT_Test import NewCurrentMeasurement, NewVoltageMeasurement
+from DUT_Test_Scripts.DUT_Test import NewCurrentMeasurement
 from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
     LineRegulation,
     NewLoadRegulation,
     OCP_Activation_Time,
-    OVP_Test,
     PowerMeasurement,
-    ProgrammingResponse,
-    RiseFallTime,
 )
 from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
     HornbillCurrentMeasurementwithELoad_IMON_200uA,
     HornbillCurrentMeasurementwithELoad_IMON_2mA,
-    HornbillVoltageMeasurementwithELoad,
 )
 from DUT_Test_Scripts.execution_control import clear_execution_worker, set_execution_worker
 from DUT_Test_Scripts.instrument_shutdown import shutdown_instruments
@@ -52,6 +44,7 @@ from SCPI_Library.instrument_errors import (
 )
 from SCPI_Library.session_manager import begin_visa_session_scope, close_visa_session_scope
 from SCPI_Library.simulation import is_simulation_mode
+from voltage_test_executor import VoltageTestExecutor
 
 
 HORNBILL_CURRENT_ACCURACY_RUNNERS = {
@@ -66,28 +59,6 @@ HORNBILL_CURRENT_ACCURACY_RUNNERS = {
         HornbillCurrentMeasurementwithELoad_IMON_200uA.Execute_Current_Accuracy_Current_Static
     ),
 }
-
-DOLPHIN_VOLTAGE_ACCURACY_RUNNERS = {
-    "CurrentStatic(VoltageChange)": (
-        NewVoltageMeasurement.Execute_Voltage_Accuracy_Current_Static
-    ),
-    "CurrentChange(LoadChange)": (
-        NewVoltageMeasurement.Execute_Voltage_Accuracy_Current_Change
-    ),
-}
-
-HORNBILL_VOLTAGE_ACCURACY_RUNNERS = {
-    "CurrentStatic(VoltageChange)": (
-        HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Static
-    ),
-    "CurrentChange(LoadChange)": (
-        HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change
-    ),
-    "CurrentStatic(VoltageChange) with Oscilloscope": (
-        HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change
-    ),
-}
-
 
 class TestState(Enum):
     IDLE = "IDLE"
@@ -141,6 +112,7 @@ class TestWorker(QThread):
         self._stop_requested = False
         self.state = TestState.IDLE
         self.force_exit = False   # ✅ Add this line
+        self.voltage_executor = VoltageTestExecutor(self)
 
     def _set_state(self, state):
         if state == self.state:
@@ -250,20 +222,6 @@ class TestWorker(QThread):
         )
         config_frame.to_csv(os.path.join(output_directory, file_name))
 
-    def _save_voltage_report(self):
-        file_name = str(self.params["unit"])
-        if is_simulation_mode():
-            file_name = f"SIMULATED_{file_name}"
-        report = xlreport(
-            save_directory=self.params["savelocation"],
-            file_name=file_name,
-        )
-        report.run()
-        self.progress.emit(
-            "Excel Report Saved: " + str(self.params["savelocation"])
-        )
-        self.progress.emit("")
-
     def _save_power_report(self):
         file_name = (
             "Power_CV" if self.params["setFunction"] == "Current" else "Power_CC"
@@ -297,84 +255,10 @@ class TestWorker(QThread):
             self.progress.emit("All measurements completed!")
 
     def _run_dolphin_voltage_tests(self, loop_index):
-        self.checkpoint()
-        if self._run_dolphin_voltage_accuracy(loop_index):
-            return
-
-        self.checkpoint()
-        self._run_voltage_auxiliary_tests()
-        self.checkpoint()
+        return self.voltage_executor.run_dolphin(loop_index)
 
     def _run_voltage_auxiliary_tests(self):
-        self.checkpoint()
-        #Voltage Load Regulation
-        if self.checkbox_states.get("VoltageLoadRegulation"):
-            if self.params["Instrument"] == "Keysight":
-                for ch in self.params["PSU_Channel"]:
-                    self.results = self._execute_checkpointed(
-                        NewLoadRegulation.executeCV_LoadRegulation,
-                        self,
-                        self.dict,
-                    )
-                    os.system('cls')
-                    self._execute_checkpointed(
-                        datatoCSV_LoadRegulation,
-                        self.results,
-                        self.params,
-                    )
-
-        #Transient Recovery
-        if self.checkbox_states.get("TransientRecovery"):
-            if self.checkbox_states["SpecialCase"]:
-                self._execute_checkpointed(RiseFallTime.executeC, self, self.dict)
-
-            if self.checkbox_states["NormalCase"]:
-                self._execute_checkpointed(RiseFallTime.executeC, self, self.dict)
-
-        #OVP Accuracy Test
-        if self.checkbox_states.get("OVP_Test"):
-            self.results = self._execute_checkpointed(
-                OVP_Test.Execute_OVP,
-                self,
-                self.dict,
-            )
-            os.system('cls')
-            self._execute_checkpointed(
-                datatoCSV_OVP_Accuracy,
-                self.results,
-                self.params,
-            )
-
-        #Voltage Line RegulationW
-        if self.checkbox_states.get("VoltageLineRegulation"):
-            self.results = self._execute_checkpointed(
-                LineRegulation.executeCV_LoadRegulation,
-                self,
-                self.dict,
-            )
-            #os.system('cls')
-            self._execute_checkpointed(
-                datatoCSV_Line_Regulation,
-                self.results,
-                self.params,
-            )
-
-        #Programming Responses
-        if self.checkbox_states.get("ProgrammingSpeed"):
-            test = ProgrammingResponse()
-            self.results, self.currenttime = self._execute_checkpointed(
-                test.execute,
-                self.dict,
-            )
-            os.system('cls')
-            self._execute_checkpointed(
-                datatoCSV_Programming_Response,
-                self.results,
-                self.currenttime,
-                self.params,
-            )
-
-        self.checkpoint()
+        return self.voltage_executor.run_auxiliary()
 
     def _run_dolphin_current_tests(self, loop_index):
         self.checkpoint()
@@ -525,67 +409,22 @@ class TestWorker(QThread):
             self.progress.emit("No DUT selected. Please select a DUT to perform the test.")
 
     def _run_hornbill_voltage_tests(self, loop_index):
-        self.checkpoint()
-        if self._run_hornbill_voltage_accuracy(loop_index):
-            return
-
-        self.checkpoint()
-        self._run_voltage_auxiliary_tests()
-        self.checkpoint()
+        return self.voltage_executor.run_hornbill(loop_index)
 
     def _selected_voltage_accuracy_runner(self, runners):
-        for selection, runner in runners.items():
-            if self.checkbox_states.get(selection):
-                return runner
-        return None
+        return self.voltage_executor.selected_accuracy_runner(runners)
 
     def _run_voltage_accuracy(self, loop_index, runner):
-        for channel in self.params["PSU_Channel"]:
-            info_list, data_list, readback_list = self._execute_checkpointed(
-                runner,
-                self,
-                self.dict,
-                channel,
-                worker=self,
-            )
-            if loop_index == int(self.params["noofloop"]) - 1:
-                self.progress.emit("✅Measurement is complete !")
-                if self.checkbox_states["DataReport"]:
-                    self._export_voltage_accuracy(
-                        info_list,
-                        data_list,
-                        readback_list,
-                    )
-
-            if self.force_exit:
-                self.progress.emit("Operation aborted")
-                return True
-
-        return False
+        return self.voltage_executor.run_accuracy(loop_index, runner)
 
     def _run_dolphin_voltage_accuracy(self, loop_index):
-        return self._run_selected_voltage_accuracy(
-            loop_index,
-            DOLPHIN_VOLTAGE_ACCURACY_RUNNERS,
-        )
+        return self.voltage_executor.run_dolphin_accuracy(loop_index)
 
     def _run_hornbill_voltage_accuracy(self, loop_index):
-        return self._run_selected_voltage_accuracy(
-            loop_index,
-            HORNBILL_VOLTAGE_ACCURACY_RUNNERS,
-        )
+        return self.voltage_executor.run_hornbill_accuracy(loop_index)
 
     def _run_selected_voltage_accuracy(self, loop_index, runners):
-        if not self.checkbox_states.get("VoltageAccuracy"):
-            return False
-        if self.dict["Instrument"] != "Keysight":
-            return False
-
-        runner = self._selected_voltage_accuracy_runner(runners)
-        if runner is None:
-            return False
-
-        return self._run_voltage_accuracy(loop_index, runner)
+        return self.voltage_executor.run_selected_accuracy(loop_index, runners)
 
     def _export_voltage_accuracy(
         self,
@@ -593,36 +432,11 @@ class TestWorker(QThread):
         data_list,
         readback_list,
     ):
-        self._execute_checkpointed(
-            instrumentData,
-            self.params["PSU"],
-            self.params["DMM"],
-            self.params["ELoad"],
-        )
-        self._execute_checkpointed(
-            datatoCSV_Accuracy,
+        return self.voltage_executor.export_accuracy(
             info_list,
             data_list,
             readback_list,
         )
-        self._execute_checkpointed(
-            datatoGraph,
-            info_list,
-            data_list,
-            readback_list,
-        )
-        self._execute_checkpointed(
-            datatoGraph.scatterCompareVoltage,
-            self,
-            float(self.params["Programming_Error_Gain"]),
-            float(self.params["Programming_Error_Offset"]),
-            float(self.params["Readback_Error_Gain"]),
-            float(self.params["Readback_Error_Offset"]),
-            str(self.params["unit"]),
-            float(self.params["Voltage_Rating"]),
-        )
-        self._execute_checkpointed(self._write_config_csv, "config.csv")
-        self._execute_checkpointed(self._save_voltage_report)
 
     def _run_current_accuracy(self, loop_index, runner):
         for channel in self.params["PSU_Channel"]:
