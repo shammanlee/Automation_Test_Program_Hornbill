@@ -261,6 +261,7 @@ class AllTestMeasurement(QDialog):
         self.run_controller.request_queued.connect(self._queue_request_added)
         self.run_controller.request_status_changed.connect(self._queue_status_changed)
         self.run_controller.request_setup_failed.connect(self._queue_setup_failed)
+        self.run_controller.queue_halted.connect(self._queue_halted)
         self.run_controller.queue_changed.connect(self._persist_pending_queue)
         self.test_state = TestState.IDLE
         self._cleanup_done = False
@@ -1294,6 +1295,12 @@ class AllTestMeasurement(QDialog):
         )
         show_error_dialog(self, exception, traceback_text)
         self.cleanup_test(reason="queue-setup-failed")
+
+    def _queue_halted(self, request, status):
+        self.OutputBox.append(
+            f"Queue halted after '{request.label}' {status.lower()}. "
+            "Review the failure, then click Run Queue to continue pending tests."
+        )
 
     def _remove_queued_run(self, run_id):
         self.run_controller.remove_pending(run_id)

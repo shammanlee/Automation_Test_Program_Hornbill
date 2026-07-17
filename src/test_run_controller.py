@@ -34,13 +34,21 @@ class TestRunController(QObject):
     request_status_changed = pyqtSignal(object, str)
     request_setup_failed = pyqtSignal(object, object, str)
     request_history_pruned = pyqtSignal(str)
+    queue_halted = pyqtSignal(object, str)
 
     TERMINAL_STATUSES = {"Completed", "Failed", "Aborted", "Removed"}
 
-    def __init__(self, worker_factory=TestWorker, parent=None, history_limit=200):
+    def __init__(
+        self,
+        worker_factory=TestWorker,
+        parent=None,
+        history_limit=200,
+        halt_on_failure=True,
+    ):
         super().__init__(parent)
         self._worker_factory = worker_factory
         self._history_limit = max(0, int(history_limit))
+        self.halt_on_failure = bool(halt_on_failure)
         self._queue = deque()
         self._terminal_history = deque()
         self._requests_by_id = {}
@@ -206,7 +214,7 @@ class TestRunController(QObject):
             self._set_status(request, "Failed")
             self.request_setup_failed.emit(request, exception, traceback_text)
             self.active_request = None
-            QTimer.singleShot(0, self._start_next)
+            self._advance_queue(request, "Failed")
             return
         worker = self._worker_factory(
             request.checkbox_states,
@@ -233,6 +241,12 @@ class TestRunController(QObject):
         self._set_status(request, status)
         self.active_worker = None
         self.active_request = None
+        self._advance_queue(request, status)
+
+    def _advance_queue(self, request, status):
+        if status == "Failed" and self.halt_on_failure and self._queue:
+            self.queue_halted.emit(request, status)
+            return
         QTimer.singleShot(0, self._start_next)
 
     def _worker_state_changed(self, request, state):
