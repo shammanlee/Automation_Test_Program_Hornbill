@@ -8,6 +8,7 @@ include = [
     "src/error_dialogs.py",
     "src/instrument_discovery.py",
     "src/instrument_discovery_ui.py",
+    "src/measurement_report_exporter.py",
     "src/output_logging.py",
     "src/output_capture.py",
     "src/preflight.py",

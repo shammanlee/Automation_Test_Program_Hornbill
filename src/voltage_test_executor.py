@@ -3,15 +3,11 @@
 import os
 
 from data import (
-    datatoCSV_Accuracy,
     datatoCSV_Line_Regulation,
     datatoCSV_LoadRegulation,
     datatoCSV_OVP_Accuracy,
     datatoCSV_Programming_Response,
-    datatoGraph,
-    instrumentData,
 )
-from xlreport import xlreport
 from DUT_Test_Scripts.DUT_Test import NewVoltageMeasurement
 from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
     LineRegulation,
@@ -23,7 +19,6 @@ from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
 from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
     HornbillVoltageMeasurementwithELoad,
 )
-from SCPI_Library.simulation import is_simulation_mode
 
 
 DOLPHIN_VOLTAGE_ACCURACY_RUNNERS = {
@@ -49,8 +44,9 @@ HORNBILL_VOLTAGE_ACCURACY_RUNNERS = {
 
 
 class VoltageTestExecutor:
-    def __init__(self, worker):
+    def __init__(self, worker, report_exporter):
         self.worker = worker
+        self.report_exporter = report_exporter
 
     def run_dolphin(self, loop_index):
         self.worker.checkpoint()
@@ -207,49 +203,11 @@ class VoltageTestExecutor:
         data_list,
         readback_list,
     ):
-        worker = self.worker
-        worker._execute_checkpointed(
-            instrumentData,
-            worker.params["PSU"],
-            worker.params["DMM"],
-            worker.params["ELoad"],
-        )
-        worker._execute_checkpointed(
-            datatoCSV_Accuracy,
+        return self.report_exporter.export_voltage_accuracy(
             info_list,
             data_list,
             readback_list,
         )
-        worker._execute_checkpointed(
-            datatoGraph,
-            info_list,
-            data_list,
-            readback_list,
-        )
-        worker._execute_checkpointed(
-            datatoGraph.scatterCompareVoltage,
-            worker,
-            float(worker.params["Programming_Error_Gain"]),
-            float(worker.params["Programming_Error_Offset"]),
-            float(worker.params["Readback_Error_Gain"]),
-            float(worker.params["Readback_Error_Offset"]),
-            str(worker.params["unit"]),
-            float(worker.params["Voltage_Rating"]),
-        )
-        worker._execute_checkpointed(worker._write_config_csv, "config.csv")
-        worker._execute_checkpointed(self.save_report)
 
     def save_report(self):
-        worker = self.worker
-        file_name = str(worker.params["unit"])
-        if is_simulation_mode():
-            file_name = f"SIMULATED_{file_name}"
-        report = xlreport(
-            save_directory=worker.params["savelocation"],
-            file_name=file_name,
-        )
-        report.run()
-        worker.progress.emit(
-            "Excel Report Saved: " + str(worker.params["savelocation"])
-        )
-        worker.progress.emit("")
+        return self.report_exporter.save_voltage_report()
