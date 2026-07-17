@@ -6,6 +6,9 @@
 Calibration development remains gated until the baseline hardware checks below
 pass with the intended DUT and instrument setup.
 
+Record the release candidate, instrument inventory, safety outcomes, and DUT matrix
+in `HARDWARE_VALIDATION_RESULTS.md` while performing this checklist.
+
 Use this checklist after worker, VISA, shutdown, or measurement changes. Automated
 tests use mocked instruments and do not replace this validation.
 

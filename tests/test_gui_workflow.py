@@ -140,6 +140,12 @@ class GuiWorkflowTests(unittest.TestCase):
     def test_ui_builders_assemble_expected_sections(self):
         self.assertEqual(self.dialog.layout().count(), 4)
         self.assertIsNotNone(self.dialog.Connection_group.layout())
+
+    def test_ocp_level_updates_parameters_and_output(self):
+        self.dialog.OCP_Level_changed("2.5")
+
+        self.assertEqual(self.dialog.params.OCP_Level, "2.5")
+        self.assertIn("OCP Level Set to: 2.5", self.dialog.OutputBox.toPlainText())
         self.assertIsNotNone(self.dialog.General_group.layout())
         self.assertIsNotNone(self.dialog.Ratings_Widget.layout())
         self.assertIsNotNone(self.dialog.oscilloscope_settings_widget.layout())

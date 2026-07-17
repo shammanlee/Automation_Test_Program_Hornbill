@@ -16,7 +16,6 @@ import pandas as pd
 from datetime import datetime
 from time import time
 from DUT_Test_Scripts.execution_control import sleep
-from SCPI_Library.visa_config import configure_visa_resource
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 import traceback
@@ -24,128 +23,12 @@ import traceback
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from SCPI_Library.IEEEStandard import OPC, WAI, TRG, RST, CLS
 from SCPI_Library.Keysight import *
-
-#Dictionary
-class dictGenerator(object):
-    """Accept the Parameters Input from GUI"""
-    def __init__():
-        pass
-
-    def input(**kwargs):
-        return kwargs
-
-#Import SCPI command list
-class Dimport:
-    """Import SCPI Library py class to DUT_Test"""
-
-    def __init__():
-        pass
-
-    def getClasses(module_name):
-        """Declare the module based on the module name given
-
-        Args:
-            module_name: Determines which library will the program import from
-
-        Returns:
-            Returns a set of Modules imported from a library
-        """
-
-        module_full_name = f"SCPI_Library.{module_name}"
-        module = __import__(module_full_name, fromlist=["*"])
-        Read = getattr(module, "Read")
-        Apply = getattr(module, "Apply")
-        Display = getattr(module, "Display")
-        Function = getattr(module, "Function")
-        Frequency = getattr(module, "Frequency")
-        Output = getattr(module, "Output")
-        Measure = getattr(module, "Measure")
-        Sense = getattr(module, "Sense")
-        Configure = getattr(module, "Configure")
-        Delay = getattr(module, "Delay")
-        Trigger = getattr(module, "Trigger")
-        Sample = getattr(module, "Sample")
-        Initiate = getattr(module, "Initiate")
-        Fetch = getattr(module, "Fetch")
-        Status = getattr(module, "Status")
-        Voltage = getattr(module, "Voltage")
-        Current = getattr(module, "Current")
-        Oscilloscope = getattr(module, "Oscilloscope")
-        Excavator = getattr(module, "Excavator")
-        SMU = getattr(module, "SMU")
-        Power = getattr(module, "Power")
-
-        return (
-            Read,
-            Apply,
-            Display,
-            Function,
-            Frequency,
-            Output,
-            Measure,
-            Sense,
-            Configure,
-            Delay,
-            Trigger,
-            Sample,
-            Initiate,
-            Fetch,
-            Status,
-            Voltage,
-            Current,
-            Oscilloscope,
-            Excavator,
-            SMU,
-            Power,
-        )
-
-#Check Visa IO address
-class VisaResourceManager:
-    """Manage the VISA Resources
-
-    Attributes:
-        args: args should contain one or multiple string containing the Visa Address of an dict["Instrument"]
-
-    """
-
-    def __init__(self):
-        """Initiate the object rm as Resource Manager"""
-        rm = pyvisa.ResourceManager()
-        self.rm = rm
-
-    def openRM(self, *args):
-        """Open the VISA Resources to be used
-
-        The program also initiates and standardize certain specifications such as the baud rate.
-
-            Args:
-                *args: to declare single or multiple VISA Resources
-
-            Returns:
-                Return a Boolean to the program whether there were any errors encountered.
-
-            Raises:
-                VisaIOError: An error occured when opening PyVisa Resources
-
-        """
-        try:
-            for i in range(len(args)):
-                instr = configure_visa_resource(self.rm.open_resource(args[i]))
-                instr.baud_rate = 9600
-
-            return 1, None
-        except pyvisa.VisaIOError as e:
-            print(e.args)
-            return 0, e.args
-
-    def closeRM(self):
-        """Closes the Visa Resources when not in used"""
-        self.rm.close()
-
-
-def _execution_checkpoint(worker):
-    if worker is not None:
-        worker.checkpoint()
+from DUT_Test_Scripts.scpi_runtime import (
+    DictGenerator as dictGenerator,
+    DolphinDimport as Dimport,
+    VisaResourceManager,
+    execution_checkpoint as _execution_checkpoint,
+)
 
 ######################################################################
 class NewVoltageMeasurement:

@@ -2,10 +2,13 @@
 target-version = "py311"
 include = [
     "src/all_test_dialog.py",
+    "src/all_test_signal_bindings.py",
     "src/configuration_service.py",
     "src/current_test_executor.py",
     "src/diagnostics.py",
+    "src/dialog_registry.py",
     "src/error_dialogs.py",
+    "src/execution_journal.py",
     "src/instrument_discovery.py",
     "src/instrument_discovery_ui.py",
     "src/measurement_report_exporter.py",
@@ -30,6 +33,7 @@ include = [
     "SCPI_Library/visa_config.py",
     "DUT_Test_Scripts/execution_control.py",
     "DUT_Test_Scripts/instrument_shutdown.py",
+    "DUT_Test_Scripts/scpi_runtime.py",
     "tests/*.py",
 ]
 

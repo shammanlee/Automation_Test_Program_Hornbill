@@ -119,6 +119,10 @@ VISA enumeration, identity queries, IP/hostname classification, model-role mappi
 and discovery-resource cleanup live in `src/instrument_discovery.py`.
 Production widget population and automatic role selection live in
 `src/instrument_discovery_ui.py`.
+Production dialog signal declarations live in `src/all_test_signal_bindings.py`,
+and the legacy launcher uses `src/dialog_registry.py` instead of an index-based
+dialog chain. Shared DUT SCPI class loading and VISA preflight plumbing live in
+`DUT_Test_Scripts/scpi_runtime.py`.
 
 Use **Add to Queue** to snapshot the current setup without starting it. Pending rows
 can be reordered or removed, and **Run Queue** executes them sequentially. Every row
@@ -139,6 +143,11 @@ again. A run that was active when the application exited is restored as
 `Interrupted` with its previous artifact-directory path. It never starts
 automatically; review its output and retry or remove it manually. Completed, failed,
 and aborted rows are not restored.
+
+Each run also writes `logs/execution_checkpoint.json` after a complete loop. Retrying
+an interrupted run continues from the next fully completed loop and links the new
+run to the previous artifact directory. A partially completed loop is intentionally
+restarted because resuming from an unknown SCPI command would be unsafe.
 
 The old multithread voltage prototype is retained under `src/experiments/` and is
 loaded only when its legacy dialog is explicitly opened.

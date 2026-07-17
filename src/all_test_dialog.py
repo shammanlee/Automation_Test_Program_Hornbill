@@ -168,6 +168,7 @@ from test_selection import (
 )
 from test_queue_widget import TestQueueWidget
 from queue_coordinator import QueueCoordinator
+from all_test_signal_bindings import connect_all_test_signals
 from realtime_plot import RealtimeMeasurement, RealtimePlotSeries
 from run_context import RunContext
 
@@ -1095,121 +1096,7 @@ class AllTestMeasurement(QDialog):
 
 
     def _connect_signals(self):
-        #Action when values changed-------------------------------------------------------------------------------------------------------
-        self.QPushButton_Voltage_Widget.clicked.connect(self.select_button)
-        self.QPushButton_Current_Widget.clicked.connect(self.select_button)
-
-        #Oscilloscope
-        self.QLineEdit_V_Settling_Band.textEdited.connect(self.V_Settling_Band_changed)
-        self.QLineEdit_T_Settling_Band.textEdited.connect(self.T_Settling_Band_changed)
-        self.QLineEdit_OSC_Display_Channel.textEdited.connect(self.OSC_Channel_changed)
-        self.QComboBox_Channel_CouplingMode.currentTextChanged.connect(self.Channel_CouplingMode_changed )
-        self.QComboBox_Trigger_CouplingMode.currentTextChanged.connect(
-            self.Trigger_CouplingMode_changed
-        )
-        self.QComboBox_Trigger_Mode.currentTextChanged.connect(self.Trigger_Mode_changed)
-        self.QComboBox_Trigger_SweepMode.currentTextChanged.connect(
-            self.Trigger_SweepMode_changed
-        )
-        self.QComboBox_Trigger_SlopeMode.currentTextChanged.connect(
-            self.Trigger_SlopeMode_changed
-        )
-        self.QComboBox_Probe_Setting.currentTextChanged.connect(
-            self.Probe_Setting_changed
-        )
-        self.QComboBox_Acq_Type.currentTextChanged.connect(
-            self.Acq_Type_changed
-        )
-        self.QLineEdit_TimeScale.textEdited.connect(self.TimeScale_changed)
-        self.QLineEdit_VerticalScale.textEdited.connect(self.VerticalScale_changed)
-
-        #Visa Address / DUT changed
-        self.QComboBox_DUT.currentTextChanged.connect(self.DUT_changed)
-        self.QLineEdit_PSU_VisaAddress.currentTextChanged.connect(self.PSU_VisaAddress_changed)
-        self.QLineEdit_DMM_VisaAddressforVoltage.currentTextChanged.connect(self.DMM_VisaAddressforVoltage_changed)
-        self.QLineEdit_DMM_VisaAddressforCurrent.currentTextChanged.connect(self.DMM_VisaAddressforCurrent_changed)
-        self.QLineEdit_OSC_VisaAddress.currentTextChanged.connect(self.OSC_VisaAddress_changed)
-        self.QLineEdit_ELoad_VisaAddress.currentTextChanged.connect(self.ELoad_VisaAddress_changed)
-        self.QComboBox_DMM_Instrument.currentTextChanged.connect(self.DMM_Instrument_changed)
-        self.QComboBox_DUT.currentIndexChanged.connect(self.on_current_index_changed)
-        self.QComboBox_AC_Supply_Type.currentTextChanged.connect(self.AC_Supply_Type_changed)
-
-        #Gain changed
-        self.QLineEdit_Programming_Error_Gain.textEdited.connect(self.Programming_Error_Gain_changed)
-        self.QLineEdit_Programming_Error_Offset.textEdited.connect(self.Programming_Error_Offset_changed)
-        self.QLineEdit_Readback_Error_Gain.textEdited.connect(self.Readback_Error_Gain_changed)
-        self.QLineEdit_Readback_Error_Offset.textEdited.connect(self.Readback_Error_Offset_changed)
-        self.QLineEdit_Load_Programming_Error_Gain.textEdited.connect(self.Load_Programming_Error_Gain_changed)
-        self.QLineEdit_Load_Programming_Error_Offset.textEdited.connect(self.Load_Programming_Error_Offset_changed)
-        self.QLineEdit_Power_Programming_Error_Gain.textEdited.connect(self.Power_Programming_Error_Gain_changed)
-        self.QLineEdit_Power_Programming_Error_Offset.textEdited.connect(self.Power_Programming_Error_Offset_changed)
-        self.QLineEdit_Power_Readback_Error_Gain.textEdited.connect(self.Power_Readback_Error_Gain_changed)
-        self.QLineEdit_Power_Readback_Error_Offset.textEdited.connect(self.Power_Readback_Error_Offset_changed)
-        self.QLineEdit_Programming_Response_Up_NoLoad.textEdited.connect(self.Programming_Response_Up_NoLoad_changed)
-        self.QLineEdit_Programming_Response_Up_FullLoad.textEdited.connect(self.Programming_Response_Up_FullLoad_changed)
-        self.QLineEdit_Programming_Response_Down_NoLoad.textEdited.connect(self.Programming_Response_Down_NoLoad_changed)
-        self.QLineEdit_Programming_Response_Down_FullLoad.textEdited.connect(self.Programming_Response_Down_FullLoad_changed)
-
-        #Voltage/Current/Power changed
-        self.QLineEdit_current_rated.textEdited.connect(self.Current_Rating_changed)
-        self.QLineEdit_voltage_rated.textEdited.connect(self.Voltage_Rating_changed)
-        self.QLineEdit_minVoltage.textEdited.connect(self.minVoltage_changed)
-        self.QLineEdit_maxVoltage.textEdited.connect(self.maxVoltage_changed)
-        self.QLineEdit_minCurrent.textEdited.connect(self.minCurrent_changed)
-        self.QLineEdit_maxCurrent.textEdited.connect(self.maxCurrent_changed)
-        self.QLineEdit_voltage_stepsize.textEdited.connect(self.voltage_step_size_changed)
-        self.QLineEdit_current_stepsize.textEdited.connect(self.current_step_size_changed)
-        
-        #Power changed
-        self.QLineEdit_Power.textEdited.connect(self.Power_changed)
-        self.QLineEdit_power_rated.textEdited.connect(self.Power_Rating_changed)
-        self.QLineEdit_power_step_size.textEdited.connect(self.power_step_size_changed)
-        self.QLineEdit_PowerINI.textEdited.connect(self.PowerINI_changed)
-        self.QLineEdit_rshunt.textEdited.connect(self.rshunt_changed)
-
-        #DUT channel/ Function changed
-        self.QComboBox_set_PSU_Channel.currentTextChanged.connect(self.set_PSU_Channel_changed)
-        self.QComboBox_set_ELoad_Channel.currentTextChanged.connect(self.ELoad_Channel_changed)
-        self.QComboBox_set_Function.currentTextChanged.connect(self.set_Function_changed)
-        self.QComboBox_Voltage_Res.currentTextChanged.connect(self.set_VoltageRes_changed)
-        self.QComboBox_Voltage_Sense.currentTextChanged.connect(self.set_VoltageSense_changed)
-
-        self.QLineEdit_OVP_Level.textEdited.connect(self.OVP_Level_changed)
-        self.QLineEdit_OCP_Level.textEdited.connect(self.OCP_Level_changed)
-        self.QLineEdit_OCP_ActivationTime_Error.textEdited.connect(self.OCP_Activation_Time_changed)
-        self.QComboBox_SPOperationMode.currentTextChanged.connect(self.SPOperationMode_changed)
-
-        self.QComboBox_Line_Reg_Range.currentTextChanged.connect(self.Line_Reg_Range_changed)
-
-        #No of collection / Checkbox changed
-        self.QComboBox_noofloop.currentTextChanged.connect(self.noofloop_changed)
-        self.QComboBox_updatedelay.currentTextChanged.connect(self.updatedelay_changed)
-        self.QCheckBox_SpecialCase_Widget.stateChanged.connect(self.checkbox_state_SpecialCase)
-        self.QCheckBox_NormalCase_Widget.stateChanged.connect(self.checkbox_state_NormalCase)
-        self.QCheckBox_Report_Widget.stateChanged.connect(self.checkbox_state_Report)
-        self.QCheckBox_Lock_Widget.stateChanged.connect(self.checkbox_state_lock)
-        self.QCheckBox_Image_Widget.stateChanged.connect(self.checkbox_state_Image)
-        self.QCheckBox_VoltageAccuracy_Widget.stateChanged.connect(self.toggle_voltage_accuracy_branch)
-        self.QCheckBox_VoltageLoadRegulation_Widget.stateChanged.connect(self.checkbox_state_VoltageLoadRegulation)
-        self.QCheckBox_TransientRecovery_Widget.stateChanged.connect(self.checkbox_state_TransientRecovery)
-        self.QCheckBox_CurrentAccuracy_Widget.stateChanged.connect(self.toggle_current_accuracy_branch)
-        self.QCheckBox_CurrentLoadRegulation_Widget.stateChanged.connect(self.checkbox_state_CurrentLoadRegulation)
-        self.QCheckBox_PowerAccuracy_Widget.stateChanged.connect(self.checkbox_state_PowerAccuracy)
-        self.QCheckBox_OVP_Test_Widget.stateChanged.connect(self.checkbox_state_OVP_Test)
-        self.QCheckBox_OCP_Test_Widget.stateChanged.connect(self.checkbox_state_OCP_Test)
-        self.QCheckBox_CurrentLineRegulation_Widget.stateChanged.connect(self.checkbox_state_VoltageLine)
-        self.QCheckBox_VoltageLineRegulation_Widget.stateChanged.connect(self.checkbox_state_CurrentLine)
-        self.QCheckBox_ProgrammingSpeed_Widget.stateChanged.connect(self.checkbox_state_ProgrammingSpeed_Test)
-
-        #Push Button Action
-        self.QPushButton_Widget0.clicked.connect(self.savepath)
-        self.QPushButton_Widget1.clicked.connect(self.executeTest)
-        self.queue_test_button.clicked.connect(
-            lambda: self.executeTest(queue_only=True)
-        )
-        self.QPushButton_Widget2.clicked.connect(self.openDialog)
-        self.QPushButton_Widget3.clicked.connect(self.estimateTime)
-        self.QPushButton_Widget4.clicked.connect(self.doFind)
+        connect_all_test_signals(self)
     
     def toggle_current_accuracy_branch(self):
         self.CurrentAccuracy_Branch_Widget.setVisible(
@@ -1739,8 +1626,8 @@ class AllTestMeasurement(QDialog):
         self.OutputBox.setPlainText("OVP Level Set to: " + str(self.params.OVP_Level))
     
     def OCP_Level_changed(self, s):
-        self.OCP_Level = s
-        self.params.OutputBox.setPlainText("OCP Level Set to: " + str(self.params.OCP_Level))
+        self.params.OCP_Level = s
+        self.OutputBox.setPlainText("OCP Level Set to: " + str(self.params.OCP_Level))
     
     def OCP_Activation_Time_changed(self,s):
         self.params.OCPActivationTime = s

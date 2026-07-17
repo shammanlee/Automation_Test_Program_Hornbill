@@ -19,6 +19,7 @@ from SCPI_Library.instrument_errors import (
 from SCPI_Library.session_manager import begin_visa_session_scope, close_visa_session_scope
 from measurement_report_exporter import MeasurementReportExporter
 from voltage_test_executor import VoltageTestExecutor
+from execution_journal import ExecutionJournal
 
 class TestState(Enum):
     IDLE = "IDLE"
@@ -76,6 +77,7 @@ class TestWorker(QThread):
         self.report_exporter = MeasurementReportExporter(self)
         self.voltage_executor = VoltageTestExecutor(self, self.report_exporter)
         self.current_executor = CurrentTestExecutor(self, self.report_exporter)
+        self.execution_journal = None
 
     def _set_state(self, state):
         if state == self.state:
@@ -319,14 +321,29 @@ class TestWorker(QThread):
         try:
             if self.run_context:
                 self.run_context.activate_data_paths()
+                self.execution_journal = ExecutionJournal.for_run(
+                    self.run_context,
+                    self.params.get("resume_run_directory"),
+                )
             begin_visa_session_scope()
-            for x in range (int(self.params["noofloop"])):
+            start_loop = (
+                self.execution_journal.next_loop_index
+                if self.execution_journal
+                else 0
+            )
+            if start_loop:
+                self.progress.emit(
+                    f"Resuming safely from completed loop {start_loop}"
+                )
+            for x in range(start_loop, int(self.params["noofloop"])):
                 self.checkpoint()
                 #Execute Voltage Measurement for each test checked---------------
                 #Voltage Accuracy Test
                 self._dispatch_dut_tests(x)
                 if self.force_exit:
                     return
+                if self.execution_journal:
+                    self.execution_journal.complete_loop(x)
 
                 
                                     
