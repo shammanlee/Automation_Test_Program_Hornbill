@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 import GUI
+import current_test_executor
 import test_worker
 import voltage_test_executor
 from DUT_Test_Scripts.instrument_shutdown import ShutdownResult
@@ -134,14 +135,15 @@ class WorkerControlTests(unittest.TestCase):
 
     def test_dut_current_handlers_run_shared_auxiliary_tests(self):
         worker = create_worker()
+        executor = worker.current_executor
         with patch.object(
-            worker,
-            "_run_dolphin_current_accuracy",
+            executor,
+            "run_dolphin_accuracy",
             return_value=False,
         ) as accuracy, patch.object(
-            worker,
-            "_run_current_auxiliary_tests",
-        ) as auxiliary, patch.object(worker, "_run_power_test") as power:
+            executor,
+            "run_auxiliary",
+        ) as auxiliary, patch.object(executor, "run_power_test") as power:
             worker._run_dolphin_current_tests(3)
 
         accuracy.assert_called_once_with(3)
@@ -149,14 +151,15 @@ class WorkerControlTests(unittest.TestCase):
         power.assert_not_called()
 
         worker = create_worker()
+        executor = worker.current_executor
         with patch.object(
-            worker,
-            "_run_hornbill_current_accuracy",
+            executor,
+            "run_hornbill_accuracy",
             return_value=False,
         ) as accuracy, patch.object(
-            worker,
-            "_run_current_auxiliary_tests",
-        ) as auxiliary, patch.object(worker, "_run_power_test") as power:
+            executor,
+            "run_auxiliary",
+        ) as auxiliary, patch.object(executor, "run_power_test") as power:
             worker._run_hornbill_current_tests(4)
 
         accuracy.assert_called_once_with(4)
@@ -165,23 +168,24 @@ class WorkerControlTests(unittest.TestCase):
 
     def test_aborted_current_accuracy_skips_auxiliary_tests(self):
         cases = (
-            ("_run_dolphin_current_tests", "_run_dolphin_current_accuracy"),
-            ("_run_hornbill_current_tests", "_run_hornbill_current_accuracy"),
+            ("_run_dolphin_current_tests", "run_dolphin_accuracy"),
+            ("_run_hornbill_current_tests", "run_hornbill_accuracy"),
         )
 
         for handler_name, accuracy_name in cases:
             with self.subTest(handler=handler_name):
                 worker = create_worker()
+                executor = worker.current_executor
                 with patch.object(
-                    worker,
+                    executor,
                     accuracy_name,
                     return_value=True,
                 ), patch.object(
-                    worker,
-                    "_run_current_auxiliary_tests",
+                    executor,
+                    "run_auxiliary",
                 ) as auxiliary, patch.object(
-                    worker,
-                    "_run_power_test",
+                    executor,
+                    "run_power_test",
                 ) as power:
                     getattr(worker, handler_name)(3)
 
@@ -191,7 +195,7 @@ class WorkerControlTests(unittest.TestCase):
     def test_current_auxiliary_uses_power_accuracy_selection(self):
         worker = create_worker()
 
-        with patch.object(worker, "_run_power_test") as power:
+        with patch.object(worker.current_executor, "run_power_test") as power:
             worker._run_current_auxiliary_tests(2)
 
         power.assert_called_once_with(2, "PowerAccuracy")
@@ -209,10 +213,10 @@ class WorkerControlTests(unittest.TestCase):
         )
         measurement = (["info"], ["measured"], ["readback"])
         with patch.object(
-            test_worker.PowerMeasurement,
+            current_test_executor.PowerMeasurement,
             "executePowerMeasurementA",
             return_value=measurement,
-        ), patch.object(worker, "_export_power_accuracy") as export:
+        ), patch.object(worker.current_executor, "export_power_accuracy") as export:
             worker._run_power_test(0, "PowerAccuracy")
             export.assert_not_called()
 
@@ -310,7 +314,9 @@ class WorkerControlTests(unittest.TestCase):
         export.assert_not_called()
 
     def test_hornbill_current_ranges_use_configured_accuracy_runner(self):
-        range_selections = tuple(test_worker.HORNBILL_CURRENT_ACCURACY_RUNNERS)
+        range_selections = tuple(
+            current_test_executor.HORNBILL_CURRENT_ACCURACY_RUNNERS
+        )
 
         for selection in range_selections:
             with self.subTest(selection=selection):
@@ -334,7 +340,7 @@ class WorkerControlTests(unittest.TestCase):
                     ),
                 )
                 with patch.dict(
-                    test_worker.HORNBILL_CURRENT_ACCURACY_RUNNERS,
+                    current_test_executor.HORNBILL_CURRENT_ACCURACY_RUNNERS,
                     {selection: runner},
                     clear=True,
                 ):
@@ -357,15 +363,15 @@ class WorkerControlTests(unittest.TestCase):
         )
 
         with patch.object(
-            worker,
-            "_run_current_accuracy",
+            worker.current_executor,
+            "run_accuracy",
             return_value=False,
         ) as run_accuracy:
             worker._run_dolphin_current_accuracy(0)
 
         run_accuracy.assert_called_once_with(
             0,
-            test_worker.NewCurrentMeasurement.executeCurrentMeasurementA,
+            current_test_executor.NewCurrentMeasurement.executeCurrentMeasurementA,
         )
 
     def test_hornbill_current_accuracy_exports_only_on_final_loop(self):
@@ -386,10 +392,10 @@ class WorkerControlTests(unittest.TestCase):
             ),
         )
         with patch.dict(
-            test_worker.HORNBILL_CURRENT_ACCURACY_RUNNERS,
+            current_test_executor.HORNBILL_CURRENT_ACCURACY_RUNNERS,
             {"CurrentAccuracy_20A_Range": runner},
             clear=True,
-        ), patch.object(worker, "_export_current_accuracy") as export:
+        ), patch.object(worker.current_executor, "export_accuracy") as export:
             worker._run_hornbill_current_tests(0)
             export.assert_not_called()
 

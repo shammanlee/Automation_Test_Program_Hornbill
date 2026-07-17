@@ -3,6 +3,7 @@ target-version = "py311"
 include = [
     "src/all_test_dialog.py",
     "src/configuration_service.py",
+    "src/current_test_executor.py",
     "src/diagnostics.py",
     "src/error_dialogs.py",
     "src/instrument_discovery.py",
