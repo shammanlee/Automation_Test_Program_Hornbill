@@ -169,6 +169,7 @@ from test_selection import (
 from test_queue_widget import TestQueueWidget
 from queue_persistence import QueuePersistence, QueuePersistenceError
 from queue_template_service import append_queue_template, save_queue_template
+from realtime_plot import RealtimeMeasurement, RealtimePlotSeries
 from run_context import RunContext
 
 class AllTestMeasurement(QDialog):
@@ -277,6 +278,7 @@ class AllTestMeasurement(QDialog):
         self.prog_low_bound = self.plot_widget.plot(pen=pg.mkPen(color='y', width=5), name="Lower Boundary Limit")
         self.last_Iset = None               #Shamman changes
         self.fail_prompt_active = False
+        self.realtime_plot_series = RealtimePlotSeries()
 
         self._build_ui()
         self._connect_signals()
@@ -1350,6 +1352,9 @@ class AllTestMeasurement(QDialog):
     def _prepare_queued_run(self, request):
         self._cleanup_done = False
         self.was_aborted = False
+        self.last_Iset = None
+        self.fail_prompt_active = False
+        self.realtime_plot_series = RealtimePlotSeries()
         self.checkbox_states = dict(request.checkbox_states)
         self.active_params = request.parameters
         self.active_run_context = self.prepare_run_storage(
@@ -1491,75 +1496,89 @@ class AllTestMeasurement(QDialog):
                 self.worker.pause()
             self.OutputBox.append("Pause requested; waiting for a safe checkpoint...")
     
-    def update_plot(self, Vset, Iset, V_prog, V_read, I_read, prog_verror, read_verror, prog_percent, read_percent, prog_upper_bound, prog_lower_bound, read_upper_bound, read_lower_bound):
-        runtime_params = self.active_params or self.params
-        #Shamman changes
-        runtime_params.counter += 1
-        runtime_params.x_data.append(runtime_params.counter)
-        runtime_params.prog_data.append(prog_verror)
-        runtime_params.read_data.append(read_verror)
-        runtime_params.up_data.append(prog_upper_bound)
-        runtime_params.low_data.append(prog_lower_bound)
-
-        #keep only the latest 100 points for better performance
-        if len(runtime_params.x_data) > 100:
-            runtime_params.x_data = runtime_params.x_data[-100:]
-            runtime_params.prog_data = runtime_params.prog_data[-100:]
-            runtime_params.read_data = runtime_params.read_data[-100:]
-            runtime_params.up_data = runtime_params.up_data[-100:]
-            runtime_params.low_data = runtime_params.low_data[-100:]
-
-        self.programming_curve.setData(runtime_params.x_data, runtime_params.prog_data)
-        self.readback_curve.setData(runtime_params.x_data, runtime_params.read_data)
-        self.prog_up_bound.setData(runtime_params.x_data, runtime_params.up_data)
-        self.prog_low_bound.setData(runtime_params.x_data, runtime_params.low_data)
-
-        # ✅ WRITE CSV ROW HERE  #Shamman changes (Note that percentage error boundary is bounded to 100 and -100)
-        run_context = self.active_run_context
-        if run_context:
-            run_context.write_realtime_row([
-                Vset,
-                Iset,
-                V_prog,
-                V_read,
-                I_read,
-                prog_verror,
-                read_verror,
-                prog_percent,
-                read_percent,
-                prog_upper_bound,
-                prog_lower_bound,
-                read_upper_bound,
-                read_lower_bound
-            ])
-
-        # ---- CURRENT BLOCK DIVIDER ----   #Shamman changes
-        if self.last_Iset is None or abs(Iset - self.last_Iset) > 1e-6:
-            self.OutputBox.append(
-                f"<br><b>===== Current Set: {Iset:.0f}A =====</b>"
-            )
-            self.last_Iset = Iset
-
-        # determine pass/fail
-        PASS = (
-            prog_lower_bound <= prog_verror <= prog_upper_bound
-            and
-            read_lower_bound <= read_verror <= read_upper_bound
+    def update_plot(
+        self,
+        set_voltage,
+        set_current,
+        programming_voltage,
+        readback_voltage,
+        readback_current,
+        programming_error,
+        readback_error,
+        programming_percent,
+        readback_percent,
+        programming_upper_bound,
+        programming_lower_bound,
+        readback_upper_bound,
+        readback_lower_bound,
+        percentage_upper_bound,
+        percentage_lower_bound,
+    ):
+        measurement = RealtimeMeasurement(
+            set_voltage=set_voltage,
+            set_current=set_current,
+            programming_voltage=programming_voltage,
+            readback_voltage=readback_voltage,
+            readback_current=readback_current,
+            programming_error=programming_error,
+            readback_error=readback_error,
+            programming_percent=programming_percent,
+            readback_percent=readback_percent,
+            programming_upper_bound=programming_upper_bound,
+            programming_lower_bound=programming_lower_bound,
+            readback_upper_bound=readback_upper_bound,
+            readback_lower_bound=readback_lower_bound,
+            percentage_upper_bound=percentage_upper_bound,
+            percentage_lower_bound=percentage_lower_bound,
         )
+        self.realtime_plot_series.append(measurement)
+        self._render_realtime_plot()
+        self._write_realtime_measurement(measurement)
+        self._append_realtime_measurement_status(measurement)
+        self._handle_realtime_measurement_failure(measurement)
 
-        status = "Pass" if PASS else "Fail"
+    def _render_realtime_plot(self):
+        series = self.realtime_plot_series
+        self.programming_curve.setData(series.x_data, series.programming_data)
+        self.readback_curve.setData(series.x_data, series.readback_data)
+        self.prog_up_bound.setData(series.x_data, series.upper_bound_data)
+        self.prog_low_bound.setData(series.x_data, series.lower_bound_data)
 
-        data_index = run_context.data_index if run_context else 0
-        log_line = f"[{data_index}] {Iset:.0f}A : {Vset:.0f}V : {status}"
+    def _write_realtime_measurement(self, measurement):
+        if self.active_run_context:
+            self.active_run_context.write_realtime_row(measurement.csv_values)
 
-        color = "green" if PASS else "red"
+    def _append_realtime_measurement_status(self, measurement):
+        if (
+            self.last_Iset is None
+            or abs(measurement.set_current - self.last_Iset) > 1e-6
+        ):
+            self.OutputBox.append(
+                f"<br><b>===== Current Set: {measurement.set_current:.0f}A =====</b>"
+            )
+            self.last_Iset = measurement.set_current
+
+        data_index = (
+            self.active_run_context.data_index
+            if self.active_run_context
+            else self.realtime_plot_series.counter
+        )
+        status = "Pass" if measurement.passed else "Fail"
+        color = "green" if measurement.passed else "red"
+        log_line = (
+            f"[{data_index}] {measurement.set_current:.0f}A : "
+            f"{measurement.set_voltage:.0f}V : {status}"
+        )
         self.OutputBox.append(f'<span style="color:{color};">{log_line}</span>')
 
-        if not PASS and not self.fail_prompt_active:
-            self.fail_prompt_active = True
+    def _handle_realtime_measurement_failure(self, measurement):
+        if measurement.passed or self.fail_prompt_active:
+            return
 
-            self.worker.pause()  # pause test loop
-            self.handle_test_failure()
+        self.fail_prompt_active = True
+        if self.worker:
+            self.worker.pause()
+        self.handle_test_failure()
 
     def handle_test_failure(self):
         msg = QMessageBox(self)

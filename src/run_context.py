@@ -23,6 +23,8 @@ REALTIME_COLUMNS = (
     "Programming_Lower_Limit_Boundary",
     "Readback_Upper_Limit_Boundary",
     "Readback_lower_Limit_Boundary",
+    "Percentage_Upper_Limit_Boundary",
+    "Percentage_Lower_Limit_Boundary",
 )
 
 
@@ -88,6 +90,12 @@ class RunContext:
     def write_realtime_row(self, values):
         if not self.csv_writer:
             return
+        values = tuple(values)
+        expected_values = len(REALTIME_COLUMNS) - 1
+        if len(values) != expected_values:
+            raise ValueError(
+                f"Realtime row requires {expected_values} values, got {len(values)}"
+            )
         self.data_index += 1
         self.csv_writer.writerow((self.data_index, *values))
         self.csv_file.flush()

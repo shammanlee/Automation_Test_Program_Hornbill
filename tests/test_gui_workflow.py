@@ -87,6 +87,7 @@ class DummyRunContext:
         self.output_root = Path(output_root)
         self.parameters = parameters
         self.data_index = 0
+        self.realtime_rows = []
         self.voltage_chart = storage.charts / "Chart.png"
         self.voltage_percentage_chart = storage.charts / "Chart2.png"
 
@@ -95,6 +96,10 @@ class DummyRunContext:
 
     def close(self):
         return None
+
+    def write_realtime_row(self, values):
+        self.data_index += 1
+        self.realtime_rows.append(tuple(values))
 
     def restore_parameter_paths(self):
         self.parameters.savelocation = str(self.output_root)
@@ -138,6 +143,36 @@ class GuiWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(self.dialog.oscilloscope_settings_widget.layout())
         self.assertIsNotNone(self.dialog.collection_group.layout())
         self.assertIsNotNone(self.dialog.queue_widget.parent())
+
+    def test_realtime_plot_accepts_complete_worker_measurement(self):
+        context = DummyRunContext(
+            create_run_storage(self.queue_directory.name, "REALTIME"),
+            self.queue_directory.name,
+            self.dialog.params,
+        )
+        self.dialog.active_run_context = context
+
+        self.dialog.update_plot(
+            5.0,
+            1.0,
+            5.1,
+            5.05,
+            1.0,
+            0.1,
+            0.05,
+            2.0,
+            1.0,
+            0.5,
+            -0.5,
+            0.5,
+            -0.5,
+            100.0,
+            -100.0,
+        )
+
+        self.assertEqual(self.dialog.realtime_plot_series.counter, 1)
+        self.assertEqual(len(context.realtime_rows[0]), 15)
+        self.assertIn("Pass", self.dialog.OutputBox.toPlainText())
 
     def test_dut_selection_loads_configuration_into_bound_widgets(self):
         self.dialog.params.savelocation = "preserved-output"
@@ -467,12 +502,18 @@ class GuiWorkflowTests(unittest.TestCase):
 
                 first_worker = self.dialog.worker
                 self.assertEqual(first_worker.parameters.noofloop, "1")
+                self.dialog.realtime_plot_series.counter = 7
+                self.dialog.last_Iset = 1.0
+                self.dialog.fail_prompt_active = True
                 first_worker.running = False
                 first_worker.finished.emit()
                 self.application.processEvents()
 
                 self.assertIsNot(self.dialog.worker, first_worker)
                 self.assertEqual(self.dialog.worker.parameters.noofloop, "2")
+                self.assertEqual(self.dialog.realtime_plot_series.counter, 0)
+                self.assertIsNone(self.dialog.last_Iset)
+                self.assertFalse(self.dialog.fail_prompt_active)
                 self.assertEqual(len(storage_roots), 2)
                 self.assertNotEqual(storage_roots[0], storage_roots[1])
 
