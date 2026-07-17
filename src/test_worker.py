@@ -10,30 +10,7 @@ import pandas as pd
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from path import csv_folder
-from data import (
-    datatoCSV_Accuracy2,
-    datatoCSV_Line_Regulation,
-    datatoCSV_LoadRegulation,
-    datatoCSV_OCP_Test,
-    datatoCSV_PowerAccuracy,
-    datatoGraph2,
-    datatoGraph3,
-    instrumentData,
-    powerinstrumentData,
-)
-from xlreport import xlreport
-from xlreportpower import xlreportpower
-from DUT_Test_Scripts.DUT_Test import NewCurrentMeasurement
-from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
-    LineRegulation,
-    NewLoadRegulation,
-    OCP_Activation_Time,
-    PowerMeasurement,
-)
-from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
-    HornbillCurrentMeasurementwithELoad_IMON_200uA,
-    HornbillCurrentMeasurementwithELoad_IMON_2mA,
-)
+from current_test_executor import CurrentTestExecutor
 from DUT_Test_Scripts.execution_control import clear_execution_worker, set_execution_worker
 from DUT_Test_Scripts.instrument_shutdown import shutdown_instruments
 from SCPI_Library.instrument_errors import (
@@ -43,22 +20,7 @@ from SCPI_Library.instrument_errors import (
     set_diagnostic_context,
 )
 from SCPI_Library.session_manager import begin_visa_session_scope, close_visa_session_scope
-from SCPI_Library.simulation import is_simulation_mode
 from voltage_test_executor import VoltageTestExecutor
-
-
-HORNBILL_CURRENT_ACCURACY_RUNNERS = {
-    "CurrentAccuracy_20A_Range": NewCurrentMeasurement.executeCurrentMeasurementA,
-    "CurrentAccuracy_2A_Range": NewCurrentMeasurement.executeCurrentMeasurementA,
-    "CurrentAccuracy_200mA_Range": NewCurrentMeasurement.executeCurrentMeasurementA,
-    "CurrentAccuracy_20mA_Range": NewCurrentMeasurement.executeCurrentMeasurementA,
-    "CurrentAccuracy_2mA_Range": (
-        HornbillCurrentMeasurementwithELoad_IMON_2mA.Execute_Current_Accuracy_Current_Static
-    ),
-    "CurrentAccuracy_200uA_Range": (
-        HornbillCurrentMeasurementwithELoad_IMON_200uA.Execute_Current_Accuracy_Current_Static
-    ),
-}
 
 class TestState(Enum):
     IDLE = "IDLE"
@@ -113,6 +75,7 @@ class TestWorker(QThread):
         self.state = TestState.IDLE
         self.force_exit = False   # ✅ Add this line
         self.voltage_executor = VoltageTestExecutor(self)
+        self.current_executor = CurrentTestExecutor(self)
 
     def _set_state(self, state):
         if state == self.state:
@@ -222,19 +185,6 @@ class TestWorker(QThread):
         )
         config_frame.to_csv(os.path.join(output_directory, file_name))
 
-    def _save_power_report(self):
-        file_name = (
-            "Power_CV" if self.params["setFunction"] == "Current" else "Power_CC"
-        )
-        if is_simulation_mode():
-            file_name = f"SIMULATED_{file_name}"
-        report = xlreportpower(
-            save_directory=self.params["savedir"], file_name=file_name
-        )
-        report.run()
-        self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-        self.progress.emit("")
-
     def _dispatch_dut_tests(self, loop_index):
         if self.params["DUT"] == "Dolphin":
             self._run_dolphin_tests(loop_index)
@@ -261,99 +211,13 @@ class TestWorker(QThread):
         return self.voltage_executor.run_auxiliary()
 
     def _run_dolphin_current_tests(self, loop_index):
-        self.checkpoint()
-        if self._run_dolphin_current_accuracy(loop_index):
-            return
-
-        self.checkpoint()
-        self._run_current_auxiliary_tests(loop_index)
-        self.checkpoint()
+        return self.current_executor.run_dolphin(loop_index)
 
     def _run_current_auxiliary_tests(self, loop_index):
-        self.checkpoint()
-        #Current Load Regulation Test
-        if self.checkbox_states.get("CurrentLoadRegulation"):
-            if self.params["Instrument"] == "Keysight":
-                for ch in self.params["PSU_Channel"]:
-                    self.results = self._execute_checkpointed(
-                        NewLoadRegulation.executeCC_LoadRegulation,
-                        self,
-                        self.dict,
-                    )
-                    os.system('cls')
-                    self._execute_checkpointed(
-                        datatoCSV_LoadRegulation,
-                        self.results,
-                        self.params,
-                    )
-
-        self._run_power_test(loop_index, "PowerAccuracy")
-
-        #Current Line Regulation
-        if self.checkbox_states.get("CurrentLineRegulation"):
-            self.results = self._execute_checkpointed(
-                LineRegulation.executeCC_LoadRegulation,
-                self,
-                self.dict,
-            )
-            self._execute_checkpointed(
-                datatoCSV_Line_Regulation,
-                self.results,
-                self.params,
-            )
-
-        #OCP Accuracy Test
-        if self.checkbox_states.get("OCP_Test"):
-
-            #Accuracy Test 1st
-            #OCP_test = OCP_Accuracy()
-            #self.results = OCP_test.Execute_OCP(dict)
-            #os.system('cls')
-            # OCP_data_export = datatoCSV_OCP_Test(params)
-            #OCP_data_export.AccuracyTest(self.results)
-
-            self.results =[]
-
-            #Activation Time Test
-            OCP_test2 = OCP_Activation_Time()
-            self.results = self._execute_checkpointed(
-                OCP_test2.Execute_OCP,
-                self.dict,
-            )
-            OCP_data_export2 = datatoCSV_OCP_Test(self.params)
-            self._execute_checkpointed(
-                OCP_data_export2.ActivationTime,
-                self.results,
-            )
-
-        self.checkpoint()
+        return self.current_executor.run_auxiliary(loop_index)
 
     def _run_power_test(self, loop_index, selection):
-        self.checkpoint()
-        if not self.checkbox_states.get(selection):
-            return
-
-        if self.checkbox_states["Voltage_Test"]:
-            info_list, data_list, readback_list = self._execute_checkpointed(
-                PowerMeasurement.executePowerMeasurementB,
-                self,
-                self.dict,
-            )
-        elif self.checkbox_states["Current_Test"]:
-            info_list, data_list, readback_list = self._execute_checkpointed(
-                PowerMeasurement.executePowerMeasurementA,
-                self,
-                self.dict,
-            )
-
-        if loop_index == int(self.params["noofloop"]) - 1:
-            self.progress.emit("✅Measurement is complete !")
-            if self.checkbox_states["DataReport"]:
-                self._export_power_accuracy(
-                    info_list,
-                    data_list,
-                    readback_list,
-                )
+        return self.current_executor.run_power_test(loop_index, selection)
 
     def _export_power_accuracy(
         self,
@@ -361,37 +225,11 @@ class TestWorker(QThread):
         data_list,
         readback_list,
     ):
-        self._execute_checkpointed(
-            powerinstrumentData,
-            self.params["PSU"],
-            self.params["DMM"],
-            self.params["DMM2"],
-            self.params["ELoad"],
-        )
-        self._execute_checkpointed(
-            datatoCSV_PowerAccuracy,
+        return self.current_executor.export_power_accuracy(
             info_list,
             data_list,
             readback_list,
         )
-        self._execute_checkpointed(
-            datatoGraph3,
-            info_list,
-            data_list,
-            readback_list,
-        )
-        self._execute_checkpointed(
-            datatoGraph3.scatterComparePower,
-            self,
-            float(self.params["Power_Programming_Error_Gain"]),
-            float(self.params["Power_Programming_Error_Offset"]),
-            float(self.params["Power_Readback_Error_Gain"]),
-            float(self.params["Power_Readback_Error_Offset"]),
-            str(self.params["setFunction"]),
-            float(self.params["P_Rating"]),
-        )
-        self._execute_checkpointed(self._write_config_csv, "powerconfig.csv")
-        self._execute_checkpointed(self._save_power_report)
 
     def _run_hornbill_tests(self, loop_index):
         if self.checkbox_states["Voltage_Test"]:
@@ -439,56 +277,16 @@ class TestWorker(QThread):
         )
 
     def _run_current_accuracy(self, loop_index, runner):
-        for channel in self.params["PSU_Channel"]:
-            info_list, data_list, readback_list = self._execute_checkpointed(
-                runner,
-                self,
-                self.dict,
-                channel,
-            )
-            if loop_index == int(self.params["noofloop"]) - 1:
-                self.progress.emit("✅Measurement is complete !")
-                if self.checkbox_states["DataReport"]:
-                    self._export_current_accuracy(
-                        info_list,
-                        data_list,
-                        readback_list,
-                    )
-
-            if self.force_exit:
-                self.progress.emit("Operation aborted")
-                return True
-
-        return False
+        return self.current_executor.run_accuracy(loop_index, runner)
 
     def _run_dolphin_current_accuracy(self, loop_index):
-        if not self.checkbox_states.get("CurrentAccuracy"):
-            return False
-        if self.dict["Instrument"] != "Keysight":
-            return False
-
-        return self._run_current_accuracy(
-            loop_index,
-            NewCurrentMeasurement.executeCurrentMeasurementA,
-        )
+        return self.current_executor.run_dolphin_accuracy(loop_index)
 
     def _selected_hornbill_current_accuracy_runner(self):
-        for selection, runner in HORNBILL_CURRENT_ACCURACY_RUNNERS.items():
-            if self.checkbox_states.get(selection):
-                return runner
-        return None
+        return self.current_executor.selected_hornbill_accuracy_runner()
 
     def _run_hornbill_current_accuracy(self, loop_index):
-        if not self.checkbox_states.get("CurrentAccuracy"):
-            return False
-        if self.dict["Instrument"] != "Keysight":
-            return False
-
-        runner = self._selected_hornbill_current_accuracy_runner()
-        if runner is None:
-            return False
-
-        return self._run_current_accuracy(loop_index, runner)
+        return self.current_executor.run_hornbill_accuracy(loop_index)
 
     def _export_current_accuracy(
         self,
@@ -496,54 +294,14 @@ class TestWorker(QThread):
         data_list,
         readback_list,
     ):
-        self._execute_checkpointed(
-            instrumentData,
-            self.params["PSU"],
-            self.params["DMM"],
-            self.params["ELoad"],
-        )
-        self._execute_checkpointed(
-            datatoCSV_Accuracy2,
+        return self.current_executor.export_accuracy(
             info_list,
             data_list,
             readback_list,
         )
-        self._execute_checkpointed(
-            datatoGraph2,
-            info_list,
-            data_list,
-            readback_list,
-        )
-        self._execute_checkpointed(
-            datatoGraph2.scatterCompareCurrent2,
-            self,
-            float(self.params["Programming_Error_Gain"]),
-            float(self.params["Programming_Error_Offset"]),
-            float(self.params["Readback_Error_Gain"]),
-            float(self.params["Readback_Error_Offset"]),
-            str(self.params["unit"]),
-            float(self.params["I_Rating"]),
-        )
-        self._execute_checkpointed(self._write_config_csv, "config.csv")
-
-        report = xlreport(
-            save_directory=self.params["savelocation"],
-            file_name=str(self.params["unit"]),
-        )
-        self._execute_checkpointed(report.run)
-        self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
-        self.progress.emit("")
 
     def _run_hornbill_current_tests(self, loop_index):
-        self.checkpoint()
-        if self._run_hornbill_current_accuracy(loop_index):
-            return
-
-        self.checkpoint()
-        self._run_current_auxiliary_tests(loop_index)
-        self.checkpoint()
-        self._run_power_test(loop_index, "Peak_Power_Test")
-        self.checkpoint()
+        return self.current_executor.run_hornbill(loop_index)
 
     def run(self):
         cancelled = False
