@@ -197,6 +197,12 @@ class TestWorker(QThread):
             with self._control:
                 self._control.wait(timeout=min(0.1, remaining))
 
+    def _execute_checkpointed(self, operation, *args, **kwargs):
+        self.checkpoint()
+        result = operation(*args, **kwargs)
+        self.checkpoint()
+        return result
+
     def safe_shutdown(self):
         result = shutdown_instruments(self.dict)
         if result.succeeded:
@@ -291,68 +297,126 @@ class TestWorker(QThread):
             self.progress.emit("All measurements completed!")
 
     def _run_dolphin_voltage_tests(self, loop_index):
+        self.checkpoint()
         if self._run_dolphin_voltage_accuracy(loop_index):
             return
 
+        self.checkpoint()
         self._run_voltage_auxiliary_tests()
+        self.checkpoint()
 
     def _run_voltage_auxiliary_tests(self):
+        self.checkpoint()
         #Voltage Load Regulation
         if self.checkbox_states.get("VoltageLoadRegulation"):
             if self.params["Instrument"] == "Keysight":
                 for ch in self.params["PSU_Channel"]:
-                    self.results = NewLoadRegulation.executeCV_LoadRegulation(self, self.dict)
+                    self.results = self._execute_checkpointed(
+                        NewLoadRegulation.executeCV_LoadRegulation,
+                        self,
+                        self.dict,
+                    )
                     os.system('cls')
-                    datatoCSV_LoadRegulation(self.results, self.params)
+                    self._execute_checkpointed(
+                        datatoCSV_LoadRegulation,
+                        self.results,
+                        self.params,
+                    )
 
         #Transient Recovery
         if self.checkbox_states.get("TransientRecovery"):
             if self.checkbox_states["SpecialCase"]:
-                RiseFallTime.executeC(self, self.dict)
+                self._execute_checkpointed(RiseFallTime.executeC, self, self.dict)
 
             if self.checkbox_states["NormalCase"]:
-                RiseFallTime.executeC(self, self.dict)
+                self._execute_checkpointed(RiseFallTime.executeC, self, self.dict)
 
         #OVP Accuracy Test
         if self.checkbox_states.get("OVP_Test"):
-            self.results = OVP_Test.Execute_OVP(self,self.dict)
+            self.results = self._execute_checkpointed(
+                OVP_Test.Execute_OVP,
+                self,
+                self.dict,
+            )
             os.system('cls')
-            datatoCSV_OVP_Accuracy(self.results, self.params)
+            self._execute_checkpointed(
+                datatoCSV_OVP_Accuracy,
+                self.results,
+                self.params,
+            )
 
         #Voltage Line RegulationW
         if self.checkbox_states.get("VoltageLineRegulation"):
-            self.results = LineRegulation.executeCV_LoadRegulation(self, self.dict)
+            self.results = self._execute_checkpointed(
+                LineRegulation.executeCV_LoadRegulation,
+                self,
+                self.dict,
+            )
             #os.system('cls')
-            datatoCSV_Line_Regulation(self.results, self.params)
+            self._execute_checkpointed(
+                datatoCSV_Line_Regulation,
+                self.results,
+                self.params,
+            )
 
         #Programming Responses
         if self.checkbox_states.get("ProgrammingSpeed"):
             test = ProgrammingResponse()
-            self.results, self.currenttime = test.execute(self.dict)
+            self.results, self.currenttime = self._execute_checkpointed(
+                test.execute,
+                self.dict,
+            )
             os.system('cls')
-            datatoCSV_Programming_Response(self.results,self.currenttime,self.params)
+            self._execute_checkpointed(
+                datatoCSV_Programming_Response,
+                self.results,
+                self.currenttime,
+                self.params,
+            )
+
+        self.checkpoint()
 
     def _run_dolphin_current_tests(self, loop_index):
+        self.checkpoint()
         if self._run_dolphin_current_accuracy(loop_index):
             return
 
+        self.checkpoint()
         self._run_current_auxiliary_tests(loop_index)
+        self.checkpoint()
 
     def _run_current_auxiliary_tests(self, loop_index):
+        self.checkpoint()
         #Current Load Regulation Test
         if self.checkbox_states.get("CurrentLoadRegulation"):
             if self.params["Instrument"] == "Keysight":
                 for ch in self.params["PSU_Channel"]:
-                    self.results = NewLoadRegulation.executeCC_LoadRegulation(self, self.dict)
+                    self.results = self._execute_checkpointed(
+                        NewLoadRegulation.executeCC_LoadRegulation,
+                        self,
+                        self.dict,
+                    )
                     os.system('cls')
-                    datatoCSV_LoadRegulation(self.results, self.params)
+                    self._execute_checkpointed(
+                        datatoCSV_LoadRegulation,
+                        self.results,
+                        self.params,
+                    )
 
         self._run_power_test(loop_index, "PowerAccuracy")
 
         #Current Line Regulation
         if self.checkbox_states.get("CurrentLineRegulation"):
-            self.results = LineRegulation.executeCC_LoadRegulation(self, self.dict)
-            datatoCSV_Line_Regulation(self.results, self.params)
+            self.results = self._execute_checkpointed(
+                LineRegulation.executeCC_LoadRegulation,
+                self,
+                self.dict,
+            )
+            self._execute_checkpointed(
+                datatoCSV_Line_Regulation,
+                self.results,
+                self.params,
+            )
 
         #OCP Accuracy Test
         if self.checkbox_states.get("OCP_Test"):
@@ -368,21 +432,34 @@ class TestWorker(QThread):
 
             #Activation Time Test
             OCP_test2 = OCP_Activation_Time()
-            self.results = OCP_test2.Execute_OCP(self.dict)
+            self.results = self._execute_checkpointed(
+                OCP_test2.Execute_OCP,
+                self.dict,
+            )
             OCP_data_export2 = datatoCSV_OCP_Test(self.params)
-            OCP_data_export2.ActivationTime(self.results)
+            self._execute_checkpointed(
+                OCP_data_export2.ActivationTime,
+                self.results,
+            )
+
+        self.checkpoint()
 
     def _run_power_test(self, loop_index, selection):
+        self.checkpoint()
         if not self.checkbox_states.get(selection):
             return
 
         if self.checkbox_states["Voltage_Test"]:
-            info_list, data_list, readback_list = (
-                PowerMeasurement.executePowerMeasurementB(self, self.dict)
+            info_list, data_list, readback_list = self._execute_checkpointed(
+                PowerMeasurement.executePowerMeasurementB,
+                self,
+                self.dict,
             )
         elif self.checkbox_states["Current_Test"]:
-            info_list, data_list, readback_list = (
-                PowerMeasurement.executePowerMeasurementA(self, self.dict)
+            info_list, data_list, readback_list = self._execute_checkpointed(
+                PowerMeasurement.executePowerMeasurementA,
+                self,
+                self.dict,
             )
 
         if loop_index == int(self.params["noofloop"]) - 1:
@@ -400,15 +477,27 @@ class TestWorker(QThread):
         data_list,
         readback_list,
     ):
-        powerinstrumentData(
+        self._execute_checkpointed(
+            powerinstrumentData,
             self.params["PSU"],
             self.params["DMM"],
             self.params["DMM2"],
             self.params["ELoad"],
         )
-        datatoCSV_PowerAccuracy(info_list, data_list, readback_list)
-        datatoGraph3(info_list, data_list, readback_list)
-        datatoGraph3.scatterComparePower(
+        self._execute_checkpointed(
+            datatoCSV_PowerAccuracy,
+            info_list,
+            data_list,
+            readback_list,
+        )
+        self._execute_checkpointed(
+            datatoGraph3,
+            info_list,
+            data_list,
+            readback_list,
+        )
+        self._execute_checkpointed(
+            datatoGraph3.scatterComparePower,
             self,
             float(self.params["Power_Programming_Error_Gain"]),
             float(self.params["Power_Programming_Error_Offset"]),
@@ -417,8 +506,8 @@ class TestWorker(QThread):
             str(self.params["setFunction"]),
             float(self.params["P_Rating"]),
         )
-        self._write_config_csv("powerconfig.csv")
-        self._save_power_report()
+        self._execute_checkpointed(self._write_config_csv, "powerconfig.csv")
+        self._execute_checkpointed(self._save_power_report)
 
     def _run_hornbill_tests(self, loop_index):
         if self.checkbox_states["Voltage_Test"]:
@@ -436,10 +525,13 @@ class TestWorker(QThread):
             self.progress.emit("No DUT selected. Please select a DUT to perform the test.")
 
     def _run_hornbill_voltage_tests(self, loop_index):
+        self.checkpoint()
         if self._run_hornbill_voltage_accuracy(loop_index):
             return
 
+        self.checkpoint()
         self._run_voltage_auxiliary_tests()
+        self.checkpoint()
 
     def _selected_voltage_accuracy_runner(self, runners):
         for selection, runner in runners.items():
@@ -449,7 +541,8 @@ class TestWorker(QThread):
 
     def _run_voltage_accuracy(self, loop_index, runner):
         for channel in self.params["PSU_Channel"]:
-            info_list, data_list, readback_list = runner(
+            info_list, data_list, readback_list = self._execute_checkpointed(
+                runner,
                 self,
                 self.dict,
                 channel,
@@ -500,14 +593,26 @@ class TestWorker(QThread):
         data_list,
         readback_list,
     ):
-        instrumentData(
+        self._execute_checkpointed(
+            instrumentData,
             self.params["PSU"],
             self.params["DMM"],
             self.params["ELoad"],
         )
-        datatoCSV_Accuracy(info_list, data_list, readback_list)
-        datatoGraph(info_list, data_list, readback_list)
-        datatoGraph.scatterCompareVoltage(
+        self._execute_checkpointed(
+            datatoCSV_Accuracy,
+            info_list,
+            data_list,
+            readback_list,
+        )
+        self._execute_checkpointed(
+            datatoGraph,
+            info_list,
+            data_list,
+            readback_list,
+        )
+        self._execute_checkpointed(
+            datatoGraph.scatterCompareVoltage,
             self,
             float(self.params["Programming_Error_Gain"]),
             float(self.params["Programming_Error_Offset"]),
@@ -516,13 +621,16 @@ class TestWorker(QThread):
             str(self.params["unit"]),
             float(self.params["Voltage_Rating"]),
         )
-        self._write_config_csv("config.csv")
-        self._save_voltage_report()
+        self._execute_checkpointed(self._write_config_csv, "config.csv")
+        self._execute_checkpointed(self._save_voltage_report)
 
     def _run_current_accuracy(self, loop_index, runner):
         for channel in self.params["PSU_Channel"]:
-            info_list, data_list, readback_list = runner(
-                self, self.dict, channel
+            info_list, data_list, readback_list = self._execute_checkpointed(
+                runner,
+                self,
+                self.dict,
+                channel,
             )
             if loop_index == int(self.params["noofloop"]) - 1:
                 self.progress.emit("✅Measurement is complete !")
@@ -574,14 +682,26 @@ class TestWorker(QThread):
         data_list,
         readback_list,
     ):
-        instrumentData(
+        self._execute_checkpointed(
+            instrumentData,
             self.params["PSU"],
             self.params["DMM"],
             self.params["ELoad"],
         )
-        datatoCSV_Accuracy2(info_list, data_list, readback_list)
-        datatoGraph2(info_list, data_list, readback_list)
-        datatoGraph2.scatterCompareCurrent2(
+        self._execute_checkpointed(
+            datatoCSV_Accuracy2,
+            info_list,
+            data_list,
+            readback_list,
+        )
+        self._execute_checkpointed(
+            datatoGraph2,
+            info_list,
+            data_list,
+            readback_list,
+        )
+        self._execute_checkpointed(
+            datatoGraph2.scatterCompareCurrent2,
             self,
             float(self.params["Programming_Error_Gain"]),
             float(self.params["Programming_Error_Offset"]),
@@ -590,22 +710,26 @@ class TestWorker(QThread):
             str(self.params["unit"]),
             float(self.params["I_Rating"]),
         )
-        self._write_config_csv("config.csv")
+        self._execute_checkpointed(self._write_config_csv, "config.csv")
 
         report = xlreport(
             save_directory=self.params["savelocation"],
             file_name=str(self.params["unit"]),
         )
-        report.run()
+        self._execute_checkpointed(report.run)
         self.progress.emit("Excel Report Saved: " + str(self.params["savedir"]))
         self.progress.emit("")
 
     def _run_hornbill_current_tests(self, loop_index):
+        self.checkpoint()
         if self._run_hornbill_current_accuracy(loop_index):
             return
 
+        self.checkpoint()
         self._run_current_auxiliary_tests(loop_index)
+        self.checkpoint()
         self._run_power_test(loop_index, "Peak_Power_Test")
+        self.checkpoint()
 
     def run(self):
         cancelled = False
