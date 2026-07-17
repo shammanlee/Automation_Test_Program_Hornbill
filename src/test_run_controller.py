@@ -204,6 +204,17 @@ class TestRunController(QObject):
             auto_start=auto_start,
         )
         if status == "Interrupted":
+            if source.recovery_run_directory:
+                if isinstance(retry.parameters, dict):
+                    retry.parameters["resume_run_directory"] = (
+                        source.recovery_run_directory
+                    )
+                else:
+                    setattr(
+                        retry.parameters,
+                        "resume_run_directory",
+                        source.recovery_run_directory,
+                    )
             self._set_status(source, "Retried")
             self.persistence_changed.emit()
         return retry

@@ -195,41 +195,8 @@ class MainWindow(QMainWindow):
         # Track current tab index
         self.CurrentTab = 0
 
-        # Add test options for the test list
-        self.test_options = [
-            ("Voltage Measurement", "Precise voltage measurement dialog - Support only - Dolphin, Excavator"),
-            ("Current Measurement", "Precise current measurement dialog - Support only - Dolphin, Excavator"),
-            ("CV Load Regulation", "Constant Voltage load regulation testing - Support only - Dolphin, Excavator"),
-            ("CC Load Regulation", "Constant Current load regulation testing - Support only - Dolphin, Excavator"),
-            ("Transient Recovery Time", "Measure transient response recovery time - Support only - Dolphin, Excavator"),
-            ("Transient Recovery Time Using Current Probe", "Measure transient response recovery time using current probe - Support only - Dolphin, Excavator"),
-            ("Programming Speed", "Test programming speed capabilities - Support only - Dolphin, Excavator"),
-            ("Power Measurement", "Comprehensive power measurement dialog - Support only - Dolphin, Excavator"),
-            ("Bundle Measurement - Voltage", "Specialized bundle voltage measurement - Support only - Dolphin, Excavator"),
-            ("Bundle Measurement - Current/Power", "Bundle current and power measurement - Support only - Dolphin, Excavator"),
-            ("AC Source Settings", "Simple Configuration of AC Source - Support only - Dolphin, Excavator"),
-            ("Voltage Calibration", "Voltage Calibration Dialog - Support only - Hornbill"),
-            ("Peak Power Test - Passive Mode", "Peak Current Pulse - Support only - Hornbill"),
-            ("MultiThreading - Voltage Measurement", "Precise voltage measurement dialog"),
-        ]
-
-        #Add qdialog to be opened when test list selected
-        self.dialog_names = [
-            "Voltage Measurement Dialog",
-            "Current Measurement Dialog",
-            "CV Load Regulation Dialog",
-            "CC Load Regulation Dialog", 
-            "Transient Recovery Time Dialog",
-            "Transient Recovery Time Using Current Probe Dialog",
-            "Programming Speed Dialog",
-            "Power Measurement Dialog",
-            "Bundle Measurement Voltage Dialog",
-            "Bundle Measurement Current/Power Dialog",
-            "AC Source Setting Dialog",
-            "Voltage Calibration Dialog",
-            "Peak Power Test Dialog",
-            "MultiThreading - Voltage Measurement"
-        ]
+        self.dialog_registry = self._create_dialog_registry()
+        self.test_options = self.dialog_registry.selection_options
         
         #Show the tab on the Main Window
         self.initTabs()
@@ -469,62 +436,36 @@ class MainWindow(QMainWindow):
                     print_console_safe("Please select a test from the list first.")
 
     def open_test_by_index(self, index):
-        """Open dialog based on index - placeholder for actual dialog implementations"""
+        """Open a registered dialog by its stable launcher index."""
+        return self.dialog_registry.open(self, index)
 
-        if 0 <= index < 16:
+    def _create_dialog_registry(self):
+        from dialog_registry import DialogRegistration, DialogRegistry
 
-            # Handle different dialog types based on index
-            if index == 0:  # Bundle Test
-                self.bundle_dialog = AllTestMeasurement()
-                self.bundle_dialog.show()
-            elif index == 1:  # Screenshot Dialog
-                self.screenshot_dialog = ScreenShotDialog(self)
-                self.screenshot_dialog.show()
-            elif index == 2:  # Voltage Measurement Dialog
-                self.voltage_dialog = VoltageMeasurementDialog()# Create voltage dialog instance
-                self.voltage_dialog.show()  # Use exec_() for modal dialog or show() for non-modal
-            elif index == 3:  # Current Measurement Dialog
-                self.current_dialog = CurrentMeasurementDialog()
-                self.current_dialog.show()
-            elif index == 4:  # CV Load Regulation Dialog
-                self.CV_load_dialog = CV_LoadRegulationDialog()
-                self.CV_load_dialog.show()
-            elif index == 5:  # CC Load Regulation Dialog
-                self.CC_load_dialog = CC_LoadRegulationDialog()
-                self.CC_load_dialog.show()
-            elif index == 6:  # Transient Recovery Time Dialog
-                self.transient_load_dialog = TransientRecoveryTime()
-                self.transient_load_dialog.show()
-            elif index == 7:  # Transient Recovery Time Using Current Probe Dialog
-                self.transient_current_probe_dialog = TransientRecoveryTimeWithCurrentSensor()
-                self.transient_current_probe_dialog.show()
-            elif index == 8:  # Programming Speed Dialog
-                self.programming_speed_dialog = ProgrammingSpeed()
-                self.programming_speed_dialog.show()
-            elif index == 9:  # Power Measurement Dialog
-                self.power_dialog = PowerMeasurementDialog()
-                self.power_dialog.show()
-            elif index == 10:  # Bundle Measurement Voltage Dialog
-                self.bundle_voltage_dialog = BundleMeasurementVoltageDialog()
-                self.bundle_voltage_dialog.show()
-            elif index == 11:  # Bundle Measurement Current/Power Dialog
-                self.bundle_current_dialog = BundleMeasurementCurrentandPowerDialog()
-                self.bundle_current_dialog.show()
-            elif index == 12:  # AC Source Dialog
-                self.ac_source_dialog = ACSourceSetting(self.params)
-                self.ac_source_dialog.show()
-            elif index == 13:  # Voltage Calibration Dialog
-                self.voltage_calibration_dialog = VoltageCalibrationDialog()
-                self.voltage_calibration_dialog.show()
-            elif index == 14:  # Voltage Calibration Dialog
-                self.peak_power_test_dialog = PeakPowerTestDialog()
-                self.peak_power_test_dialog.show()
-            elif index == 15:
-                from experiments.multithread_voltage import MultiThreadVoltageMeasurementDialog
-                self.multithread_voltage_dialog = MultiThreadVoltageMeasurementDialog()
-                self.multithread_voltage_dialog.show()
-        else:
-            print_console_safe(f"Invalid dialog index: {index}")
+        def multithread_voltage_dialog():
+            from experiments.multithread_voltage import MultiThreadVoltageMeasurementDialog
+
+            return MultiThreadVoltageMeasurementDialog()
+
+        registrations = (
+            DialogRegistration("Bundle Test", "Production queued test dialog", "bundle_dialog", AllTestMeasurement),
+            DialogRegistration("Screenshot", "Instrument screenshot dialog", "screenshot_dialog", lambda: ScreenShotDialog(self)),
+            DialogRegistration("Voltage Measurement", "Precise voltage measurement dialog - Support only - Dolphin, Excavator", "voltage_dialog", VoltageMeasurementDialog),
+            DialogRegistration("Current Measurement", "Precise current measurement dialog - Support only - Dolphin, Excavator", "current_dialog", CurrentMeasurementDialog),
+            DialogRegistration("CV Load Regulation", "Constant Voltage load regulation testing - Support only - Dolphin, Excavator", "CV_load_dialog", CV_LoadRegulationDialog),
+            DialogRegistration("CC Load Regulation", "Constant Current load regulation testing - Support only - Dolphin, Excavator", "CC_load_dialog", CC_LoadRegulationDialog),
+            DialogRegistration("Transient Recovery Time", "Measure transient response recovery time - Support only - Dolphin, Excavator", "transient_load_dialog", TransientRecoveryTime),
+            DialogRegistration("Transient Recovery Time Using Current Probe", "Measure transient response recovery time using current probe - Support only - Dolphin, Excavator", "transient_current_probe_dialog", TransientRecoveryTimeWithCurrentSensor),
+            DialogRegistration("Programming Speed", "Test programming speed capabilities - Support only - Dolphin, Excavator", "programming_speed_dialog", ProgrammingSpeed),
+            DialogRegistration("Power Measurement", "Comprehensive power measurement dialog - Support only - Dolphin, Excavator", "power_dialog", PowerMeasurementDialog),
+            DialogRegistration("Bundle Measurement - Voltage", "Specialized bundle voltage measurement - Support only - Dolphin, Excavator", "bundle_voltage_dialog", BundleMeasurementVoltageDialog),
+            DialogRegistration("Bundle Measurement - Current/Power", "Bundle current and power measurement - Support only - Dolphin, Excavator", "bundle_current_dialog", BundleMeasurementCurrentandPowerDialog),
+            DialogRegistration("AC Source Settings", "Simple Configuration of AC Source - Support only - Dolphin, Excavator", "ac_source_dialog", lambda: ACSourceSetting(self.params)),
+            DialogRegistration("Voltage Calibration", "Voltage Calibration Dialog - Support only - Hornbill", "voltage_calibration_dialog", VoltageCalibrationDialog),
+            DialogRegistration("Peak Power Test - Passive Mode", "Peak Current Pulse - Support only - Hornbill", "peak_power_test_dialog", PeakPowerTestDialog),
+            DialogRegistration("MultiThreading - Voltage Measurement", "Precise voltage measurement dialog", "multithread_voltage_dialog", multithread_voltage_dialog),
+        )
+        return DialogRegistry(registrations, print_console_safe)
 
 #######------------------------Standalone Test Scripts in Tab 3-----------------------------#####################
 class VoltageMeasurementDialog(QDialog):
