@@ -121,18 +121,22 @@ Production widget population and automatic role selection live in
 Use **Add to Queue** to snapshot the current setup without starting it. Pending rows
 can be reordered or removed, and **Run Queue** executes them sequentially. Every row
 receives its own run directory and reports `Pending`, `Running`, `Paused`,
-`Stopping`, `Completed`, `Failed`, or `Aborted`. Aborting an active row leaves the
-remaining queue available;
+`Stopping`, `Completed`, `Failed`, `Aborted`, `Interrupted`, or `Retried`. Aborting
+an active row leaves the remaining queue available;
 **Clear Pending** removes waiting rows.
 **Duplicate** creates an independent copy of any selected row. **Retry Failed**
-requeues failed or aborted rows using their original parameter snapshot. **Save
-Template** stores pending rows in portable JSON, and **Load Template** appends new
+requeues failed, aborted, or interrupted rows using their original parameter
+snapshot. **Save Template** stores pending rows in portable JSON, and **Load
+Template** appends new
 queue entries without reusing old run IDs.
 Completed, failed, aborted, and removed history is limited to the newest 200 rows
 per dialog session so long-running stations do not accumulate unbounded objects.
-Pending items are saved atomically to
+Pending and active items are saved atomically to
 `Instrument_Config_Files/test_queue.json` and restored when the test dialog opens
-again. Active, completed, failed, and aborted rows are not restored.
+again. A run that was active when the application exited is restored as
+`Interrupted` with its previous artifact-directory path. It never starts
+automatically; review its output and retry or remove it manually. Completed, failed,
+and aborted rows are not restored.
 
 The old multithread voltage prototype is retained under `src/experiments/` and is
 loaded only when its legacy dialog is explicitly opened.

@@ -55,7 +55,9 @@ class TestQueueWidget(QGroupBox):
         self.down_button.setToolTip("Move the selected pending test later")
         self.clear_button.setToolTip("Remove every test that has not started")
         self.duplicate_button.setToolTip("Copy the selected run into the queue")
-        self.retry_button.setToolTip("Retry the selected failed or aborted run")
+        self.retry_button.setToolTip(
+            "Retry the selected failed, aborted, or interrupted run"
+        )
         self.save_template_button.setToolTip("Save pending runs as a reusable template")
         self.load_template_button.setToolTip("Append runs from a saved template")
 
@@ -117,6 +119,8 @@ class TestQueueWidget(QGroupBox):
             "Completed": QColor("#167c2f"),
             "Failed": QColor("#b00020"),
             "Aborted": QColor("#8a3b12"),
+            "Interrupted": QColor("#8a3b12"),
+            "Retried": QColor("#5f6368"),
         }
         if status in status_colors:
             status_item.setForeground(QBrush(status_colors[status]))

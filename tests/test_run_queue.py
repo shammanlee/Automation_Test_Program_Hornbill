@@ -258,6 +258,36 @@ class TestRunQueueTests(unittest.TestCase):
         self.assertEqual(self.controller.status_for(request.run_id), "Failed")
         self.assertIsNone(self.controller.retry(retry.run_id))
 
+    def test_interrupted_run_requires_manual_retry(self):
+        request = self.controller.restore_interrupted(
+            {"Voltage_Test": True},
+            {"DUT": "Dolphin"},
+            {"noofloop": "1"},
+            label="Recovered voltage",
+            run_id="interrupted-1",
+            recovery_run_directory="runs/interrupted-1",
+        )
+
+        self.assertEqual(self.controller.pending_count, 0)
+        self.assertEqual(self.workers, [])
+        self.assertEqual(self.controller.status_for(request.run_id), "Interrupted")
+        self.assertEqual(self.controller.interrupted_requests, (request,))
+
+        retry = self.controller.retry(request.run_id)
+
+        self.assertIsNotNone(retry)
+        self.assertEqual(retry.label, "Recovered voltage (Retry)")
+        self.assertEqual(self.controller.status_for(request.run_id), "Retried")
+        self.assertEqual(self.controller.pending_count, 1)
+        self.assertEqual(self.workers, [])
+
+    def test_interrupted_run_can_be_dismissed(self):
+        request = self.controller.restore_interrupted({}, {}, {}, run_id="old-run")
+
+        self.assertTrue(self.controller.remove_pending(request.run_id))
+        self.assertEqual(self.controller.status_for(request.run_id), "Removed")
+        self.assertEqual(self.controller.interrupted_requests, ())
+
     def test_terminal_history_prunes_old_requests_at_configured_limit(self):
         workers = []
 
@@ -307,6 +337,30 @@ class TestRunQueueTests(unittest.TestCase):
         self.assertEqual(prepared, ["first", "second"])
         self.assertIn(("first", "Completed"), statuses)
         self.assertIn(("second", "Running"), statuses)
+
+    def test_active_snapshot_refreshes_after_prepare(self):
+        parameters = {"prepared": False}
+        active_snapshots = []
+
+        def capture_active():
+            if self.controller.active_request:
+                active_snapshots.append(
+                    self.controller.active_request.parameters["prepared"]
+                )
+
+        self.controller.persistence_changed.connect(capture_active)
+        self.controller.enqueue(
+            {},
+            {},
+            parameters,
+            prepare=lambda request: request.parameters.update(prepared=True),
+            auto_start=False,
+        )
+
+        self.controller.start_queue()
+
+        self.assertIn(False, active_snapshots)
+        self.assertEqual(active_snapshots[-1], True)
 
     def test_setup_failure_marks_request_failed_without_worker(self):
         statuses = []

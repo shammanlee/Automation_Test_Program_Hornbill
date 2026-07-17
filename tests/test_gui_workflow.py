@@ -16,7 +16,9 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 
 import GUI
 import all_test_dialog
+from queue_persistence import QueuePersistence
 from run_storage import create_run_storage
+from test_run_controller import TestRunRequest
 
 
 class DummySignal:
@@ -537,6 +539,59 @@ class GuiWorkflowTests(unittest.TestCase):
             self.assertEqual(request.label, "Restored voltage test")
             self.assertEqual(request.parameters.noofloop, "3")
             self.assertEqual(restored_dialog.queue_widget.table.rowCount(), 1)
+        finally:
+            restored_dialog.close()
+            restored_dialog.deleteLater()
+            self.application.processEvents()
+
+    def test_active_run_restores_as_interrupted_and_requires_retry(self):
+        active = TestRunRequest(
+            {"Voltage_Test": True},
+            {"DUT": "Dolphin"},
+            GUI.ParameterSnapshot(noofloop="3", savelocation="output"),
+            label="Interrupted voltage test",
+            run_id="interrupted-run",
+            recovery_run_directory="output/previous-run",
+        )
+        QueuePersistence(self.queue_file).save([], active)
+
+        restored_dialog = GUI.AllTestMeasurement(queue_file=self.queue_file)
+        try:
+            controller = restored_dialog.run_controller
+            self.assertEqual(controller.pending_count, 0)
+            self.assertIsNone(controller.active_worker)
+            self.assertEqual(
+                controller.status_for("interrupted-run"),
+                "Interrupted",
+            )
+            self.assertEqual(restored_dialog.queue_widget.table.rowCount(), 1)
+            self.assertEqual(
+                restored_dialog.queue_widget.table.item(0, 3).text(),
+                "Interrupted",
+            )
+            self.assertIn(
+                "output/previous-run",
+                restored_dialog.OutputBox.toPlainText(),
+            )
+            recovered_snapshot = QueuePersistence(self.queue_file).load_snapshot()
+            self.assertIsNone(recovered_snapshot["active"])
+            self.assertEqual(
+                recovered_snapshot["interrupted"][0]["run_id"],
+                "interrupted-run",
+            )
+
+            restored_dialog.queue_widget.table.selectRow(0)
+            restored_dialog.queue_widget.retry_button.click()
+
+            self.assertEqual(controller.pending_count, 1)
+            self.assertEqual(
+                controller.status_for("interrupted-run"),
+                "Retried",
+            )
+            self.assertIsNone(controller.active_worker)
+            retry_snapshot = QueuePersistence(self.queue_file).load_snapshot()
+            self.assertEqual(retry_snapshot["interrupted"], [])
+            self.assertEqual(len(retry_snapshot["pending"]), 1)
         finally:
             restored_dialog.close()
             restored_dialog.deleteLater()
