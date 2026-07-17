@@ -3,6 +3,7 @@
 import datetime
 import traceback
 from pathlib import Path
+from types import SimpleNamespace
 
 import pyqtgraph as pg
 from PyQt5.QtCore import Qt, pyqtSlot
@@ -230,6 +231,17 @@ class AllTestMeasurement(QDialog):
         self._restore_pending_queue()
 
     def _build_ui(self):
+        self._create_control_widgets()
+        ui = self._create_configuration_widgets()
+        test_selection_layout = self._create_test_selection_layout(ui)
+        self._create_connection_and_general_groups(ui)
+        self._create_rating_and_error_groups(ui)
+        self._create_scope_and_collection_groups(ui)
+        right_container = self._create_execution_panel(ui)
+        left_container = self._create_settings_panel(ui, test_selection_layout)
+        self._install_main_layout(left_container, right_container)
+
+    def _create_control_widgets(self):
         #Create find button 
         self.QPushButton_Widget0 = QPushButton()
         self.QPushButton_Widget0.setText("Save Path")
@@ -391,6 +403,19 @@ class AllTestMeasurement(QDialog):
         self.OutputBox.append(f"{my_result.getvalue()}")
         self.OutputBox.append("")  # Empty line after each append
 
+    def _create_configuration_widgets(self):
+        connection_section = self._create_connection_configuration_widgets()
+        sections = (
+            connection_section,
+            self._create_rating_widgets(),
+            self._create_oscilloscope_widgets(),
+            self._create_collection_widgets(connection_section.QLabel_Save_Path),
+        )
+        return SimpleNamespace(
+            **{name: value for section in sections for name, value in vars(section).items()}
+        )
+
+    def _create_connection_configuration_widgets(self):
         #Description 1-7
         Desp0 = QLabel()
         Desp1 = QLabel()
@@ -579,7 +604,53 @@ class AllTestMeasurement(QDialog):
         self.QComboBox_SPOperationMode.addItems(["Independent","Series","Parallel"])
         self.QComboBox_Line_Reg_Range.addItems(["100-115-230","100"])
         self.QComboBox_Line_Reg_Range.setEnabled(False)
+        return SimpleNamespace(
+            Desp0=Desp0,
+            Desp1=Desp1,
+            Desp2=Desp2,
+            Desp3=Desp3,
+            Desp4=Desp4,
+            Desp5=Desp5,
+            Desp6=Desp6,
+            Desp7=Desp7,
+            Desp8=Desp8,
+            Desp9=Desp9,
+            OscilloscopeSetting=OscilloscopeSetting,
+            PerformTest=PerformTest,
+            QLabel_AC_Supply_Type=QLabel_AC_Supply_Type,
+            QLabel_Connection_Selection=QLabel_Connection_Selection,
+            QLabel_DMM_Instrument=QLabel_DMM_Instrument,
+            QLabel_DMM_VisaAddressforVoltage=QLabel_DMM_VisaAddressforVoltage,
+            QLabel_DUT=QLabel_DUT,
+            QLabel_ELoad_VisaAddress=QLabel_ELoad_VisaAddress,
+            QLabel_Line_Reg_Range=QLabel_Line_Reg_Range,
+            QLabel_Load_Programming_Error_Gain=QLabel_Load_Programming_Error_Gain,
+            QLabel_Load_Programming_Error_Offset=QLabel_Load_Programming_Error_Offset,
+            QLabel_OCP_Activation_Time=QLabel_OCP_Activation_Time,
+            QLabel_OCP_Level=QLabel_OCP_Level,
+            QLabel_OVP_Error_Gain=QLabel_OVP_Error_Gain,
+            QLabel_OVP_Error_Offset=QLabel_OVP_Error_Offset,
+            QLabel_OVP_Level=QLabel_OVP_Level,
+            QLabel_PSU_VisaAddress=QLabel_PSU_VisaAddress,
+            QLabel_Programming_Error_Gain=QLabel_Programming_Error_Gain,
+            QLabel_Programming_Error_Offset=QLabel_Programming_Error_Offset,
+            QLabel_Programming_Response_Down_FullLoad=QLabel_Programming_Response_Down_FullLoad,
+            QLabel_Programming_Response_Down_NoLoad=QLabel_Programming_Response_Down_NoLoad,
+            QLabel_Programming_Response_Up_FullLoad=QLabel_Programming_Response_Up_FullLoad,
+            QLabel_Programming_Response_Up_NoLoad=QLabel_Programming_Response_Up_NoLoad,
+            QLabel_Readback_Error_Gain=QLabel_Readback_Error_Gain,
+            QLabel_Readback_Error_Offset=QLabel_Readback_Error_Offset,
+            QLabel_SPOperationMode=QLabel_SPOperationMode,
+            QLabel_Save_Path=QLabel_Save_Path,
+            QLabel_Testing_Selection=QLabel_Testing_Selection,
+            QLabel_Voltage_Res=QLabel_Voltage_Res,
+            QLabel_Voltage_Sense=QLabel_Voltage_Sense,
+            QLabel_set_ELoad_Channel=QLabel_set_ELoad_Channel,
+            QLabel_set_Function=QLabel_set_Function,
+            QLabel_set_PSU_Channel=QLabel_set_PSU_Channel,
+        )
 
+    def _create_rating_widgets(self):
         #Rated Power
         QLabel_power_rated = QLabel()
         QLabel_power_rated.setText("DUT Rated Power (W):")
@@ -631,8 +702,21 @@ class AllTestMeasurement(QDialog):
         self.QLineEdit_maxVoltage = QLineEdit()
         self.QLineEdit_voltage_stepsize = QLineEdit()
         self.QLineEdit_voltage_rated = QLineEdit()
-        self.QLineEdit_voltage_rated.setFixedSize(100, 40) 
+        self.QLineEdit_voltage_rated.setFixedSize(100, 40)
+        return SimpleNamespace(
+            QLabel_Power=QLabel_Power,
+            QLabel_current_rated=QLabel_current_rated,
+            QLabel_current_step_size=QLabel_current_step_size,
+            QLabel_maxCurrent=QLabel_maxCurrent,
+            QLabel_maxVoltage=QLabel_maxVoltage,
+            QLabel_minCurrent=QLabel_minCurrent,
+            QLabel_minVoltage=QLabel_minVoltage,
+            QLabel_power_rated=QLabel_power_rated,
+            QLabel_voltage_rated=QLabel_voltage_rated,
+            QLabel_voltage_step_size=QLabel_voltage_step_size,
+        )
 
+    def _create_oscilloscope_widgets(self):
         # Oscilloscope Settings
         QLabel_OSC_Display_Channel = QLabel()
         QLabel_V_Settling_Band = QLabel()
@@ -680,7 +764,22 @@ class AllTestMeasurement(QDialog):
         self.QComboBox_Trigger_CouplingMode.addItems(["AC", "DC"])
         self.QComboBox_Trigger_SweepMode.addItems(["NORMAL", "AUTO"])
         self.QComboBox_Trigger_SlopeMode.addItems(["ALT", "POS", "NEG", "EITH"])
+        return SimpleNamespace(
+            QLabel_Acq_Type=QLabel_Acq_Type,
+            QLabel_Channel_CouplingMode=QLabel_Channel_CouplingMode,
+            QLabel_OSC_Display_Channel=QLabel_OSC_Display_Channel,
+            QLabel_Probe_Setting=QLabel_Probe_Setting,
+            QLabel_T_Settling_Band=QLabel_T_Settling_Band,
+            QLabel_TimeScale=QLabel_TimeScale,
+            QLabel_Trigger_CouplingMode=QLabel_Trigger_CouplingMode,
+            QLabel_Trigger_Mode=QLabel_Trigger_Mode,
+            QLabel_Trigger_SlopeMode=QLabel_Trigger_SlopeMode,
+            QLabel_Trigger_SweepMode=QLabel_Trigger_SweepMode,
+            QLabel_V_Settling_Band=QLabel_V_Settling_Band,
+            QLabel_VerticalScale=QLabel_VerticalScale,
+        )
 
+    def _create_collection_widgets(self, save_path_label):
         #Loop & Delay
         QLabel_noofloop = QLabel()
         QLabel_noofloop.setText("No. of Data Collection:")
@@ -694,25 +793,33 @@ class AllTestMeasurement(QDialog):
 
         #Create a horizontal layout for the "Save Path" and checkboxes
         save_path_layout = QVBoxLayout()
-        save_path_layout.addWidget(QLabel_Save_Path)  # QLabel for "Save Path"
+        save_path_layout.addWidget(save_path_label)  # QLabel for "Save Path"
         #save_path_layout.addWidget(QLineEdit_Save_Path)  # QLineEdit for the path
         save_path_layout.addWidget(self.QCheckBox_Report_Widget)  # Checkbox for "Generate Excel Report"
         save_path_layout.addWidget(self.QCheckBox_Image_Widget)  # Checkbox for "Show Graph"
         save_path_layout.addWidget(self.QCheckBox_Lock_Widget)  # Checkbox for "Show Graph"
+        return SimpleNamespace(
+            QLabel_noofloop=QLabel_noofloop,
+            QLabel_updatedelay=QLabel_updatedelay,
+            save_path_layout=save_path_layout,
+        )
 
-#+++++++++++++++++++++++++Layout Organization Part --(Organize Layout of GUI here)++++++++++++++++++++++++++++++++++++++++++++++++++++
+    def _create_test_selection_layout(self, ui):
+        #+++++++++++++++++++++++++Layout Organization Part --(Organize Layout of GUI here)++++++++++++++++++++++++++++++++++++++++++++++++++++
         Voltage_Current_Selection_Layout = QVBoxLayout()
         Voltage_Current_Selection_Layout.addWidget(self.QPushButton_Voltage_Widget)
         Voltage_Current_Selection_Layout.addWidget(self.QPushButton_Current_Widget)
         
         self.Current_Test_group, self.CurrentAccuracy_Branch_Widget = (
-            create_current_selection_widget(self, QLabel_Testing_Selection)
+            create_current_selection_widget(self, ui.QLabel_Testing_Selection)
         )
         voltage_heading = QLabel("Testing Selection")
         self.Voltage_Test_group, self.VoltageAccuracy_Branch_Widget = (
             create_voltage_selection_widget(self, voltage_heading)
         )
+        return Voltage_Current_Selection_Layout
 
+    def _create_connection_and_general_groups(self, ui):
         #Connections Layout
         self.Connection_group = QGroupBox()
         Connection_layout = QFormLayout(self.Connection_group)
@@ -721,30 +828,31 @@ class AllTestMeasurement(QDialog):
         Checkbox_row.addWidget(self.QCheckBox_USB_Widget)
         Checkbox_row.addWidget(self.QCheckBox_IP_Widget)
         Checkbox_row.addWidget(self.QCheckBox_Hostname_Widget)
-        Connection_layout.addRow(QLabel_Connection_Selection, Checkbox_row)
-        Connection_layout.addRow(QLabel_DUT, self.QComboBox_DUT)
-        Connection_layout.addRow(QLabel_AC_Supply_Type, self.QComboBox_AC_Supply_Type)
-        Connection_layout.addRow(QLabel_PSU_VisaAddress, self.QLineEdit_PSU_VisaAddress)
-        Connection_layout.addRow(QLabel_DMM_VisaAddressforVoltage, self.QLineEdit_DMM_VisaAddressforVoltage)
+        Connection_layout.addRow(ui.QLabel_Connection_Selection, Checkbox_row)
+        Connection_layout.addRow(ui.QLabel_DUT, self.QComboBox_DUT)
+        Connection_layout.addRow(ui.QLabel_AC_Supply_Type, self.QComboBox_AC_Supply_Type)
+        Connection_layout.addRow(ui.QLabel_PSU_VisaAddress, self.QLineEdit_PSU_VisaAddress)
+        Connection_layout.addRow(ui.QLabel_DMM_VisaAddressforVoltage, self.QLineEdit_DMM_VisaAddressforVoltage)
         Connection_layout.addRow(self.QLabel_DMM_VisaAddressforCurrent, self.QLineEdit_DMM_VisaAddressforCurrent)
-        Connection_layout.addRow(QLabel_ELoad_VisaAddress, self.QLineEdit_ELoad_VisaAddress)
+        Connection_layout.addRow(ui.QLabel_ELoad_VisaAddress, self.QLineEdit_ELoad_VisaAddress)
         Connection_layout.addRow(self.QLabel_OSC_VisaAddress, self.QLineEdit_OSC_VisaAddress)
-        Connection_layout.addRow(QLabel_DMM_Instrument, self.QComboBox_DMM_Instrument)
+        Connection_layout.addRow(ui.QLabel_DMM_Instrument, self.QComboBox_DMM_Instrument)
 
         #General Setting Layout
         self.General_group = QGroupBox()
         General_Setting_layout = QFormLayout(self.General_group)
-        General_Setting_layout.addRow(QLabel_set_PSU_Channel, self.QComboBox_set_PSU_Channel)
-        General_Setting_layout.addRow(QLabel_set_ELoad_Channel, self.QComboBox_set_ELoad_Channel)
-        General_Setting_layout.addRow(QLabel_set_Function, self.QComboBox_set_Function)
+        General_Setting_layout.addRow(ui.QLabel_set_PSU_Channel, self.QComboBox_set_PSU_Channel)
+        General_Setting_layout.addRow(ui.QLabel_set_ELoad_Channel, self.QComboBox_set_ELoad_Channel)
+        General_Setting_layout.addRow(ui.QLabel_set_Function, self.QComboBox_set_Function)
         General_Setting_layout.addRow(self.QLabel_rshunt, self.QLineEdit_rshunt)
-        General_Setting_layout.addRow(QLabel_Voltage_Sense, self.QComboBox_Voltage_Sense)
-        General_Setting_layout.addRow(QLabel_OVP_Level, self.QLineEdit_OVP_Level)
-        General_Setting_layout.addRow(QLabel_OCP_Level, self.QLineEdit_OCP_Level)
-        General_Setting_layout.addRow(QLabel_OCP_Activation_Time, self.QLineEdit_OCP_ActivationTime_Error)
-        General_Setting_layout.addRow(QLabel_SPOperationMode, self.QComboBox_SPOperationMode)
-        General_Setting_layout.addRow(QLabel_Line_Reg_Range, self.QComboBox_Line_Reg_Range)
+        General_Setting_layout.addRow(ui.QLabel_Voltage_Sense, self.QComboBox_Voltage_Sense)
+        General_Setting_layout.addRow(ui.QLabel_OVP_Level, self.QLineEdit_OVP_Level)
+        General_Setting_layout.addRow(ui.QLabel_OCP_Level, self.QLineEdit_OCP_Level)
+        General_Setting_layout.addRow(ui.QLabel_OCP_Activation_Time, self.QLineEdit_OCP_ActivationTime_Error)
+        General_Setting_layout.addRow(ui.QLabel_SPOperationMode, self.QComboBox_SPOperationMode)
+        General_Setting_layout.addRow(ui.QLabel_Line_Reg_Range, self.QComboBox_Line_Reg_Range)
 
+    def _create_rating_and_error_groups(self, ui):
         #Test Ratings (Current/Voltage/Power)
         self.power_setting_widget = QWidget()
         power_init_step_layout = QFormLayout(self.power_setting_widget)
@@ -753,24 +861,24 @@ class AllTestMeasurement(QDialog):
         power_init_step_layout.addRow(self.QLabel_power_step_size, self.QLineEdit_power_step_size)
         power_group = QGroupBox()
         power_sweep_layout = QFormLayout(power_group)
-        power_sweep_layout.addRow(Desp4) 
-        power_sweep_layout.addRow(QLabel_power_rated, self.QLineEdit_power_rated)  
-        power_sweep_layout.addRow(QLabel_Power, self.QLineEdit_Power)
+        power_sweep_layout.addRow(ui.Desp4)
+        power_sweep_layout.addRow(ui.QLabel_power_rated, self.QLineEdit_power_rated)
+        power_sweep_layout.addRow(ui.QLabel_Power, self.QLineEdit_Power)
         power_sweep_layout.addRow("",self.power_setting_widget)
         voltage_group = QGroupBox()
         voltage_inifin_layout = QFormLayout(voltage_group)
-        voltage_inifin_layout.addRow(Desp5)
-        voltage_inifin_layout.addRow(QLabel_voltage_rated, self.QLineEdit_voltage_rated)
-        voltage_inifin_layout.addRow(QLabel_minVoltage, self.QLineEdit_minVoltage) 
-        voltage_inifin_layout.addRow(QLabel_maxVoltage, self.QLineEdit_maxVoltage) 
-        voltage_inifin_layout.addRow(QLabel_voltage_step_size, self.QLineEdit_voltage_stepsize)
+        voltage_inifin_layout.addRow(ui.Desp5)
+        voltage_inifin_layout.addRow(ui.QLabel_voltage_rated, self.QLineEdit_voltage_rated)
+        voltage_inifin_layout.addRow(ui.QLabel_minVoltage, self.QLineEdit_minVoltage)
+        voltage_inifin_layout.addRow(ui.QLabel_maxVoltage, self.QLineEdit_maxVoltage)
+        voltage_inifin_layout.addRow(ui.QLabel_voltage_step_size, self.QLineEdit_voltage_stepsize)
         current_group = QGroupBox()
         current_inifin_layout = QFormLayout(current_group)
-        current_inifin_layout.addRow(Desp6)  
-        current_inifin_layout.addRow(QLabel_current_rated, self.QLineEdit_current_rated )  
-        current_inifin_layout.addRow(QLabel_minCurrent, self.QLineEdit_minCurrent) 
-        current_inifin_layout.addRow(QLabel_maxCurrent, self.QLineEdit_maxCurrent)
-        current_inifin_layout.addRow(QLabel_current_step_size, self.QLineEdit_current_stepsize)
+        current_inifin_layout.addRow(ui.Desp6)
+        current_inifin_layout.addRow(ui.QLabel_current_rated, self.QLineEdit_current_rated)
+        current_inifin_layout.addRow(ui.QLabel_minCurrent, self.QLineEdit_minCurrent)
+        current_inifin_layout.addRow(ui.QLabel_maxCurrent, self.QLineEdit_maxCurrent)
+        current_inifin_layout.addRow(ui.QLabel_current_step_size, self.QLineEdit_current_stepsize)
         self.Ratings_Widget = QGroupBox()
         Ratings_Layout = QHBoxLayout(self.Ratings_Widget)
         Ratings_Layout.addWidget(power_group)
@@ -780,15 +888,15 @@ class AllTestMeasurement(QDialog):
         #Gain Error Settings
         self.programming_error_widget = QGroupBox()
         programming_error_layout = QFormLayout(self.programming_error_widget)
-        programming_error_layout.addRow(QLabel_Programming_Error_Gain, self.QLineEdit_Programming_Error_Gain)
-        programming_error_layout.addRow(QLabel_Programming_Error_Offset, self.QLineEdit_Programming_Error_Offset)
-        programming_error_layout.addRow(QLabel_Readback_Error_Gain, self.QLineEdit_Readback_Error_Gain)
-        programming_error_layout.addRow(QLabel_Readback_Error_Offset, self.QLineEdit_Readback_Error_Offset)
+        programming_error_layout.addRow(ui.QLabel_Programming_Error_Gain, self.QLineEdit_Programming_Error_Gain)
+        programming_error_layout.addRow(ui.QLabel_Programming_Error_Offset, self.QLineEdit_Programming_Error_Offset)
+        programming_error_layout.addRow(ui.QLabel_Readback_Error_Gain, self.QLineEdit_Readback_Error_Gain)
+        programming_error_layout.addRow(ui.QLabel_Readback_Error_Offset, self.QLineEdit_Readback_Error_Offset)
 
         self.load_error_widget = QGroupBox()
         load_error_layout = QFormLayout(self.load_error_widget)
-        load_error_layout.addRow(QLabel_Load_Programming_Error_Gain, self.QLineEdit_Load_Programming_Error_Gain)
-        load_error_layout.addRow(QLabel_Load_Programming_Error_Offset, self.QLineEdit_Load_Programming_Error_Offset)
+        load_error_layout.addRow(ui.QLabel_Load_Programming_Error_Gain, self.QLineEdit_Load_Programming_Error_Gain)
+        load_error_layout.addRow(ui.QLabel_Load_Programming_Error_Offset, self.QLineEdit_Load_Programming_Error_Offset)
 
         self.power_programming_error_widget = QGroupBox()
         power_programming_error_layout = QFormLayout(self.power_programming_error_widget)
@@ -799,32 +907,33 @@ class AllTestMeasurement(QDialog):
 
         self.Programming_Response_widget = QGroupBox()
         programming_response_error_layout = QFormLayout(self.Programming_Response_widget)
-        programming_response_error_layout.addRow( QLabel_Programming_Response_Up_NoLoad, self.QLineEdit_Programming_Response_Up_NoLoad)
-        programming_response_error_layout.addRow( QLabel_Programming_Response_Up_FullLoad, self.QLineEdit_Programming_Response_Up_FullLoad)
-        programming_response_error_layout.addRow(QLabel_Programming_Response_Down_NoLoad, self.QLineEdit_Programming_Response_Down_NoLoad)
-        programming_response_error_layout.addRow( QLabel_Programming_Response_Down_FullLoad, self.QLineEdit_Programming_Response_Down_FullLoad)
+        programming_response_error_layout.addRow( ui.QLabel_Programming_Response_Up_NoLoad, self.QLineEdit_Programming_Response_Up_NoLoad)
+        programming_response_error_layout.addRow( ui.QLabel_Programming_Response_Up_FullLoad, self.QLineEdit_Programming_Response_Up_FullLoad)
+        programming_response_error_layout.addRow(ui.QLabel_Programming_Response_Down_NoLoad, self.QLineEdit_Programming_Response_Down_NoLoad)
+        programming_response_error_layout.addRow( ui.QLabel_Programming_Response_Down_FullLoad, self.QLineEdit_Programming_Response_Down_FullLoad)
 
         self.OVP_error_widget = QGroupBox()
         OVP_error_layout = QFormLayout(self.OVP_error_widget)
-        OVP_error_layout.addRow(QLabel_OVP_Error_Gain, self.QLineEdit_OVP_Error_Gain)
-        OVP_error_layout.addRow(QLabel_OVP_Error_Offset, self.QLineEdit_OVP_Error_Offset)
-   
+        OVP_error_layout.addRow(ui.QLabel_OVP_Error_Gain, self.QLineEdit_OVP_Error_Gain)
+        OVP_error_layout.addRow(ui.QLabel_OVP_Error_Offset, self.QLineEdit_OVP_Error_Offset)
+
+    def _create_scope_and_collection_groups(self, ui):
         #Oscilloscope Settings
         self.oscilloscope_settings_widget = QGroupBox()
         self.oscilloscope_form = QFormLayout(self.oscilloscope_settings_widget)
-        self.oscilloscope_form.addRow(OscilloscopeSetting)
-        self.oscilloscope_form.addRow(QLabel_OSC_Display_Channel, self.QLineEdit_OSC_Display_Channel)
-        self.oscilloscope_form.addRow(QLabel_V_Settling_Band, self.QLineEdit_V_Settling_Band)
-        self.oscilloscope_form.addRow(QLabel_T_Settling_Band, self.QLineEdit_T_Settling_Band)
-        self.oscilloscope_form.addRow(QLabel_Probe_Setting, self.QComboBox_Probe_Setting)
-        self.oscilloscope_form.addRow(QLabel_Acq_Type, self.QComboBox_Acq_Type)
-        self.oscilloscope_form.addRow(QLabel_Channel_CouplingMode, self.QComboBox_Channel_CouplingMode)
-        self.oscilloscope_form.addRow(QLabel_Trigger_CouplingMode, self.QComboBox_Trigger_CouplingMode)
-        self.oscilloscope_form.addRow(QLabel_Trigger_Mode, self.QComboBox_Trigger_Mode)
-        self.oscilloscope_form.addRow(QLabel_Trigger_SweepMode, self.QComboBox_Trigger_SweepMode)
-        self.oscilloscope_form.addRow(QLabel_Trigger_SlopeMode, self.QComboBox_Trigger_SlopeMode)
-        self.oscilloscope_form.addRow(QLabel_TimeScale, self.QLineEdit_TimeScale)
-        self.oscilloscope_form.addRow(QLabel_VerticalScale, self.QLineEdit_VerticalScale)
+        self.oscilloscope_form.addRow(ui.OscilloscopeSetting)
+        self.oscilloscope_form.addRow(ui.QLabel_OSC_Display_Channel, self.QLineEdit_OSC_Display_Channel)
+        self.oscilloscope_form.addRow(ui.QLabel_V_Settling_Band, self.QLineEdit_V_Settling_Band)
+        self.oscilloscope_form.addRow(ui.QLabel_T_Settling_Band, self.QLineEdit_T_Settling_Band)
+        self.oscilloscope_form.addRow(ui.QLabel_Probe_Setting, self.QComboBox_Probe_Setting)
+        self.oscilloscope_form.addRow(ui.QLabel_Acq_Type, self.QComboBox_Acq_Type)
+        self.oscilloscope_form.addRow(ui.QLabel_Channel_CouplingMode, self.QComboBox_Channel_CouplingMode)
+        self.oscilloscope_form.addRow(ui.QLabel_Trigger_CouplingMode, self.QComboBox_Trigger_CouplingMode)
+        self.oscilloscope_form.addRow(ui.QLabel_Trigger_Mode, self.QComboBox_Trigger_Mode)
+        self.oscilloscope_form.addRow(ui.QLabel_Trigger_SweepMode, self.QComboBox_Trigger_SweepMode)
+        self.oscilloscope_form.addRow(ui.QLabel_Trigger_SlopeMode, self.QComboBox_Trigger_SlopeMode)
+        self.oscilloscope_form.addRow(ui.QLabel_TimeScale, self.QLineEdit_TimeScale)
+        self.oscilloscope_form.addRow(ui.QLabel_VerticalScale, self.QLineEdit_VerticalScale)
         self.oscilloscope_form.addRow(self.QCheckBox_SpecialCase_Widget)
         self.oscilloscope_form.addRow(self.QCheckBox_NormalCase_Widget)
 
@@ -838,15 +947,16 @@ class AllTestMeasurement(QDialog):
         #Collection and Delay
         self.collection_group = QGroupBox()
         self.collection_group_layout = QFormLayout(self.collection_group)
-        self.collection_group_layout.addRow(QLabel_noofloop, self.QComboBox_noofloop)
-        self.collection_group_layout.addRow(QLabel_updatedelay, self.QComboBox_updatedelay)
+        self.collection_group_layout.addRow(ui.QLabel_noofloop, self.QComboBox_noofloop)
+        self.collection_group_layout.addRow(ui.QLabel_updatedelay, self.QComboBox_updatedelay)
 
+    def _create_execution_panel(self, ui):
         #Execute Layout + Outputbox in Right Container
         Right_container = QVBoxLayout()
         exec_layout_box = QHBoxLayout()
         exec_layout = QFormLayout()
 
-        #exec_layout.addRow(Desp0)
+        #exec_layout.addRow(ui.Desp0)
         exec_layout.addWidget(self.OutputBox)
         exec_layout.addRow(self.QPushButton_Widget0)
 
@@ -860,15 +970,17 @@ class AllTestMeasurement(QDialog):
 
         exec_layout_box.addLayout(exec_layout)
  
-        Right_container.addLayout(save_path_layout)         #Need changes
+        Right_container.addLayout(ui.save_path_layout)         #Need changes
         Right_container.addLayout(exec_layout_box)
         Right_container.addWidget(self.queue_widget)
         Right_container.addWidget(self.plot_widget)
+        return Right_container
 
+    def _create_settings_panel(self, ui, test_selection_layout):
         #Setting Form Layout with Left Container
         top_widget = QWidget()
         top_layout_left = QVBoxLayout()  # Using QVBoxLayout for stacking the left items vertically
-        top_layout_left.addLayout(Voltage_Current_Selection_Layout)
+        top_layout_left.addLayout(test_selection_layout)
         top_layout_left.addWidget(self.image_label)
 
         top_layout_right = QVBoxLayout()  # Using QVBoxLayout for stacking the right items vertically
@@ -880,11 +992,11 @@ class AllTestMeasurement(QDialog):
         #Configuration Layout Setting (Put every groupbox inside left main layout)
         setting_widget = QWidget()
         setting_layout = QFormLayout(setting_widget)
-        setting_layout.addRow(Desp1)
+        setting_layout.addRow(ui.Desp1)
         setting_layout.addRow(self.Connection_group)
-        setting_layout.addRow(Desp2)
+        setting_layout.addRow(ui.Desp2)
         setting_layout.addRow(self.General_group)
-        setting_layout.addRow(Desp3)
+        setting_layout.addRow(ui.Desp3)
         setting_layout.addRow(self.programming_error_widget)
         setting_layout.addRow(self.load_error_widget)
         setting_layout.addRow(self.Programming_Response_widget)
@@ -893,7 +1005,7 @@ class AllTestMeasurement(QDialog):
         setting_layout.addRow(self.Ratings_Widget)
         setting_layout.addRow(self.oscilloscope_settings_widget)
         #setting_layout.addRow(self.performtest_widget)
-        setting_layout.addRow(Desp7)
+        setting_layout.addRow(ui.Desp7)
         setting_layout.addRow(self.collection_group)
 
         top_combined = QHBoxLayout()
@@ -909,13 +1021,15 @@ class AllTestMeasurement(QDialog):
 
         Left_container.addWidget(top_widget, stretch =1)
         Left_container.addWidget(scroll_area, stretch =3)
+        return Left_container
 
+    def _install_main_layout(self, left_container, right_container):
         #Main Layout
         Main_Layout = QHBoxLayout()
         Main_Layout.addWidget(self.progress_label)
         Main_Layout.addWidget(self.progress_bar)
-        Main_Layout.addLayout(Left_container,stretch= 2)
-        Main_Layout.addLayout(Right_container,stretch = 1)
+        Main_Layout.addLayout(left_container,stretch= 2)
+        Main_Layout.addLayout(right_container,stretch = 1)
         self.setLayout(Main_Layout)
 
 

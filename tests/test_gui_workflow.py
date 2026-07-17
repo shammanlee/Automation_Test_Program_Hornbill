@@ -130,6 +130,15 @@ class GuiWorkflowTests(unittest.TestCase):
             "? Measurement complete",
         )
 
+    def test_ui_builders_assemble_expected_sections(self):
+        self.assertEqual(self.dialog.layout().count(), 4)
+        self.assertIsNotNone(self.dialog.Connection_group.layout())
+        self.assertIsNotNone(self.dialog.General_group.layout())
+        self.assertIsNotNone(self.dialog.Ratings_Widget.layout())
+        self.assertIsNotNone(self.dialog.oscilloscope_settings_widget.layout())
+        self.assertIsNotNone(self.dialog.collection_group.layout())
+        self.assertIsNotNone(self.dialog.queue_widget.parent())
+
     def test_state_controls_follow_worker_state(self):
         self.dialog.set_test_state(GUI.TestState.RUNNING)
         self.assertFalse(self.dialog.QPushButton_Widget1.isEnabled())
