@@ -333,10 +333,12 @@ class TestWorker(QThread):
             datatoCSV_Programming_Response(self.results,self.currenttime,self.params)
 
     def _run_dolphin_current_tests(self, loop_index):
-        x = loop_index
         if self._run_dolphin_current_accuracy(loop_index):
             return
 
+        self._run_current_auxiliary_tests(loop_index)
+
+    def _run_current_auxiliary_tests(self, loop_index):
         #Current Load Regulation Test
         if self.checkbox_states.get("CurrentLoadRegulation"):
             if self.params["Instrument"] == "Keysight":
@@ -345,30 +347,7 @@ class TestWorker(QThread):
                     os.system('cls')
                     datatoCSV_LoadRegulation(self.results, self.params)
 
-        #Power Accuracy Test
-        if self.checkbox_states.get("PowerAccuracy"):
-            if self.checkbox_states["Voltage_Test"]:
-                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementB(self, self.dict)  # Power CC
-
-            elif self.checkbox_states["Current_Test"]:
-                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementA(self, self.dict)  # Power CV
-
-            #Measurement Completion
-            if x == (int(self.params["noofloop"]) - 1):
-                self.progress.emit("✅Measurement is complete !")
-
-                #Export Data to CSV
-                if self.checkbox_states["DataReport"]:
-
-                    #Export data to CSV and Graph (Refer data.py for details)
-                    powerinstrumentData(self.params["PSU"], self.params["DMM"], self.params["DMM2"], self.params["ELoad"])
-                    datatoCSV_PowerAccuracy(infoList, dataList, dataList2)
-                    datatoGraph3(infoList, dataList,dataList2)
-                    datatoGraph3.scatterComparePower(self, float(self.params["Power_Programming_Error_Gain"]), float(self.params["Power_Programming_Error_Offset"]), float(self.params["Power_Readback_Error_Gain"]), float(self.params["Power_Readback_Error_Offset"]), str(self.params["setFunction"]), float(self.params["P_Rating"]))
-
-                    self._write_config_csv("powerconfig.csv")
-
-                    self._save_power_report()
+        self._run_power_test(loop_index, "PowerAccuracy")
 
         #Current Line Regulation
         if self.checkbox_states.get("CurrentLineRegulation"):
@@ -392,6 +371,54 @@ class TestWorker(QThread):
             self.results = OCP_test2.Execute_OCP(self.dict)
             OCP_data_export2 = datatoCSV_OCP_Test(self.params)
             OCP_data_export2.ActivationTime(self.results)
+
+    def _run_power_test(self, loop_index, selection):
+        if not self.checkbox_states.get(selection):
+            return
+
+        if self.checkbox_states["Voltage_Test"]:
+            info_list, data_list, readback_list = (
+                PowerMeasurement.executePowerMeasurementB(self, self.dict)
+            )
+        elif self.checkbox_states["Current_Test"]:
+            info_list, data_list, readback_list = (
+                PowerMeasurement.executePowerMeasurementA(self, self.dict)
+            )
+
+        if loop_index == int(self.params["noofloop"]) - 1:
+            self.progress.emit("✅Measurement is complete !")
+            if self.checkbox_states["DataReport"]:
+                self._export_power_accuracy(
+                    info_list,
+                    data_list,
+                    readback_list,
+                )
+
+    def _export_power_accuracy(
+        self,
+        info_list,
+        data_list,
+        readback_list,
+    ):
+        powerinstrumentData(
+            self.params["PSU"],
+            self.params["DMM"],
+            self.params["DMM2"],
+            self.params["ELoad"],
+        )
+        datatoCSV_PowerAccuracy(info_list, data_list, readback_list)
+        datatoGraph3(info_list, data_list, readback_list)
+        datatoGraph3.scatterComparePower(
+            self,
+            float(self.params["Power_Programming_Error_Gain"]),
+            float(self.params["Power_Programming_Error_Offset"]),
+            float(self.params["Power_Readback_Error_Gain"]),
+            float(self.params["Power_Readback_Error_Offset"]),
+            str(self.params["setFunction"]),
+            float(self.params["P_Rating"]),
+        )
+        self._write_config_csv("powerconfig.csv")
+        self._save_power_report()
 
     def _run_hornbill_tests(self, loop_index):
         if self.checkbox_states["Voltage_Test"]:
@@ -574,90 +601,11 @@ class TestWorker(QThread):
         self.progress.emit("")
 
     def _run_hornbill_current_tests(self, loop_index):
-        x = loop_index
         if self._run_hornbill_current_accuracy(loop_index):
             return
 
-        #Current Load Regulation Test
-        if self.checkbox_states.get("CurrentLoadRegulation"):
-            if self.params["Instrument"] == "Keysight":
-                for ch in self.params["PSU_Channel"]:
-                    self.results = NewLoadRegulation.executeCC_LoadRegulation(self, self.dict)
-                    os.system('cls')
-                    datatoCSV_LoadRegulation(self.results, self.params)
-
-        #Power Accuracy Test
-        if self.checkbox_states.get("PowerAccuracy"):
-            if self.checkbox_states["Voltage_Test"]:
-                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementB(self, self.dict)  # Power CC
-
-            elif self.checkbox_states["Current_Test"]:
-                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementA(self, self.dict)  # Power CV
-
-            #Measurement Completion
-            if x == (int(self.params["noofloop"]) - 1):
-                self.progress.emit("✅Measurement is complete !")
-
-                #Export Data to CSV
-                if self.checkbox_states["DataReport"]:
-
-                    #Export data to CSV and Graph (Refer data.py for details)
-                    powerinstrumentData(self.params["PSU"], self.params["DMM"], self.params["DMM2"], self.params["ELoad"])
-                    datatoCSV_PowerAccuracy(infoList, dataList, dataList2)
-                    datatoGraph3(infoList, dataList,dataList2)
-                    datatoGraph3.scatterComparePower(self, float(self.params["Power_Programming_Error_Gain"]), float(self.params["Power_Programming_Error_Offset"]), float(self.params["Power_Readback_Error_Gain"]), float(self.params["Power_Readback_Error_Offset"]), str(self.params["setFunction"]), float(self.params["P_Rating"]))
-
-                    self._write_config_csv("powerconfig.csv")
-
-                    self._save_power_report()
-
-        #Current Line Regulation
-        if self.checkbox_states.get("CurrentLineRegulation"):
-            self.results = LineRegulation.executeCC_LoadRegulation(self, self.dict)
-            datatoCSV_Line_Regulation(self.results, self.params)
-
-        #OCP Accuracy Test
-        if self.checkbox_states.get("OCP_Test"):
-
-            #Accuracy Test 1st
-            #OCP_test = OCP_Accuracy()
-            #self.results = OCP_test.Execute_OCP(dict)
-            #os.system('cls')
-            # OCP_data_export = datatoCSV_OCP_Test(params)
-            #OCP_data_export.AccuracyTest(self.results)
-
-            self.results =[]
-
-            #Activation Time Test
-            OCP_test2 = OCP_Activation_Time()
-            self.results = OCP_test2.Execute_OCP(self.dict)
-            OCP_data_export2 = datatoCSV_OCP_Test(self.params)
-            OCP_data_export2.ActivationTime(self.results)
-
-        #Peak Power Test
-        if self.checkbox_states.get("Peak_Power_Test"):
-            if self.checkbox_states["Voltage_Test"]:
-                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementB(self, self.dict)  # Power CC
-
-            elif self.checkbox_states["Current_Test"]:
-                infoList, dataList, dataList2 = PowerMeasurement.executePowerMeasurementA(self, self.dict)  # Power CV
-
-            #Measurement Completion
-            if x == (int(self.params["noofloop"]) - 1):
-                self.progress.emit("✅Measurement is complete !")
-
-                #Export Data to CSV
-                if self.checkbox_states["DataReport"]:
-
-                    #Export data to CSV and Graph (Refer data.py for details)
-                    powerinstrumentData(self.params["PSU"], self.params["DMM"], self.params["DMM2"], self.params["ELoad"])
-                    datatoCSV_PowerAccuracy(infoList, dataList, dataList2)
-                    datatoGraph3(infoList, dataList,dataList2)
-                    datatoGraph3.scatterComparePower(self, float(self.params["Power_Programming_Error_Gain"]), float(self.params["Power_Programming_Error_Offset"]), float(self.params["Power_Readback_Error_Gain"]), float(self.params["Power_Readback_Error_Offset"]), str(self.params["setFunction"]), float(self.params["P_Rating"]))
-
-                    self._write_config_csv("powerconfig.csv")
-
-                    self._save_power_report()
+        self._run_current_auxiliary_tests(loop_index)
+        self._run_power_test(loop_index, "Peak_Power_Test")
 
     def run(self):
         cancelled = False

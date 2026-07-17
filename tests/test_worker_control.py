@@ -128,6 +128,98 @@ class WorkerControlTests(unittest.TestCase):
 
                 auxiliary.assert_not_called()
 
+    def test_dut_current_handlers_run_shared_auxiliary_tests(self):
+        worker = create_worker()
+        with patch.object(
+            worker,
+            "_run_dolphin_current_accuracy",
+            return_value=False,
+        ) as accuracy, patch.object(
+            worker,
+            "_run_current_auxiliary_tests",
+        ) as auxiliary, patch.object(worker, "_run_power_test") as power:
+            worker._run_dolphin_current_tests(3)
+
+        accuracy.assert_called_once_with(3)
+        auxiliary.assert_called_once_with(3)
+        power.assert_not_called()
+
+        worker = create_worker()
+        with patch.object(
+            worker,
+            "_run_hornbill_current_accuracy",
+            return_value=False,
+        ) as accuracy, patch.object(
+            worker,
+            "_run_current_auxiliary_tests",
+        ) as auxiliary, patch.object(worker, "_run_power_test") as power:
+            worker._run_hornbill_current_tests(4)
+
+        accuracy.assert_called_once_with(4)
+        auxiliary.assert_called_once_with(4)
+        power.assert_called_once_with(4, "Peak_Power_Test")
+
+    def test_aborted_current_accuracy_skips_auxiliary_tests(self):
+        cases = (
+            ("_run_dolphin_current_tests", "_run_dolphin_current_accuracy"),
+            ("_run_hornbill_current_tests", "_run_hornbill_current_accuracy"),
+        )
+
+        for handler_name, accuracy_name in cases:
+            with self.subTest(handler=handler_name):
+                worker = create_worker()
+                with patch.object(
+                    worker,
+                    accuracy_name,
+                    return_value=True,
+                ), patch.object(
+                    worker,
+                    "_run_current_auxiliary_tests",
+                ) as auxiliary, patch.object(
+                    worker,
+                    "_run_power_test",
+                ) as power:
+                    getattr(worker, handler_name)(3)
+
+                auxiliary.assert_not_called()
+                power.assert_not_called()
+
+    def test_current_auxiliary_uses_power_accuracy_selection(self):
+        worker = create_worker()
+
+        with patch.object(worker, "_run_power_test") as power:
+            worker._run_current_auxiliary_tests(2)
+
+        power.assert_called_once_with(2, "PowerAccuracy")
+
+    def test_power_test_exports_only_on_final_loop(self):
+        worker = TestWorker(
+            {
+                "PowerAccuracy": True,
+                "Voltage_Test": False,
+                "Current_Test": True,
+                "DataReport": True,
+            },
+            {},
+            Parameters(noofloop=2),
+        )
+        measurement = (["info"], ["measured"], ["readback"])
+        with patch.object(
+            test_worker.PowerMeasurement,
+            "executePowerMeasurementA",
+            return_value=measurement,
+        ), patch.object(worker, "_export_power_accuracy") as export:
+            worker._run_power_test(0, "PowerAccuracy")
+            export.assert_not_called()
+
+            worker._run_power_test(1, "PowerAccuracy")
+
+        export.assert_called_once_with(
+            ["info"],
+            ["measured"],
+            ["readback"],
+        )
+
     def test_voltage_modes_use_configured_accuracy_runner(self):
         cases = (
             (
