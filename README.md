@@ -110,11 +110,14 @@ Queue-template serialization and reconstruction are isolated in
 `src/output_logging.py`.
 VISA enumeration, identity queries, IP/hostname classification, model-role mapping,
 and discovery-resource cleanup live in `src/instrument_discovery.py`.
+Production widget population and automatic role selection live in
+`src/instrument_discovery_ui.py`.
 
 Use **Add to Queue** to snapshot the current setup without starting it. Pending rows
 can be reordered or removed, and **Run Queue** executes them sequentially. Every row
-receives its own run directory and reports `Pending`, `Running`, `Completed`,
-`Failed`, or `Aborted`. Aborting an active row leaves the remaining queue available;
+receives its own run directory and reports `Pending`, `Running`, `Paused`,
+`Stopping`, `Completed`, `Failed`, or `Aborted`. Aborting an active row leaves the
+remaining queue available;
 **Clear Pending** removes waiting rows.
 **Duplicate** creates an independent copy of any selected row. **Retry Failed**
 requeues failed or aborted rows using their original parameter snapshot. **Save

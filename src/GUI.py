@@ -55,6 +55,7 @@ from instrument_discovery import (
     get_visa_tcpip_resources as GetVisaTCPIPResources,
     load_model_role_map,
 )
+from instrument_discovery_ui import present_discovery_result
 
 from DUT_Test_Scripts.DUT_Test import NewCurrentMeasurement, NewVoltageMeasurement
 from SCPI_Library.visa_config import configure_visa_resource
@@ -10829,7 +10830,12 @@ class AllTestMeasurement(QDialog):
                 "<span style='color:orange;'>⚠ Failure ignored by operator — test resumed</span>"
             )
         elif msg.clickedButton() == terminate_btn:
-            self.worker.stop()
+            self.was_aborted = True
+            self.set_test_state(TestState.STOPPING)
+            if self.run_controller.active_worker is self.worker:
+                self.run_controller.request_stop(clear_pending=False)
+            else:
+                self.worker.request_stop()
             self.OutputBox.append(
                 "<span style='color:red;'>⛔ Test terminated by operator</span>"
             )
@@ -10939,41 +10945,29 @@ class AllTestMeasurement(QDialog):
     def doFind(self):       #Shamman changes
         try:
             # Clear GUI fields
-            self.QLineEdit_PSU_VisaAddress.clear()
-            self.QLineEdit_DMM_VisaAddressforVoltage.clear()
-            self.QLineEdit_DMM_VisaAddressforCurrent.clear()
-            self.QLineEdit_OSC_VisaAddress.clear()
-            self.QLineEdit_ELoad_VisaAddress.clear()
-            self.OutputBox.clear()
-
             # 🔑 Call the dispatcher
             discovery = ScanSelectedVisaResources(self)
-            self.visaIdList = discovery.addresses
-            self.nameList = discovery.identities
-            instrument_roles = discovery.roles
+            self.visaIdList = list(discovery.addresses)
+            self.nameList = list(discovery.identities)
 
-            for visa_id, name in zip(self.visaIdList, self.nameList):
-                self.OutputBox.append(f"{name}  {visa_id}")
-
-                self.QLineEdit_PSU_VisaAddress.addItem(visa_id)
-                self.QLineEdit_OSC_VisaAddress.addItem(visa_id)
-                self.QLineEdit_DMM_VisaAddressforVoltage.addItem(visa_id)
-                self.QLineEdit_DMM_VisaAddressforCurrent.addItem(visa_id)
-                self.QLineEdit_ELoad_VisaAddress.addItem(visa_id)
-
-            # Auto-assign roles
-            role_widget_map = {
-                'PSU': self.QLineEdit_PSU_VisaAddress,
-                'ELOAD': self.QLineEdit_ELoad_VisaAddress,
-                'DMM': self.QLineEdit_DMM_VisaAddressforVoltage,
-                'DMM2': self.QLineEdit_DMM_VisaAddressforCurrent,
-                'SCOPE': self.QLineEdit_OSC_VisaAddress
-            }
-
-            for role, visa in instrument_roles.items():
-                if role in role_widget_map and visa in self.visaIdList:
-                    idx = self.visaIdList.index(visa)
-                    role_widget_map[role].setCurrentIndex(idx)
+            present_discovery_result(
+                discovery,
+                address_widgets=(
+                    self.QLineEdit_PSU_VisaAddress,
+                    self.QLineEdit_DMM_VisaAddressforVoltage,
+                    self.QLineEdit_DMM_VisaAddressforCurrent,
+                    self.QLineEdit_OSC_VisaAddress,
+                    self.QLineEdit_ELoad_VisaAddress,
+                ),
+                role_widgets={
+                    "PSU": self.QLineEdit_PSU_VisaAddress,
+                    "ELOAD": self.QLineEdit_ELoad_VisaAddress,
+                    "DMM": self.QLineEdit_DMM_VisaAddressforVoltage,
+                    "DMM2": self.QLineEdit_DMM_VisaAddressforCurrent,
+                    "SCOPE": self.QLineEdit_OSC_VisaAddress,
+                },
+                output_widget=self.OutputBox,
+            )
 
         except Exception as e:
             self.OutputBox.append("No Devices Found!!! " + str(e))

@@ -162,6 +162,81 @@ class GuiWorkflowTests(unittest.TestCase):
         self.assertEqual(self.dialog.test_state, GUI.TestState.STOPPING)
         self.assertEqual(self.dialog.abort_button.text(), "Stopping...")
 
+    def test_discovery_populates_all_instrument_widgets_and_assigns_roles(self):
+        result = GUI.DiscoveryResult(
+            addresses=["USB0::PSU::INSTR", "USB0::DMM::INSTR"],
+            identities=["VENDOR,PSU", "VENDOR,DMM"],
+            roles={
+                "PSU": "USB0::PSU::INSTR",
+                "DMM": "USB0::DMM::INSTR",
+            },
+        )
+
+        with patch.object(
+            GUI, "ScanSelectedVisaResources", return_value=result
+        ):
+            self.dialog.doFind()
+
+        widgets = (
+            self.dialog.QLineEdit_PSU_VisaAddress,
+            self.dialog.QLineEdit_DMM_VisaAddressforVoltage,
+            self.dialog.QLineEdit_DMM_VisaAddressforCurrent,
+            self.dialog.QLineEdit_OSC_VisaAddress,
+            self.dialog.QLineEdit_ELoad_VisaAddress,
+        )
+        for widget in widgets:
+            self.assertEqual(widget.count(), 2)
+        self.assertEqual(
+            self.dialog.QLineEdit_PSU_VisaAddress.currentText(),
+            "USB0::PSU::INSTR",
+        )
+        self.assertEqual(
+            self.dialog.QLineEdit_DMM_VisaAddressforVoltage.currentText(),
+            "USB0::DMM::INSTR",
+        )
+
+    def test_failure_termination_uses_safe_stop_state(self):
+        class TerminateMessageBox:
+            Warning = QMessageBox.Warning
+            AcceptRole = QMessageBox.AcceptRole
+            RejectRole = QMessageBox.RejectRole
+
+            def __init__(self, _parent):
+                self.terminate_button = None
+
+            def setIcon(self, _icon):
+                return None
+
+            def setWindowTitle(self, _title):
+                return None
+
+            def setText(self, _text):
+                return None
+
+            def addButton(self, text, _role):
+                button = object()
+                if text == "Terminate Test":
+                    self.terminate_button = button
+                return button
+
+            def exec_(self):
+                return None
+
+            def clickedButton(self):
+                return self.terminate_button
+
+        worker = DummyWorker()
+        worker.running = True
+        self.dialog.worker = worker
+        self.dialog.set_test_state(GUI.TestState.PAUSED)
+
+        with patch.object(GUI, "QMessageBox", TerminateMessageBox):
+            self.dialog.handle_test_failure()
+
+        self.assertTrue(self.dialog.was_aborted)
+        self.assertEqual(self.dialog.test_state, GUI.TestState.STOPPING)
+        self.assertEqual(worker.stop_calls, 1)
+
     def test_duplicate_start_is_rejected_before_preflight(self):
         worker = DummyWorker()
         worker.running = True

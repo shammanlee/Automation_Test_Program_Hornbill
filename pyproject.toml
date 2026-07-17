@@ -4,6 +4,7 @@ include = [
     "src/configuration_service.py",
     "src/diagnostics.py",
     "src/instrument_discovery.py",
+    "src/instrument_discovery_ui.py",
     "src/output_logging.py",
     "src/preflight.py",
     "src/queue_persistence.py",

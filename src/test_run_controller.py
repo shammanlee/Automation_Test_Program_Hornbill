@@ -219,6 +219,9 @@ class TestRunController(QObject):
         worker.error.connect(
             lambda *_: self._worker_ended(request, "Failed")
         )
+        worker.state_changed.connect(
+            lambda state: self._worker_state_changed(request, state)
+        )
         self.request_started.emit(request)
         self._set_status(request, "Running")
         self.worker_created.emit(worker)
@@ -232,7 +235,20 @@ class TestRunController(QObject):
         self.active_request = None
         QTimer.singleShot(0, self._start_next)
 
+    def _worker_state_changed(self, request, state):
+        if request is not self.active_request:
+            return
+        status = {
+            "RUNNING": "Running",
+            "PAUSED": "Paused",
+            "STOPPING": "Stopping",
+        }.get(state)
+        if status:
+            self._set_status(request, status)
+
     def _set_status(self, request, status):
+        if self._statuses_by_id.get(request.run_id) == status:
+            return
         self._statuses_by_id[request.run_id] = status
         self.request_status_changed.emit(request, status)
         if status not in self.TERMINAL_STATUSES:
