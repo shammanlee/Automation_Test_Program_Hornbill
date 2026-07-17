@@ -3,6 +3,11 @@ import unittest
 from unittest.mock import patch
 
 import GUI
+from SCPI_Library.instrument_errors import (
+    InstrumentCommandError,
+    InstrumentConnectionError,
+    InstrumentTimeoutError,
+)
 from SCPI_Library.session_manager import (
     begin_visa_session_scope,
     close_visa_session_scope,
@@ -11,6 +16,7 @@ from SCPI_Library.session_manager import (
 from SCPI_Library.simulation import (
     SIMULATED_INSTRUMENTS,
     SimulatedVisaResourceManager,
+    inject_simulation_fault,
     create_resource_manager,
     reset_simulation,
     is_simulation_mode,
@@ -63,6 +69,42 @@ class SimulationTests(unittest.TestCase):
         psu.write("OUTP OFF")
 
         self.assertEqual(float(dmm.query("MEAS:VOLT:DC?")), 0.0)
+
+    def test_injected_timeout_preserves_instrument_context(self):
+        address = "USB0::SIM::DMM::INSTR"
+        inject_simulation_fault("query", "timeout", resource_name=address)
+
+        with patch.dict(os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False):
+            dmm = get_visa_resource(address)
+            with self.assertRaises(InstrumentTimeoutError) as raised:
+                dmm.query("MEAS:VOLT:DC?")
+
+        self.assertEqual(raised.exception.context["address"], address)
+        self.assertEqual(raised.exception.context["command"], "MEAS:VOLT:DC?")
+        self.assertEqual(raised.exception.context["operation"], "query")
+
+    def test_injected_disconnect_is_reported_as_command_failure(self):
+        address = "USB0::SIM::DMM::INSTR"
+        inject_simulation_fault("query", "disconnect", resource_name=address)
+
+        with patch.dict(os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False):
+            dmm = get_visa_resource(address)
+            with self.assertRaises(InstrumentCommandError) as raised:
+                dmm.query("READ?")
+
+        self.assertNotIsInstance(raised.exception, InstrumentTimeoutError)
+        self.assertEqual(raised.exception.context["address"], address)
+
+    def test_injected_connection_failure_is_normalized(self):
+        address = "USB0::SIM::PSU::INSTR"
+        inject_simulation_fault("connect", "disconnect", resource_name=address)
+
+        with patch.dict(os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False):
+            with self.assertRaises(InstrumentConnectionError) as raised:
+                get_visa_resource(address)
+
+        self.assertEqual(raised.exception.context["address"], address)
+        self.assertEqual(raised.exception.context["operation"], "connect")
 
 
 if __name__ == "__main__":

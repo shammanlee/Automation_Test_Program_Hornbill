@@ -224,9 +224,8 @@ class TestRunController(QObject):
         self.active_worker = worker
         worker.finished.connect(lambda: self._worker_ended(request, "Completed"))
         worker.aborted.connect(lambda: self._worker_ended(request, "Aborted"))
-        worker.error.connect(
-            lambda *_: self._worker_ended(request, "Failed")
-        )
+        failure_signal = getattr(worker, "failed", worker.error)
+        failure_signal.connect(lambda *_: self._worker_ended(request, "Failed"))
         worker.state_changed.connect(
             lambda state: self._worker_state_changed(request, state)
         )
@@ -238,6 +237,9 @@ class TestRunController(QObject):
     def _worker_ended(self, request, status):
         if request is not self.active_request:
             return
+        worker = self.active_worker
+        if worker is not None and hasattr(worker, "wait"):
+            worker.wait()
         self._set_status(request, status)
         self.active_worker = None
         self.active_request = None

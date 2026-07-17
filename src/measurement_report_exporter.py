@@ -17,7 +17,7 @@ from data import (
 )
 from xlreport import xlreport
 from xlreportpower import xlreportpower
-from SCPI_Library.simulation import is_simulation_mode
+from SCPI_Library.simulation import is_simulation_mode, raise_for_simulation_fault
 
 
 class MeasurementReportExporter:
@@ -33,6 +33,11 @@ class MeasurementReportExporter:
             worker.run_context.storage.raw if worker.run_context else csv_folder
         )
         config_frame.to_csv(os.path.join(output_directory, file_name))
+
+    @staticmethod
+    def _check_report_fault():
+        if is_simulation_mode():
+            raise_for_simulation_fault("report")
 
     def export_voltage_accuracy(
         self,
@@ -113,6 +118,7 @@ class MeasurementReportExporter:
             save_directory=worker.params["savelocation"],
             file_name=str(worker.params["unit"]),
         )
+        self._check_report_fault()
         worker._execute_checkpointed(report.run)
         worker.progress.emit("Excel Report Saved: " + str(worker.params["savedir"]))
         worker.progress.emit("")
@@ -165,6 +171,7 @@ class MeasurementReportExporter:
             save_directory=worker.params["savelocation"],
             file_name=file_name,
         )
+        self._check_report_fault()
         report.run()
         worker.progress.emit(
             "Excel Report Saved: " + str(worker.params["savelocation"])
@@ -184,6 +191,7 @@ class MeasurementReportExporter:
             save_directory=worker.params["savedir"],
             file_name=file_name,
         )
+        self._check_report_fault()
         report.run()
         worker.progress.emit("Excel Report Saved: " + str(worker.params["savedir"]))
         worker.progress.emit("")
