@@ -19,6 +19,7 @@ class TestRunRequest:
     label: str = "Test Run"
     prepare: object = None
     run_id: str = ""
+    recovery_run_directory: str = ""
 
     def __post_init__(self):
         if not self.run_id:
@@ -35,8 +36,11 @@ class TestRunController(QObject):
     request_setup_failed = pyqtSignal(object, object, str)
     request_history_pruned = pyqtSignal(str)
     queue_halted = pyqtSignal(object, str)
+    persistence_changed = pyqtSignal()
 
-    TERMINAL_STATUSES = {"Completed", "Failed", "Aborted", "Removed"}
+    TERMINAL_STATUSES = {
+        "Completed", "Failed", "Aborted", "Interrupted", "Retried", "Removed"
+    }
 
     def __init__(
         self,
@@ -63,6 +67,14 @@ class TestRunController(QObject):
     @property
     def pending_requests(self):
         return tuple(self._queue)
+
+    @property
+    def interrupted_requests(self):
+        return tuple(
+            request
+            for run_id, request in self._requests_by_id.items()
+            if self._statuses_by_id.get(run_id) == "Interrupted"
+        )
 
     @property
     def is_running(self):
@@ -103,6 +115,7 @@ class TestRunController(QObject):
         self.queue_changed.emit(len(self._queue))
         self.request_queued.emit(request)
         self._set_status(request, "Pending")
+        self.persistence_changed.emit()
         if auto_start:
             self.start_queue()
         return request
@@ -118,7 +131,13 @@ class TestRunController(QObject):
                 self._queue = deque(requests)
                 self.queue_changed.emit(len(self._queue))
                 self._set_status(request, "Removed")
+                self.persistence_changed.emit()
                 return True
+        request = self.request_for(run_id)
+        if request and self.status_for(run_id) == "Interrupted":
+            self._set_status(request, "Removed")
+            self.persistence_changed.emit()
+            return True
         return False
 
     def move_pending(self, run_id, offset):
@@ -135,6 +154,7 @@ class TestRunController(QObject):
         requests[index], requests[target] = requests[target], requests[index]
         self._queue = deque(requests)
         self.queue_changed.emit(len(self._queue))
+        self.persistence_changed.emit()
         return True
 
     def clear_pending(self):
@@ -143,6 +163,7 @@ class TestRunController(QObject):
         self.queue_changed.emit(0)
         for request in removed:
             self._set_status(request, "Removed")
+        self.persistence_changed.emit()
 
     def request_for(self, run_id):
         return self._requests_by_id.get(run_id)
@@ -168,12 +189,13 @@ class TestRunController(QObject):
         )
 
     def retry(self, run_id, auto_start=False):
-        if self.status_for(run_id) not in {"Failed", "Aborted"}:
+        status = self.status_for(run_id)
+        if status not in {"Failed", "Aborted", "Interrupted"}:
             return None
         source = self.request_for(run_id)
         if source is None:
             return None
-        return self.enqueue(
+        retry = self.enqueue(
             deepcopy(source.checkbox_states),
             deepcopy(source.configuration),
             deepcopy(source.parameters),
@@ -181,6 +203,35 @@ class TestRunController(QObject):
             prepare=source.prepare,
             auto_start=auto_start,
         )
+        if status == "Interrupted":
+            self._set_status(source, "Retried")
+            self.persistence_changed.emit()
+        return retry
+
+    def restore_interrupted(
+        self,
+        checkbox_states,
+        configuration,
+        parameters,
+        *,
+        label="Interrupted Test Run",
+        prepare=None,
+        run_id="",
+        recovery_run_directory="",
+    ):
+        request = TestRunRequest(
+            dict(checkbox_states),
+            dict(configuration),
+            parameters,
+            label=label,
+            prepare=prepare,
+            run_id=run_id,
+            recovery_run_directory=recovery_run_directory,
+        )
+        self._requests_by_id[request.run_id] = request
+        self.request_queued.emit(request)
+        self._set_status(request, "Interrupted")
+        return request
 
     def pause(self):
         if self.is_running:
@@ -204,16 +255,19 @@ class TestRunController(QObject):
             return
 
         request = self._queue.popleft()
-        self.queue_changed.emit(len(self._queue))
         self.active_request = request
+        self.queue_changed.emit(len(self._queue))
+        self.persistence_changed.emit()
         try:
             if request.prepare:
                 request.prepare(request)
+            self.persistence_changed.emit()
         except Exception as exception:
             traceback_text = traceback.format_exc()
             self._set_status(request, "Failed")
             self.request_setup_failed.emit(request, exception, traceback_text)
             self.active_request = None
+            self.persistence_changed.emit()
             self._advance_queue(request, "Failed")
             return
         worker = self._worker_factory(
@@ -243,6 +297,7 @@ class TestRunController(QObject):
         self._set_status(request, status)
         self.active_worker = None
         self.active_request = None
+        self.persistence_changed.emit()
         self._advance_queue(request, status)
 
     def _advance_queue(self, request, status):

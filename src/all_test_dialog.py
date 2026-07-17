@@ -262,7 +262,7 @@ class AllTestMeasurement(QDialog):
         self.run_controller.request_status_changed.connect(self._queue_status_changed)
         self.run_controller.request_setup_failed.connect(self._queue_setup_failed)
         self.run_controller.queue_halted.connect(self._queue_halted)
-        self.run_controller.queue_changed.connect(self._persist_pending_queue)
+        self.run_controller.persistence_changed.connect(self._persist_queue_state)
         self.test_state = TestState.IDLE
         self._cleanup_done = False
         self.run_storage = None
@@ -1250,19 +1250,45 @@ class AllTestMeasurement(QDialog):
         self.queue_widget.add_request(request)
         self.OutputBox.append(f"Queued: {request.label}")
 
-    def _persist_pending_queue(self, *_):
+    def _persist_queue_state(self, *_):
         if self._restoring_queue:
             return
         try:
-            self.queue_persistence.save(self.run_controller.pending_requests)
+            self.queue_persistence.save(
+                self.run_controller.pending_requests,
+                self.run_controller.active_request,
+                self.run_controller.interrupted_requests,
+            )
         except QueuePersistenceError as exception:
             self.OutputBox.append(f"Queue save warning: {exception}")
 
     def _restore_pending_queue(self):
         self._restoring_queue = True
         try:
-            records = self.queue_persistence.load()
-            for record in records:
+            snapshot = self.queue_persistence.load_snapshot()
+            interrupted_records = list(snapshot["interrupted"])
+            if snapshot["active"]:
+                interrupted_records.insert(0, snapshot["active"])
+            restored_ids = set()
+            for record in interrupted_records:
+                run_id = record.get("run_id", "")
+                if run_id in restored_ids:
+                    continue
+                restored_ids.add(run_id)
+                self.run_controller.restore_interrupted(
+                    record["checkbox_states"],
+                    record["configuration"],
+                    ParameterSnapshot(record["parameters"]),
+                    label=record.get("label", "Interrupted Test Run"),
+                    prepare=self._prepare_queued_run,
+                    run_id=run_id,
+                    recovery_run_directory=record.get("run_directory") or "",
+                )
+                if record.get("run_directory"):
+                    self.OutputBox.append(
+                        f"Interrupted run artifacts: {record['run_directory']}"
+                    )
+            for record in snapshot["pending"]:
                 self.run_controller.enqueue(
                     record["checkbox_states"],
                     record["configuration"],
@@ -1272,15 +1298,20 @@ class AllTestMeasurement(QDialog):
                     auto_start=False,
                     run_id=record.get("run_id", ""),
                 )
-            if records:
+            if interrupted_records:
                 self.OutputBox.append(
-                    f"Restored {len(records)} pending queue item(s)"
+                    f"Recovered {len(restored_ids)} interrupted run(s). "
+                    "Review and use Retry Failed to run them again."
+                )
+            if snapshot["pending"]:
+                self.OutputBox.append(
+                    f"Restored {len(snapshot['pending'])} pending queue item(s)"
                 )
         except (QueuePersistenceError, KeyError, TypeError) as exception:
             self.OutputBox.append(f"Queue restore warning: {exception}")
         finally:
             self._restoring_queue = False
-        self._persist_pending_queue()
+        self._persist_queue_state()
 
     def _queue_status_changed(self, request, status):
         self.queue_widget.update_status(request, status)
@@ -1317,7 +1348,9 @@ class AllTestMeasurement(QDialog):
 
     def _retry_queued_run(self, run_id):
         if self.run_controller.retry(run_id) is None:
-            self.OutputBox.append("Only failed or aborted queue items can be retried")
+            self.OutputBox.append(
+                "Only failed, aborted, or interrupted queue items can be retried"
+            )
 
     def _save_queue_template(self):
         if not self.run_controller.pending_requests:
