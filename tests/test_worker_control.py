@@ -85,6 +85,91 @@ class WorkerControlTests(unittest.TestCase):
         current.assert_called_once_with(5)
         voltage.assert_not_called()
 
+    def test_voltage_modes_use_configured_accuracy_runner(self):
+        cases = (
+            (
+                "Dolphin",
+                test_worker.DOLPHIN_VOLTAGE_ACCURACY_RUNNERS,
+                "_run_dolphin_voltage_accuracy",
+            ),
+            (
+                "Hornbill",
+                test_worker.HORNBILL_VOLTAGE_ACCURACY_RUNNERS,
+                "_run_hornbill_voltage_accuracy",
+            ),
+        )
+
+        for dut, runners, method_name in cases:
+            for selection in tuple(runners):
+                with self.subTest(dut=dut, selection=selection):
+                    channels = []
+
+                    def runner(
+                        _worker,
+                        _configuration,
+                        channel,
+                        worker=None,
+                    ):
+                        channels.append(channel)
+                        return ["info"], ["measured"], ["readback"]
+
+                    worker = TestWorker(
+                        {
+                            "VoltageAccuracy": True,
+                            selection: True,
+                            "DataReport": False,
+                        },
+                        {"Instrument": "Keysight"},
+                        Parameters(
+                            DUT=dut,
+                            noofloop=1,
+                            PSU_Channel=[1, 2],
+                        ),
+                    )
+                    with patch.dict(
+                        runners,
+                        {selection: runner},
+                        clear=True,
+                    ):
+                        getattr(worker, method_name)(0)
+
+                    self.assertEqual(channels, [1, 2])
+
+    def test_voltage_accuracy_exports_only_on_final_loop(self):
+        def runner(_worker, _configuration, _channel, worker=None):
+            return ["info"], ["measured"], ["readback"]
+
+        worker = TestWorker(
+            {"DataReport": True},
+            {"Instrument": "Keysight"},
+            Parameters(noofloop=2, PSU_Channel=[1]),
+        )
+        with patch.object(worker, "_export_voltage_accuracy") as export:
+            worker._run_voltage_accuracy(0, runner)
+            export.assert_not_called()
+
+            worker._run_voltage_accuracy(1, runner)
+
+        export.assert_called_once_with(
+            ["info"],
+            ["measured"],
+            ["readback"],
+        )
+
+    def test_voltage_accuracy_skips_export_when_report_disabled(self):
+        def runner(_worker, _configuration, _channel, worker=None):
+            return ["info"], ["measured"], ["readback"]
+
+        worker = TestWorker(
+            {"DataReport": False},
+            {"Instrument": "Keysight"},
+            Parameters(noofloop=1, PSU_Channel=[1]),
+        )
+        with patch.object(worker, "_export_voltage_accuracy") as export:
+            worker._run_voltage_accuracy(0, runner)
+
+        export.assert_not_called()
+
     def test_hornbill_current_ranges_use_configured_accuracy_runner(self):
         range_selections = tuple(test_worker.HORNBILL_CURRENT_ACCURACY_RUNNERS)
 

@@ -67,6 +67,28 @@ HORNBILL_CURRENT_ACCURACY_RUNNERS = {
     ),
 }
 
+DOLPHIN_VOLTAGE_ACCURACY_RUNNERS = {
+    "CurrentStatic(VoltageChange)": (
+        NewVoltageMeasurement.Execute_Voltage_Accuracy_Current_Static
+    ),
+    "CurrentChange(LoadChange)": (
+        NewVoltageMeasurement.Execute_Voltage_Accuracy_Current_Change
+    ),
+}
+
+HORNBILL_VOLTAGE_ACCURACY_RUNNERS = {
+    "CurrentStatic(VoltageChange)": (
+        HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Static
+    ),
+    "CurrentChange(LoadChange)": (
+        HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change
+    ),
+    "CurrentStatic(VoltageChange) with Oscilloscope": (
+        HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change
+    ),
+}
+
+
 class TestState(Enum):
     IDLE = "IDLE"
     RUNNING = "RUNNING"
@@ -269,55 +291,8 @@ class TestWorker(QThread):
             self.progress.emit("All measurements completed!")
 
     def _run_dolphin_voltage_tests(self, loop_index):
-        x = loop_index
-        #Voltage Accuracy
-        if self.checkbox_states.get("VoltageAccuracy"):
-            if self.dict["Instrument"] == "Keysight":
-                if self.checkbox_states.get("CurrentStatic(VoltageChange)"):
-                    for ch in self.dict["PSU_Channel"]:
-                        (infoList,
-                        dataList,
-                        dataList2)= NewVoltageMeasurement.Execute_Voltage_Accuracy_Current_Static(self, self.dict, ch, worker=self)
-
-                        #Measurement Completion
-                        if (int(self.params["noofloop"]) - 1) <= 0:
-                            self.progress.emit("✅Measurement is complete !")
-
-                            #Export Data to CSV
-                            if self.checkbox_states["DataReport"]:
-
-                                #Export data to CSV and Graph (Refer data.py for details)
-                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                datatoCSV_Accuracy(infoList, dataList, dataList2)
-                                datatoGraph(infoList, dataList,dataList2)
-                                datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
-
-                                self._write_config_csv("config.csv")
-
-                                self._save_voltage_report()
-
-                elif self.checkbox_states.get("CurrentChange(LoadChange)"):
-                    for ch in self.dict["PSU_Channel"]:
-                        (infoList,
-                        dataList,
-                        dataList2)= NewVoltageMeasurement.Execute_Voltage_Accuracy_Current_Change(self, self.dict, ch, worker=self)
-
-                        #Measurement Completion
-                        if (int(self.params["noofloop"]) - 1) <= 0:
-                            self.progress.emit("✅Measurement is complete !")
-
-                            #Export Data to CSV
-                            if self.checkbox_states["DataReport"]:
-
-                                #Export data to CSV and Graph (Refer data.py for details)
-                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                datatoCSV_Accuracy(infoList, dataList, dataList2)
-                                datatoGraph(infoList, dataList,dataList2)
-                                datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
-
-                                self._write_config_csv("config.csv")
-
-                                self._save_voltage_report()
+        if self._run_dolphin_voltage_accuracy(loop_index):
+            return
 
         #Voltage Load Regulation
         if self.checkbox_states.get("VoltageLoadRegulation"):
@@ -431,80 +406,8 @@ class TestWorker(QThread):
             self.progress.emit("No DUT selected. Please select a DUT to perform the test.")
 
     def _run_hornbill_voltage_tests(self, loop_index):
-        x = loop_index
-        #Voltage Accuracy
-        if self.checkbox_states.get("VoltageAccuracy"):
-            if self.checkbox_states.get("CurrentStatic(VoltageChange)"):
-                if self.dict["Instrument"] == "Keysight":
-                    for ch in self.dict["PSU_Channel"]:
-                        (infoList,
-                        dataList,
-                        dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Static(self, self.dict, ch, worker=self)
-
-                        #Measurement Completion
-                        self.progress.emit(f"✅ {int(self.params['noofloop'])} Measurement is complete !")
-
-
-                        #Export Data to CSV
-                        #if self.checkbox_states["DataReport"]:
-
-                        #Export data to CSV and Graph (Refer data.py for details)
-                        instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                        datatoCSV_Accuracy(infoList, dataList, dataList2)
-                        datatoGraph(infoList, dataList,dataList2)
-                        datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
-
-                        self._write_config_csv("config.csv")
-
-                        self._save_voltage_report()
-
-            elif self.checkbox_states.get("CurrentChange(LoadChange)"):
-                if self.dict["Instrument"] == "Keysight":
-                    for ch in self.dict["PSU_Channel"]:
-                        (infoList,
-                        dataList,
-                        dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change(self, self.dict, ch, worker=self)
-
-                        #Measurement Completion
-                        if (int(self.params["noofloop"]) - 1) <= 0:
-                            self.progress.emit("✅Measurement is complete !")
-
-                            #Export Data to CSV
-                            if self.checkbox_states["DataReport"]:
-
-                                #Export data to CSV and Graph (Refer data.py for details)
-                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                datatoCSV_Accuracy(infoList, dataList, dataList2)
-                                datatoGraph(infoList, dataList,dataList2)
-                                datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
-
-                                self._write_config_csv("config.csv")
-
-                                self._save_voltage_report()
-
-            elif self.checkbox_states.get("CurrentStatic(VoltageChange) with Oscilloscope"):
-                if self.dict["Instrument"] == "Keysight":
-                    for ch in self.dict["PSU_Channel"]:
-                        (infoList,
-                        dataList,
-                        dataList2)= HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change(self, self.dict, ch, worker=self)
-
-                        #Measurement Completion
-                        if (int(self.params["noofloop"]) - 1) <= 0:
-                            self.progress.emit("✅Measurement is complete !")
-
-                            #Export Data to CSV
-                            if self.checkbox_states["DataReport"]:
-
-                                #Export data to CSV and Graph (Refer data.py for details)
-                                instrumentData(self.params["PSU"], self.params["DMM"], self.params["ELoad"])
-                                datatoCSV_Accuracy(infoList, dataList, dataList2)
-                                datatoGraph(infoList, dataList,dataList2)
-                                datatoGraph.scatterCompareVoltage(self, float(self.params["Programming_Error_Gain"]), float(self.params["Programming_Error_Offset"]), float(self.params["Readback_Error_Gain"]), float(self.params["Readback_Error_Offset"]), str(self.params["unit"]), float(self.params["Voltage_Rating"]))
-
-                                self._write_config_csv("config.csv")
-
-                                self._save_voltage_report()
+        if self._run_hornbill_voltage_accuracy(loop_index):
+            return
 
         #Voltage Load Regulation
         if self.checkbox_states.get("VoltageLoadRegulation"):
@@ -540,6 +443,84 @@ class TestWorker(QThread):
             self.results, self.currenttime = test.execute(self.dict)
             os.system('cls')
             datatoCSV_Programming_Response(self.results,self.currenttime,self.params)
+
+    def _selected_voltage_accuracy_runner(self, runners):
+        for selection, runner in runners.items():
+            if self.checkbox_states.get(selection):
+                return runner
+        return None
+
+    def _run_voltage_accuracy(self, loop_index, runner):
+        for channel in self.params["PSU_Channel"]:
+            info_list, data_list, readback_list = runner(
+                self,
+                self.dict,
+                channel,
+                worker=self,
+            )
+            if loop_index == int(self.params["noofloop"]) - 1:
+                self.progress.emit("✅Measurement is complete !")
+                if self.checkbox_states["DataReport"]:
+                    self._export_voltage_accuracy(
+                        info_list,
+                        data_list,
+                        readback_list,
+                    )
+
+            if self.force_exit:
+                self.progress.emit("Operation aborted")
+                return True
+
+        return False
+
+    def _run_dolphin_voltage_accuracy(self, loop_index):
+        return self._run_selected_voltage_accuracy(
+            loop_index,
+            DOLPHIN_VOLTAGE_ACCURACY_RUNNERS,
+        )
+
+    def _run_hornbill_voltage_accuracy(self, loop_index):
+        return self._run_selected_voltage_accuracy(
+            loop_index,
+            HORNBILL_VOLTAGE_ACCURACY_RUNNERS,
+        )
+
+    def _run_selected_voltage_accuracy(self, loop_index, runners):
+        if not self.checkbox_states.get("VoltageAccuracy"):
+            return False
+        if self.dict["Instrument"] != "Keysight":
+            return False
+
+        runner = self._selected_voltage_accuracy_runner(runners)
+        if runner is None:
+            return False
+
+        return self._run_voltage_accuracy(loop_index, runner)
+
+    def _export_voltage_accuracy(
+        self,
+        info_list,
+        data_list,
+        readback_list,
+    ):
+        instrumentData(
+            self.params["PSU"],
+            self.params["DMM"],
+            self.params["ELoad"],
+        )
+        datatoCSV_Accuracy(info_list, data_list, readback_list)
+        datatoGraph(info_list, data_list, readback_list)
+        datatoGraph.scatterCompareVoltage(
+            self,
+            float(self.params["Programming_Error_Gain"]),
+            float(self.params["Programming_Error_Offset"]),
+            float(self.params["Readback_Error_Gain"]),
+            float(self.params["Readback_Error_Offset"]),
+            str(self.params["unit"]),
+            float(self.params["Voltage_Rating"]),
+        )
+        self._write_config_csv("config.csv")
+        self._save_voltage_report()
 
     def _run_current_accuracy(self, loop_index, runner):
         for channel in self.params["PSU_Channel"]:
