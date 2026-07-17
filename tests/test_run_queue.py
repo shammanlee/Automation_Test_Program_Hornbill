@@ -91,6 +91,101 @@ class TestRunQueueTests(unittest.TestCase):
         self.assertEqual(len(self.workers), 2)
         self.assertEqual(self.workers[1].checkbox_states["name"], "second")
 
+    def test_worker_failure_halts_pending_queue_until_manual_resume(self):
+        halted = []
+        self.controller.queue_halted.connect(
+            lambda request, status: halted.append((request.label, status))
+        )
+        first = self.controller.start({}, {}, {}, label="first")
+        second = self.controller.enqueue({}, {}, {}, label="second")
+
+        self.workers[0].running = False
+        self.workers[0].error.emit(RuntimeError("failed"), "traceback")
+
+        self.assertEqual(halted, [("first", "Failed")])
+        self.assertEqual(self.controller.status_for(first.run_id), "Failed")
+        self.assertEqual(self.controller.status_for(second.run_id), "Pending")
+        self.assertEqual(self.controller.pending_count, 1)
+        self.assertIsNone(self.controller.active_worker)
+        self.assertEqual(len(self.workers), 1)
+
+        self.controller.start_queue()
+
+        self.assertEqual(len(self.workers), 2)
+        self.assertEqual(self.controller.status_for(second.run_id), "Running")
+
+    def test_queue_can_opt_into_continuing_after_failure(self):
+        workers = []
+
+        def factory(*args):
+            worker = DummyWorker(*args)
+            workers.append(worker)
+            return worker
+
+        controller = TestRunController(
+            worker_factory=factory,
+            halt_on_failure=False,
+        )
+        controller.start({}, {}, {}, label="first")
+        second = controller.enqueue({}, {}, {}, label="second")
+
+        workers[0].running = False
+        workers[0].error.emit(RuntimeError("failed"), "traceback")
+        controller._start_next()
+
+        self.assertEqual(len(workers), 2)
+        self.assertEqual(controller.status_for(second.run_id), "Running")
+
+    def test_final_failure_still_finishes_empty_queue(self):
+        finished = []
+        halted = []
+        self.controller.queue_finished.connect(lambda: finished.append(True))
+        self.controller.queue_halted.connect(lambda *_: halted.append(True))
+        self.controller.start({}, {}, {}, label="only run")
+
+        self.workers[0].running = False
+        self.workers[0].error.emit(RuntimeError("failed"), "traceback")
+        self.controller._start_next()
+
+        self.assertEqual(finished, [True])
+        self.assertEqual(halted, [])
+
+    def test_setup_failure_halts_pending_queue(self):
+        halted = []
+        self.controller.queue_halted.connect(
+            lambda request, status: halted.append((request.label, status))
+        )
+        failed = self.controller.enqueue(
+            {},
+            {},
+            {},
+            label="invalid setup",
+            prepare=lambda _request: (_ for _ in ()).throw(
+                RuntimeError("setup failed")
+            ),
+            auto_start=False,
+        )
+        pending = self.controller.enqueue(
+            {},
+            {},
+            {},
+            label="pending",
+            auto_start=False,
+        )
+
+        self.controller.start_queue()
+
+        self.assertEqual(halted, [("invalid setup", "Failed")])
+        self.assertEqual(self.controller.status_for(failed.run_id), "Failed")
+        self.assertEqual(self.controller.status_for(pending.run_id), "Pending")
+        self.assertEqual(self.controller.pending_count, 1)
+        self.assertEqual(self.workers, [])
+
+        self.controller.start_queue()
+
+        self.assertEqual(len(self.workers), 1)
+        self.assertEqual(self.controller.status_for(pending.run_id), "Running")
+
     def test_pause_resume_and_stop_delegate_to_worker(self):
         request = self.controller.start({}, {}, {})
         worker = self.workers[0]
