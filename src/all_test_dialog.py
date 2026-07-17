@@ -187,6 +187,60 @@ class AllTestMeasurement(QDialog):
     DEFAULT_SAVE_LOCATION = (
         "C:/PyVisa - Copy  - Excavator - Copy/PyVisa/Test Data/File Export Testing"
     )
+    PARAMETER_TEXT_BINDINGS = (
+        ("QLineEdit_Programming_Error_Gain", "Programming_Error_Gain"),
+        ("QLineEdit_Programming_Error_Offset", "Programming_Error_Offset"),
+        ("QLineEdit_Readback_Error_Gain", "Readback_Error_Gain"),
+        ("QLineEdit_Readback_Error_Offset", "Readback_Error_Offset"),
+        ("QLineEdit_Load_Programming_Error_Gain", "Load_Programming_Error_Gain"),
+        ("QLineEdit_Load_Programming_Error_Offset", "Load_Programming_Error_Offset"),
+        ("QLineEdit_Power", "Power"),
+        ("QLineEdit_minVoltage", "minVoltage"),
+        ("QLineEdit_maxVoltage", "maxVoltage"),
+        ("QLineEdit_voltage_stepsize", "voltage_step_size"),
+        ("QLineEdit_minCurrent", "minCurrent"),
+        ("QLineEdit_maxCurrent", "maxCurrent"),
+        ("QLineEdit_current_stepsize", "current_step_size"),
+        ("QLineEdit_current_rated", "Current_Rating"),
+        ("QLineEdit_voltage_rated", "Voltage_Rating"),
+        ("QLineEdit_power_rated", "Power_Rating"),
+        ("QLineEdit_power_step_size", "power_step_size"),
+        ("QLineEdit_PowerINI", "powerini"),
+        ("QLineEdit_rshunt", "rshunt"),
+        ("QLineEdit_OVP_Level", "OVP_Level"),
+        ("QLineEdit_Power_Programming_Error_Gain", "Power_Programming_Error_Gain"),
+        ("QLineEdit_Power_Programming_Error_Offset", "Power_Programming_Error_Offset"),
+        ("QLineEdit_Power_Readback_Error_Gain", "Power_Readback_Error_Gain"),
+        ("QLineEdit_Power_Readback_Error_Offset", "Power_Readback_Error_Offset"),
+        ("QLineEdit_Programming_Response_Up_NoLoad", "Programming_Response_Up_NoLoad"),
+        ("QLineEdit_Programming_Response_Up_FullLoad", "Programming_Response_Up_FullLoad"),
+        ("QLineEdit_Programming_Response_Down_NoLoad", "Programming_Response_Down_NoLoad"),
+        ("QLineEdit_Programming_Response_Down_FullLoad", "Programming_Response_Down_FullLoad"),
+        ("QLineEdit_OVP_Error_Gain", "OVP_ErrorGain"),
+        ("QLineEdit_OVP_Error_Offset", "OVP_ErrorOffset"),
+        ("QLineEdit_OSC_Display_Channel", "OSC_Channel"),
+        ("QLineEdit_V_Settling_Band", "V_Settling_Band"),
+        ("QLineEdit_T_Settling_Band", "T_Settling_Band"),
+        ("QLineEdit_TimeScale", "TimeScale"),
+        ("QLineEdit_VerticalScale", "VerticalScale"),
+    )
+    PARAMETER_COMBO_BINDINGS = (
+        ("QComboBox_DMM_Instrument", "DMM_Instrument"),
+        ("QComboBox_Voltage_Res", "VoltageRes"),
+        ("QComboBox_set_PSU_Channel", "PSU_Channel"),
+        ("QComboBox_set_ELoad_Channel", "ELoad_Channel"),
+        ("QComboBox_SPOperationMode", "SPOperationMode"),
+        ("QComboBox_Probe_Setting", "Probe_Setting"),
+        ("QComboBox_Acq_Type", "Acq_Type"),
+        ("QComboBox_Channel_CouplingMode", "Channel_CouplingMode"),
+        ("QComboBox_Trigger_Mode", "Trigger_Mode"),
+        ("QComboBox_Trigger_CouplingMode", "Trigger_CouplingMode"),
+        ("QComboBox_Trigger_SweepMode", "Trigger_SweepMode"),
+        ("QComboBox_Trigger_SlopeMode", "Trigger_SlopeMode"),
+        ("QComboBox_noofloop", "noofloop"),
+        ("QComboBox_updatedelay", "updatedelay"),
+        ("QComboBox_AC_Supply_Type", "AC_Supply_Type"),
+    )
 
     def __init__(self, queue_file=None):
         super().__init__()
@@ -1557,55 +1611,31 @@ class AllTestMeasurement(QDialog):
     def on_current_index_changed(self):
         selected_text = self.QComboBox_DUT.currentText()
         self.params.update_selection(selected_text)
- 
-        self.QLineEdit_Programming_Error_Gain.setText(self.params.Programming_Error_Gain)
-        self.QLineEdit_Programming_Error_Gain.setText(self.params.Programming_Error_Gain)
-        self.QLineEdit_Programming_Error_Offset.setText(self.params.Programming_Error_Offset)
-        self.QLineEdit_Readback_Error_Gain.setText(self.params.Readback_Error_Gain)
-        self.QLineEdit_Readback_Error_Offset.setText(self.params.Readback_Error_Offset)
-        self.QLineEdit_Load_Programming_Error_Gain.setText(self.params.Load_Programming_Error_Gain)
-        self.QLineEdit_Load_Programming_Error_Offset.setText(self.params.Load_Programming_Error_Offset)
-        self.QLineEdit_Power.setText(self.params.Power)
-        self.QLineEdit_minVoltage.setText(self.params.minVoltage)
-        self.QLineEdit_maxVoltage.setText(self.params.maxVoltage)
-        self.QLineEdit_voltage_stepsize.setText(self.params.voltage_step_size)
-        self.QLineEdit_minCurrent.setText(self.params.minCurrent)
-        self.QLineEdit_maxCurrent.setText(self.params.maxCurrent)
-        self.QLineEdit_current_stepsize.setText(self.params.current_step_size)
-        self.QLineEdit_current_rated.setText(self.params.Current_Rating)
-        self.QLineEdit_voltage_rated.setText(self.params.Voltage_Rating)
-        self.QLineEdit_power_rated.setText(self.params.Power_Rating)
-        self.QLineEdit_power_step_size.setText(self.params.power_step_size)
-        self.QLineEdit_PowerINI.setText(self.params.powerini)
-        self.QLineEdit_rshunt.setText(self.params.rshunt)
-        self.QLineEdit_OVP_Level.setText(self.params.OVP_Level)
+        self._apply_parameter_widget_bindings(
+            self.PARAMETER_TEXT_BINDINGS, "setText"
+        )
+        self._apply_parameter_widget_bindings(
+            self.PARAMETER_COMBO_BINDINGS, "setCurrentText"
+        )
 
-        self.QLineEdit_Power_Programming_Error_Gain.setText(self.params.Power_Programming_Error_Gain)
-        self.QLineEdit_Power_Programming_Error_Offset.setText(self.params.Power_Programming_Error_Offset)
-        self.QLineEdit_Power_Readback_Error_Gain.setText(self.params.Power_Readback_Error_Gain)
-        self.QLineEdit_Power_Readback_Error_Offset.setText(self.params.Power_Readback_Error_Offset)
+        load_function = getattr(self.params, "setFunction", None)
+        if load_function in {"Voltage", "Current", "Resistance"}:
+            self.QComboBox_set_Function.setCurrentText(
+                f"{load_function} Priority"
+            )
 
-        #Oscilloscope
-        self.QLineEdit_OSC_Display_Channel.setText(self.params.OSC_Channel)
-        self.QLineEdit_V_Settling_Band.setText(self.params.V_Settling_Band)
-        self.QLineEdit_T_Settling_Band.setText(self.params.T_Settling_Band)
-        self.QComboBox_Probe_Setting.setCurrentText(self.params.Probe_Setting)
-        self.QComboBox_Acq_Type.setCurrentText(self.params.Acq_Type)
-        self.QComboBox_Channel_CouplingMode.setCurrentText(self.params.Channel_CouplingMode)
-        self.QComboBox_Trigger_Mode.setCurrentText(self.params.Trigger_Mode)
-        self.QComboBox_Trigger_CouplingMode.setCurrentText(self.params.Trigger_CouplingMode)
-        self.QComboBox_Trigger_SweepMode.setCurrentText(self.params.Trigger_SweepMode)
-        self.QComboBox_Trigger_SlopeMode.setCurrentText(self.params.Trigger_SlopeMode)
-        self.QLineEdit_TimeScale.setText(self.params.TimeScale)
-        self.QLineEdit_VerticalScale.setText(self.params.VerticalScale)
-        self.QComboBox_updatedelay.setCurrentText(self.params.updatedelay)
-        
-        self.QComboBox_set_PSU_Channel.setCurrentIndex(int(self.params.PSU_Channel)-1)
-        self.QComboBox_set_ELoad_Channel.setCurrentIndex(int(self.params.ELoad_Channel)-1)
-        self.QComboBox_SPOperationMode.setCurrentText(self.params.SPOperationMode)
-        self.QComboBox_Voltage_Sense.setCurrentText("4 Wire" if self.params.VoltageSense == "EXT" else "2 Wire")
-        self.QComboBox_noofloop.setCurrentText(self.params.noofloop)
-        self.QComboBox_updatedelay.setCurrentText(self.params.updatedelay)
+        voltage_sense = getattr(self.params, "VoltageSense", None)
+        if voltage_sense is not None:
+            sense_text = "4 Wire" if voltage_sense == "EXT" else "2 Wire"
+            self.QComboBox_Voltage_Sense.setCurrentText(sense_text)
+
+    def _apply_parameter_widget_bindings(self, bindings, setter_name):
+        for widget_name, parameter_name in bindings:
+            value = getattr(self.params, parameter_name, None)
+            if value is None:
+                continue
+            widget = getattr(self, widget_name)
+            getattr(widget, setter_name)(str(value))
 
     def set_PSU_Channel_changed(self, s):
         

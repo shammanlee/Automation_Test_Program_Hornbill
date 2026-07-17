@@ -139,6 +139,27 @@ class GuiWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(self.dialog.collection_group.layout())
         self.assertIsNotNone(self.dialog.queue_widget.parent())
 
+    def test_dut_selection_loads_configuration_into_bound_widgets(self):
+        self.dialog.params.savelocation = "preserved-output"
+
+        self.dialog.QComboBox_DUT.setCurrentText("Hornbill")
+
+        self.assertEqual(self.dialog.params.DUT, "Hornbill")
+        self.assertEqual(self.dialog.params.savelocation, "preserved-output")
+        self.assertEqual(self.dialog.QLineEdit_Programming_Error_Gain.text(), "0.0003")
+        self.assertEqual(
+            self.dialog.QLineEdit_Programming_Response_Up_NoLoad.text(), "80"
+        )
+        self.assertEqual(self.dialog.QLineEdit_OVP_Error_Gain.text(), "0.002")
+        self.assertEqual(self.dialog.QLineEdit_maxVoltage.text(), "3000")
+        self.assertEqual(self.dialog.QComboBox_Probe_Setting.currentText(), "X10")
+        self.assertEqual(self.dialog.QComboBox_Voltage_Res.currentText(), "SLOW")
+        self.assertEqual(
+            self.dialog.QComboBox_set_Function.currentText(), "Voltage Priority"
+        )
+        self.assertEqual(self.dialog.QComboBox_Voltage_Sense.currentText(), "4 Wire")
+        self.assertEqual(self.dialog.QLineEdit_OVP_Level.text(), "")
+
     def test_measurement_mode_updates_related_controls(self):
         self.dialog.QPushButton_Current_Widget.click()
 
