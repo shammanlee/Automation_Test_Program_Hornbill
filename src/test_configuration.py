@@ -1,6 +1,7 @@
 """Build immutable worker configuration from GUI parameters and selections."""
 
 from copy import deepcopy
+from dataclasses import dataclass
 
 
 class ParameterSnapshot(dict):
@@ -8,6 +9,14 @@ class ParameterSnapshot(dict):
 
     def __setattr__(self, name, value):
         self[name] = value
+
+
+@dataclass(frozen=True)
+class RunSubmission:
+    selections: dict
+    configuration: dict
+    parameters: ParameterSnapshot
+    label: str
 
 
 def snapshot_parameters(parameters):
@@ -163,3 +172,21 @@ def build_test_parameters(parameters, selections):
         })
 
     return result
+
+
+def prepare_run_submission(parameters, selections):
+    selection_snapshot = dict(selections)
+    parameter_snapshot = snapshot_parameters(parameters)
+    configuration = build_test_parameters(parameter_snapshot, selection_snapshot)
+    selected_names = [
+        name
+        for name, enabled in selection_snapshot.items()
+        if enabled and name not in {"DataReport", "DataImage"}
+    ]
+    label = f"{parameter_snapshot.DUT}: " + ", ".join(selected_names)
+    return RunSubmission(
+        selections=selection_snapshot,
+        configuration=configuration,
+        parameters=parameter_snapshot,
+        label=label,
+    )
