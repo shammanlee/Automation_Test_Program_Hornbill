@@ -158,7 +158,7 @@ from test_parameters import (
 from test_worker import TestCancelled as TestCancelled, TestState, TestWorker
 from test_run_controller import TestRunController
 from test_configuration import (
-    ParameterSnapshot,
+    ParameterSnapshot as ParameterSnapshot,
     prepare_run_submission,
 )
 from test_selection import (
@@ -167,8 +167,7 @@ from test_selection import (
     create_voltage_selection_widget,
 )
 from test_queue_widget import TestQueueWidget
-from queue_persistence import QueuePersistence, QueuePersistenceError
-from queue_template_service import append_queue_template, save_queue_template
+from queue_coordinator import QueueCoordinator
 from realtime_plot import RealtimeMeasurement, RealtimePlotSeries
 from run_context import RunContext
 
@@ -249,20 +248,13 @@ class AllTestMeasurement(QDialog):
         self.worker = None
         self.active_params = None
         self.active_run_context = None
-        self.queue_persistence = QueuePersistence(
-            queue_file or (Path(config_folder) / "test_queue.json")
-        )
-        self._restoring_queue = False
+        self.queue_file = queue_file or (Path(config_folder) / "test_queue.json")
         self.run_controller = TestRunController(
             worker_factory=lambda *args: TestWorker(*args),
             parent=self,
         )
         self.run_controller.worker_created.connect(self._connect_worker)
-        self.run_controller.request_queued.connect(self._queue_request_added)
-        self.run_controller.request_status_changed.connect(self._queue_status_changed)
         self.run_controller.request_setup_failed.connect(self._queue_setup_failed)
-        self.run_controller.queue_halted.connect(self._queue_halted)
-        self.run_controller.persistence_changed.connect(self._persist_queue_state)
         self.test_state = TestState.IDLE
         self._cleanup_done = False
         self.run_storage = None
@@ -282,13 +274,22 @@ class AllTestMeasurement(QDialog):
         self.realtime_plot_series = RealtimePlotSeries()
 
         self._build_ui()
+        self.queue_coordinator = QueueCoordinator(
+            self.run_controller,
+            self.queue_widget,
+            self.queue_file,
+            self._prepare_queued_run,
+            self.OutputBox.append,
+            parent=self,
+            template_directory=config_folder,
+        )
         self._connect_signals()
 
         #Voltage/Current Test Selection with Enable/Disable Input Fields
         self.select_button()
         self.InteractiveAction()
         self.Image_Label_Setup()
-        self._restore_pending_queue()
+        self.queue_coordinator.restore()
 
     def _build_ui(self):
         self._create_control_widgets()
@@ -1206,17 +1207,6 @@ class AllTestMeasurement(QDialog):
         self.queue_test_button.clicked.connect(
             lambda: self.executeTest(queue_only=True)
         )
-        self.queue_widget.run_requested.connect(self.run_controller.start_queue)
-        self.queue_widget.remove_requested.connect(self._remove_queued_run)
-        self.queue_widget.move_requested.connect(self._move_queued_run)
-        self.queue_widget.clear_requested.connect(self.run_controller.clear_pending)
-        self.queue_widget.duplicate_requested.connect(self._duplicate_queued_run)
-        self.queue_widget.retry_requested.connect(self._retry_queued_run)
-        self.queue_widget.save_template_requested.connect(self._save_queue_template)
-        self.queue_widget.load_template_requested.connect(self._load_queue_template)
-        self.run_controller.request_history_pruned.connect(
-            self.queue_widget.remove_run
-        )
         self.QPushButton_Widget2.clicked.connect(self.openDialog)
         self.QPushButton_Widget3.clicked.connect(self.estimateTime)
         self.QPushButton_Widget4.clicked.connect(self.doFind)
@@ -1246,77 +1236,6 @@ class AllTestMeasurement(QDialog):
         worker.popup_data.connect(self.plot_window.popup_plot)
         worker.state_changed.connect(self.set_test_state)
 
-    def _queue_request_added(self, request):
-        self.queue_widget.add_request(request)
-        self.OutputBox.append(f"Queued: {request.label}")
-
-    def _persist_queue_state(self, *_):
-        if self._restoring_queue:
-            return
-        try:
-            self.queue_persistence.save(
-                self.run_controller.pending_requests,
-                self.run_controller.active_request,
-                self.run_controller.interrupted_requests,
-            )
-        except QueuePersistenceError as exception:
-            self.OutputBox.append(f"Queue save warning: {exception}")
-
-    def _restore_pending_queue(self):
-        self._restoring_queue = True
-        try:
-            snapshot = self.queue_persistence.load_snapshot()
-            interrupted_records = list(snapshot["interrupted"])
-            if snapshot["active"]:
-                interrupted_records.insert(0, snapshot["active"])
-            restored_ids = set()
-            for record in interrupted_records:
-                run_id = record.get("run_id", "")
-                if run_id in restored_ids:
-                    continue
-                restored_ids.add(run_id)
-                self.run_controller.restore_interrupted(
-                    record["checkbox_states"],
-                    record["configuration"],
-                    ParameterSnapshot(record["parameters"]),
-                    label=record.get("label", "Interrupted Test Run"),
-                    prepare=self._prepare_queued_run,
-                    run_id=run_id,
-                    recovery_run_directory=record.get("run_directory") or "",
-                )
-                if record.get("run_directory"):
-                    self.OutputBox.append(
-                        f"Interrupted run artifacts: {record['run_directory']}"
-                    )
-            for record in snapshot["pending"]:
-                self.run_controller.enqueue(
-                    record["checkbox_states"],
-                    record["configuration"],
-                    ParameterSnapshot(record["parameters"]),
-                    label=record.get("label", "Restored Test Run"),
-                    prepare=self._prepare_queued_run,
-                    auto_start=False,
-                    run_id=record.get("run_id", ""),
-                )
-            if interrupted_records:
-                self.OutputBox.append(
-                    f"Recovered {len(restored_ids)} interrupted run(s). "
-                    "Review and use Retry Failed to run them again."
-                )
-            if snapshot["pending"]:
-                self.OutputBox.append(
-                    f"Restored {len(snapshot['pending'])} pending queue item(s)"
-                )
-        except (QueuePersistenceError, KeyError, TypeError) as exception:
-            self.OutputBox.append(f"Queue restore warning: {exception}")
-        finally:
-            self._restoring_queue = False
-        self._persist_queue_state()
-
-    def _queue_status_changed(self, request, status):
-        self.queue_widget.update_status(request, status)
-        self.OutputBox.append(f"Queue item '{request.label}': {status}")
-
     def _queue_setup_failed(self, request, exception, traceback_text):
         self.set_test_state(TestState.FAILED)
         self.write_diagnostic(
@@ -1328,68 +1247,6 @@ class AllTestMeasurement(QDialog):
         )
         show_error_dialog(self, exception, traceback_text)
         self.cleanup_test(reason="queue-setup-failed")
-
-    def _queue_halted(self, request, status):
-        self.OutputBox.append(
-            f"Queue halted after '{request.label}' {status.lower()}. "
-            "Review the failure, then click Run Queue to continue pending tests."
-        )
-
-    def _remove_queued_run(self, run_id):
-        self.run_controller.remove_pending(run_id)
-
-    def _move_queued_run(self, run_id, offset):
-        if self.run_controller.move_pending(run_id, offset):
-            self.queue_widget.reorder(self.run_controller.pending_requests)
-
-    def _duplicate_queued_run(self, run_id):
-        if self.run_controller.duplicate(run_id) is None:
-            self.OutputBox.append("Unable to duplicate the selected queue item")
-
-    def _retry_queued_run(self, run_id):
-        if self.run_controller.retry(run_id) is None:
-            self.OutputBox.append(
-                "Only failed, aborted, or interrupted queue items can be retried"
-            )
-
-    def _save_queue_template(self):
-        if not self.run_controller.pending_requests:
-            self.OutputBox.append("Queue template not saved: no pending items")
-            return
-        template_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Queue Template",
-            str(Path(config_folder) / "queue_template.json"),
-            "Queue Template (*.json)",
-        )
-        if not template_path:
-            return
-        try:
-            save_queue_template(template_path, self.run_controller.pending_requests)
-            self.OutputBox.append(f"Queue template saved: {template_path}")
-        except QueuePersistenceError as exception:
-            self.OutputBox.append(f"Queue template save warning: {exception}")
-
-    def _load_queue_template(self):
-        template_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Queue Template",
-            str(config_folder),
-            "Queue Template (*.json)",
-        )
-        if not template_path:
-            return
-        try:
-            loaded_count = append_queue_template(
-                template_path,
-                self.run_controller,
-                prepare=self._prepare_queued_run,
-            )
-            self.OutputBox.append(
-                f"Loaded {loaded_count} queue template item(s)"
-            )
-        except (QueuePersistenceError, KeyError, TypeError) as exception:
-            self.OutputBox.append(f"Queue template load warning: {exception}")
 
     def _prepare_queued_run(self, request):
         self._cleanup_done = False

@@ -12,6 +12,7 @@ include = [
     "src/output_logging.py",
     "src/output_capture.py",
     "src/preflight.py",
+    "src/queue_coordinator.py",
     "src/realtime_plot.py",
     "src/queue_persistence.py",
     "src/run_context.py",
