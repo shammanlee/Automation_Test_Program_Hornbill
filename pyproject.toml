@@ -1,11 +1,14 @@
 [tool.ruff]
 target-version = "py311"
 include = [
+    "src/all_test_dialog.py",
     "src/configuration_service.py",
     "src/diagnostics.py",
+    "src/error_dialogs.py",
     "src/instrument_discovery.py",
     "src/instrument_discovery_ui.py",
     "src/output_logging.py",
+    "src/output_capture.py",
     "src/preflight.py",
     "src/queue_persistence.py",
     "src/run_context.py",
