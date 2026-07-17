@@ -107,7 +107,9 @@ tree, parameter snapshot, realtime CSV, chart paths, and diagnostics destination
 queued runs therefore do not share output files. Report generators infer their own
 `raw/` and `charts/` directories from the requested `reports/` directory.
 `src/test_run_controller.py` owns worker lifecycle and provides a FIFO queue for
-sequential runs. Test-selection widgets/state and worker parameter construction are
+sequential runs. `src/queue_coordinator.py` connects that controller to queue UI,
+persistence, interrupted-run recovery, and reusable templates. Test-selection
+widgets/state and worker parameter construction are
 isolated in `src/test_selection.py` and `src/test_configuration.py`. DUT setup files
 are loaded through `src/configuration_service.py`.
 Queue-template serialization and reconstruction are isolated in

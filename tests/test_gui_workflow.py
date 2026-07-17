@@ -612,7 +612,7 @@ class GuiWorkflowTests(unittest.TestCase):
             "getSaveFileName",
             return_value=(str(template_path), "Queue Template (*.json)"),
         ):
-            self.dialog._save_queue_template()
+            self.dialog.queue_coordinator.save_template()
 
         self.dialog.run_controller.clear_pending()
         with patch.object(
@@ -620,7 +620,7 @@ class GuiWorkflowTests(unittest.TestCase):
             "getOpenFileName",
             return_value=(str(template_path), "Queue Template (*.json)"),
         ):
-            self.dialog._load_queue_template()
+            self.dialog.queue_coordinator.load_template()
 
         self.assertEqual(self.dialog.run_controller.pending_count, 1)
         loaded = self.dialog.run_controller.pending_requests[0]
