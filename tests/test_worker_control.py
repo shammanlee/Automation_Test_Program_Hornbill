@@ -1,3 +1,4 @@
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -413,6 +414,103 @@ class WorkerControlTests(unittest.TestCase):
         self.assertEqual(worker.state, TestState.STOPPING)
         with self.assertRaises(TestCancelled):
             worker.checkpoint()
+
+    def test_paused_checkpointed_operation_waits_for_resume(self):
+        worker = create_worker()
+        worker.state = TestState.RUNNING
+        operation_started = threading.Event()
+        operation_finished = threading.Event()
+
+        def operation():
+            operation_started.set()
+
+        def run_operation():
+            worker._execute_checkpointed(operation)
+            operation_finished.set()
+
+        worker.pause()
+        operation_thread = threading.Thread(target=run_operation)
+        operation_thread.start()
+
+        self.assertFalse(operation_started.wait(timeout=0.05))
+        worker.resume()
+        self.assertTrue(operation_finished.wait(timeout=1.0))
+        operation_thread.join(timeout=1.0)
+        self.assertFalse(operation_thread.is_alive())
+
+    def test_stop_after_voltage_channel_prevents_next_channel_and_export(self):
+        channels = []
+
+        def runner(_worker, _configuration, channel, worker=None):
+            channels.append(channel)
+            worker.request_stop()
+            return ["info"], ["measured"], ["readback"]
+
+        worker = TestWorker(
+            {"DataReport": True},
+            {},
+            Parameters(noofloop=1, PSU_Channel=[1, 2]),
+        )
+        with patch.object(worker, "_export_voltage_accuracy") as export:
+            with self.assertRaises(TestCancelled):
+                worker._run_voltage_accuracy(0, runner)
+
+        self.assertEqual(channels, [1])
+        export.assert_not_called()
+
+    def test_stop_after_auxiliary_measurement_skips_reports_and_later_tests(self):
+        worker = TestWorker(
+            {
+                "VoltageLoadRegulation": True,
+                "TransientRecovery": True,
+                "SpecialCase": True,
+                "NormalCase": False,
+            },
+            {},
+            Parameters(Instrument="Keysight", PSU_Channel=[1]),
+        )
+
+        def stop_after_measurement(_worker, _configuration):
+            worker.request_stop()
+            return ["measurement"]
+
+        with patch.object(
+            test_worker.NewLoadRegulation,
+            "executeCV_LoadRegulation",
+            side_effect=stop_after_measurement,
+        ), patch.object(test_worker, "datatoCSV_LoadRegulation") as export, patch.object(
+            test_worker.RiseFallTime,
+            "executeC",
+        ) as transient:
+            with self.assertRaises(TestCancelled):
+                worker._run_voltage_auxiliary_tests()
+
+        export.assert_not_called()
+        transient.assert_not_called()
+
+    def test_stop_during_export_prevents_remaining_report_steps(self):
+        worker = TestWorker(
+            {},
+            {},
+            Parameters(PSU="PSU", DMM="DMM", ELoad="ELoad"),
+        )
+
+        def stop_after_instrument_data(*_args):
+            worker.request_stop()
+
+        with patch.object(
+            test_worker,
+            "instrumentData",
+            side_effect=stop_after_instrument_data,
+        ), patch.object(test_worker, "datatoCSV_Accuracy") as export:
+            with self.assertRaises(TestCancelled):
+                worker._export_voltage_accuracy(
+                    ["info"],
+                    ["measured"],
+                    ["readback"],
+                )
+
+        export.assert_not_called()
 
     def test_success_closes_sessions_before_hardware_shutdown(self):
         worker = create_worker()
