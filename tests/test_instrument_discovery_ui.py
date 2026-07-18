@@ -13,9 +13,14 @@ from instrument_discovery_ui import present_discovery_result
 
 
 class FakeAddressWidget:
-    def __init__(self):
-        self.items = ["stale"]
-        self.current_index = -1
+    def __init__(self, current_text="stale"):
+        self.items = [current_text]
+        self.current_index = 0
+
+    def currentText(self):
+        if self.current_index < 0:
+            return ""
+        return self.items[self.current_index]
 
     def clear(self):
         self.items.clear()
@@ -81,6 +86,23 @@ class InstrumentDiscoveryUiTests(unittest.TestCase):
 
         self.assertEqual(psu_widget.items, [])
         self.assertEqual(psu_widget.current_index, -1)
+
+    def test_present_discovery_preserves_valid_configured_address(self):
+        configured_dmm = "USB0::DMM34470::INSTR"
+        result = DiscoveryResult(
+            addresses=["GPIB0::22::INSTR", configured_dmm],
+            identities=["HP3458A", "KEYSIGHT,34470A"],
+            roles={"DMM": "GPIB0::22::INSTR"},
+        )
+        dmm_widget = FakeAddressWidget(configured_dmm)
+
+        present_discovery_result(
+            result,
+            address_widgets=(dmm_widget,),
+            role_widgets={"DMM": dmm_widget},
+        )
+
+        self.assertEqual(dmm_widget.current_index, 1)
 
 
 if __name__ == "__main__":

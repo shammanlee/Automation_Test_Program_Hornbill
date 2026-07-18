@@ -9,6 +9,11 @@ def present_discovery_result(
     output_widget=None,
 ):
     widgets = tuple(address_widgets)
+    configured_addresses = {
+        widget: widget.currentText().strip()
+        for widget in widgets
+        if hasattr(widget, "currentText")
+    }
     for widget in widgets:
         widget.clear()
     if output_widget is not None:
@@ -22,7 +27,9 @@ def present_discovery_result(
             widget.addItem(display_address)
 
     for role, widget in (role_widgets or {}).items():
-        address = result.roles.get(role)
+        address = configured_addresses.get(widget) or result.roles.get(role)
+        if address not in result.addresses:
+            address = result.roles.get(role)
         if address not in result.addresses:
             continue
         widget.setCurrentIndex(result.addresses.index(address))

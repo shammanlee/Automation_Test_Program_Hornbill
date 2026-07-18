@@ -7,6 +7,7 @@ from pathlib import Path
 import pyvisa
 
 from output_logging import print_console_safe
+from SCPI_Library.instrument_errors import InstrumentTimeoutError
 from SCPI_Library.simulation import create_resource_manager
 from SCPI_Library.visa_config import configure_visa_resource
 
@@ -102,6 +103,7 @@ def _discover_resources(
     manager = factory()
     result = DiscoveryResult()
     model_roles = load_model_role_map(role_map_path)
+    role_specificity = {}
     try:
         for address in manager.list_resources():
             if prefixes and not str(address).startswith(prefixes):
@@ -126,7 +128,13 @@ def _discover_resources(
                     continue
                 result.addresses.append(address)
                 result.identities.append(identity)
-                _assign_role(result.roles, model_roles, identity, address)
+                _assign_role(
+                    result.roles,
+                    model_roles,
+                    identity,
+                    address,
+                    role_specificity,
+                )
             except pyvisa.errors.VisaIOError as exception:
                 if exception.error_code not in IGNORED_VISA_ERROR_CODES:
                     print_console_safe(f"VISA error on {address}: {exception}")
@@ -149,7 +157,7 @@ def _discover_resources(
 def _query_identity(instrument, address, *, gpib_fallback):
     try:
         return instrument.query("*IDN?").strip().upper()
-    except pyvisa.errors.VisaIOError:
+    except (pyvisa.errors.VisaIOError, InstrumentTimeoutError):
         if not gpib_fallback or not str(address).startswith("GPIB"):
             raise
         instrument.clear()
@@ -171,8 +179,16 @@ def _matches_address_kind(address, address_kind):
     return actual_kind == address_kind
 
 
-def _assign_role(roles, model_roles, identity, address):
-    for model, role in model_roles.items():
-        if model in identity:
-            roles[role] = address
-            return
+def _assign_role(roles, model_roles, identity, address, role_specificity=None):
+    matches = [
+        (len(model), role)
+        for model, role in model_roles.items()
+        if model in identity
+    ]
+    if not matches:
+        return
+    specificity, role = max(matches)
+    specificity_by_role = role_specificity if role_specificity is not None else {}
+    if specificity > specificity_by_role.get(role, -1):
+        roles[role] = address
+        specificity_by_role[role] = specificity

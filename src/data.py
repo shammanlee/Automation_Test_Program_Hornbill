@@ -18,7 +18,7 @@ from openpyxl.drawing.image import Image as ExcelImage
 from path import *
 from SCPI_Library.IEEEStandard import IDN
 from SCPI_Library.Keysight import System
-from path import csv_folder, IMAGE_DIR, IMAGE_PATH, IMAGE_PATH_2
+from path import IMAGE_DIR, IMAGE_PATH, IMAGE_PATH_2
 
 
 def configure_run_storage(raw_directory, chart_directory):
@@ -923,8 +923,8 @@ class datatoGraph2(datatoCSV_Accuracy2):
                         ax1.plot(Iset, ProgrammingI_error, label=f"Voltage = {Vset.iloc[0]}", linewidth=0.8)
 
                         # Plot for Percentage Error Boundaries
-                        ax3.scatter(Vset, ProgrammingI_percent_error, color=color_condition, s=size_condition, alpha=alpha_condition)
-                        ax3.plot(Vset, ProgrammingI_percent_error, label=f"Current = {Iset.iloc[0]}", linewidth=0.8)
+                        ax3.scatter(Iset, ProgrammingI_percent_error, color=color_condition, s=size_condition, alpha=alpha_condition)
+                        ax3.plot(Iset, ProgrammingI_percent_error, label=f"Voltage = {Vset.iloc[0]}", linewidth=0.8)
 
                         # Labeling data points
                         """"for i, txt in enumerate(ProgrammingV_error):
@@ -939,8 +939,8 @@ class datatoGraph2(datatoCSV_Accuracy2):
                         ax2.plot(Iset, Ireadback_error, label=f"Voltage = {Vset.iloc[0]}", linewidth=0.8)
                         
                          # Plot for Readback Percentage Error Boundaries
-                        ax4.scatter(Vset, ReadbackI_percent_error, color=color_condition2, s=size_condition2, alpha=alpha_condition2)
-                        ax4.plot(Vset, ReadbackI_percent_error, label=f"Current = {Iset.iloc[0]}", linewidth=0.8)
+                        ax4.scatter(Iset, ReadbackI_percent_error, color=color_condition2, s=size_condition2, alpha=alpha_condition2)
+                        ax4.plot(Iset, ReadbackI_percent_error, label=f"Voltage = {Vset.iloc[0]}", linewidth=0.8)
 
                         # Labeling data points
                         """for i, txt in enumerate(Vreadback_error):

@@ -11,10 +11,13 @@ for import_path in (SRC, ROOT):
 
 from instrument_discovery import (
     DiscoveryResult,
+    get_all_visa_resources,
     get_visa_hostname_resources,
     get_visa_tcpip_resources,
     load_model_role_map,
+    _query_identity,
 )
+from SCPI_Library.instrument_errors import InstrumentTimeoutError
 
 
 class DiscoveryResource:
@@ -45,6 +48,24 @@ class DiscoveryManager:
 
     def close(self):
         self.closed = True
+
+
+class LegacyGpibResource:
+    def __init__(self):
+        self.commands = []
+
+    def query(self, command):
+        self.commands.append(command)
+        raise InstrumentTimeoutError()
+
+    def clear(self):
+        self.commands.append("clear")
+
+    def write(self, command):
+        self.commands.append(command)
+
+    def read_raw(self):
+        return b"HP3458A\r\n"
 
 
 class InstrumentDiscoveryTests(unittest.TestCase):
@@ -116,6 +137,36 @@ class InstrumentDiscoveryTests(unittest.TestCase):
                 for resource in manager.resources.values()
             )
         )
+
+    def test_serial_specific_role_overrides_generic_duplicate_model(self):
+        identities = {
+            "USB0::OTHER::INSTR": "KEYSIGHT,E36731A,MY62100065,1.0",
+            "USB0::ELOAD::INSTR": "KEYSIGHT,E36731A,MY62100043,1.0",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            role_map = Path(directory) / "roles.txt"
+            role_map.write_text(
+                "E36731A: ELOAD\nMY62100043: ELOAD\n",
+                encoding="utf-8",
+            )
+            result = get_all_visa_resources(
+                lambda: DiscoveryManager(identities),
+                role_map,
+            )
+
+        self.assertEqual(result.roles["ELOAD"], "USB0::ELOAD::INSTR")
+
+    def test_gpib_identity_uses_legacy_fallback_after_guarded_timeout(self):
+        resource = LegacyGpibResource()
+
+        identity = _query_identity(
+            resource,
+            "GPIB0::22::INSTR",
+            gpib_fallback=True,
+        )
+
+        self.assertEqual(identity, "HP3458A")
+        self.assertEqual(resource.commands, ["*IDN?", "clear", "ID?"])
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ Hornbill: PSU
 //Electronics Load Instrument 
 EL33133A: ELOAD
 EL34243A: ELOAD
+MY62100043: ELOAD
 E36731A: ELOAD
 
 

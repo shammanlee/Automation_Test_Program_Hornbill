@@ -89,6 +89,62 @@ class MeasurementReportExporterTests(unittest.TestCase):
         current_export.assert_called_once_with(*measurement)
         power_export.assert_called_once_with(*measurement)
 
+    def test_current_export_uses_snapshot_rating_and_current_meter(self):
+        worker = create_worker(
+            Parameters(
+                noofloop=1,
+                PSU="SIM::PSU",
+                DMM2="SIM::CURRENT_DMM",
+                ELoad="SIM::ELOAD",
+                Programming_Error_Gain="0.1",
+                Programming_Error_Offset="0.2",
+                Readback_Error_Gain="0.3",
+                Readback_Error_Offset="0.4",
+                unit="CURRENT",
+                Current_Rating="10",
+                savelocation="reports",
+                savedir="reports",
+            )
+        )
+        worker._execute_checkpointed = lambda function, *args: function(*args)
+
+        class Report:
+            def __init__(self, **_kwargs):
+                pass
+
+            def run(self):
+                pass
+
+        with patch.object(
+            measurement_report_exporter,
+            "instrumentData",
+        ) as instrument_data, patch.object(
+            measurement_report_exporter,
+            "datatoCSV_Accuracy2",
+        ), patch.object(
+            measurement_report_exporter,
+            "datatoGraph2",
+        ) as graph, patch.object(
+            worker.report_exporter,
+            "write_config_csv",
+        ), patch.object(
+            measurement_report_exporter,
+            "xlreport",
+            Report,
+        ):
+            worker.report_exporter.export_current_accuracy([], [], [])
+
+        instrument_data.assert_called_once_with(
+            "SIM::PSU",
+            "SIM::CURRENT_DMM",
+            "SIM::ELOAD",
+        )
+        graph.return_value.scatterCompareCurrent2.assert_called_once()
+        self.assertEqual(
+            graph.return_value.scatterCompareCurrent2.call_args.args[-1],
+            10.0,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

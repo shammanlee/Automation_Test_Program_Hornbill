@@ -107,6 +107,38 @@ class ReportGenerationTests(unittest.TestCase):
 
             self._assert_report_artifacts(storage, "SIMULATED_CURRENT")
 
+    def test_current_percentage_graph_sweeps_current_horizontally(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            storage = self._create_storage(temporary_directory, "CURRENT")
+            info = [[1.0, current, 0] for current in (1.0, 2.0, 3.0)]
+            measured = [[0.0, current] for current in (1.0, 2.0, 3.0)]
+            readback = [[1.0, current] for current in (1.0, 2.0, 3.0)]
+            graph = data_module.datatoGraph2(info, measured, readback)
+
+            with patch(
+                "matplotlib.axes.Axes.plot",
+                autospec=True,
+                return_value=[],
+            ) as plot:
+                graph.scatterCompareCurrent2(
+                    0.001,
+                    0.001,
+                    0.001,
+                    0.001,
+                    "CURRENT",
+                    10.0,
+                )
+
+            voltage_series = [
+                call
+                for call in plot.call_args_list
+                if call.kwargs.get("label") == "Voltage = 1.0"
+            ]
+
+        self.assertEqual(len(voltage_series), 4)
+        for call in voltage_series:
+            self.assertEqual(list(call.args[1]), [1.0, 2.0, 3.0])
+
 
 if __name__ == "__main__":
     unittest.main()

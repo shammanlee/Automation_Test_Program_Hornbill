@@ -58,15 +58,14 @@ class MeasurementReportExporter:
             data_list,
             readback_list,
         )
-        worker._execute_checkpointed(
+        graph = worker._execute_checkpointed(
             datatoGraph,
             info_list,
             data_list,
             readback_list,
         )
         worker._execute_checkpointed(
-            datatoGraph.scatterCompareVoltage,
-            worker,
+            graph.scatterCompareVoltage,
             float(worker.params["Programming_Error_Gain"]),
             float(worker.params["Programming_Error_Offset"]),
             float(worker.params["Readback_Error_Gain"]),
@@ -87,7 +86,7 @@ class MeasurementReportExporter:
         worker._execute_checkpointed(
             instrumentData,
             worker.params["PSU"],
-            worker.params["DMM"],
+            worker.params["DMM2"],
             worker.params["ELoad"],
         )
         worker._execute_checkpointed(
@@ -96,21 +95,20 @@ class MeasurementReportExporter:
             data_list,
             readback_list,
         )
-        worker._execute_checkpointed(
+        graph = worker._execute_checkpointed(
             datatoGraph2,
             info_list,
             data_list,
             readback_list,
         )
         worker._execute_checkpointed(
-            datatoGraph2.scatterCompareCurrent2,
-            worker,
+            graph.scatterCompareCurrent2,
             float(worker.params["Programming_Error_Gain"]),
             float(worker.params["Programming_Error_Offset"]),
             float(worker.params["Readback_Error_Gain"]),
             float(worker.params["Readback_Error_Offset"]),
             str(worker.params["unit"]),
-            float(worker.params["I_Rating"]),
+            float(worker.params["Current_Rating"]),
         )
         worker._execute_checkpointed(self.write_config_csv, "config.csv")
 
@@ -143,21 +141,20 @@ class MeasurementReportExporter:
             data_list,
             readback_list,
         )
-        worker._execute_checkpointed(
+        graph = worker._execute_checkpointed(
             datatoGraph3,
             info_list,
             data_list,
             readback_list,
         )
         worker._execute_checkpointed(
-            datatoGraph3.scatterComparePower,
-            worker,
+            graph.scatterComparePower,
             float(worker.params["Power_Programming_Error_Gain"]),
             float(worker.params["Power_Programming_Error_Offset"]),
             float(worker.params["Power_Readback_Error_Gain"]),
             float(worker.params["Power_Readback_Error_Offset"]),
             str(worker.params["setFunction"]),
-            float(worker.params["P_Rating"]),
+            float(worker.params["Power_Rating"]),
         )
         worker._execute_checkpointed(self.write_config_csv, "powerconfig.csv")
         worker._execute_checkpointed(self.save_power_report)
