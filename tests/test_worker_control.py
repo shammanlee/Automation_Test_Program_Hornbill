@@ -378,8 +378,28 @@ class WorkerControlTests(unittest.TestCase):
 
         run_accuracy.assert_called_once_with(
             0,
-            current_test_executor.NewCurrentMeasurement.executeCurrentMeasurementA,
+            current_test_executor.execute_dolphin_current_accuracy,
         )
+
+    def test_dolphin_current_adapter_binds_measurement_worker(self):
+        worker = create_worker()
+        configuration = {"Instrument": "Keysight"}
+
+        with patch.object(
+            current_test_executor,
+            "NewCurrentMeasurement",
+        ) as measurement_type:
+            result = current_test_executor.execute_dolphin_current_accuracy(
+                worker,
+                configuration,
+                1,
+            )
+
+        measurement_method = (
+            measurement_type.return_value.executeCurrentMeasurementA
+        )
+        measurement_method.assert_called_once_with(configuration, 1, worker)
+        self.assertIs(result, measurement_method.return_value)
 
     def test_hornbill_current_accuracy_exports_only_on_final_loop(self):
         def runner(_worker, _configuration, _channel):
@@ -420,11 +440,28 @@ class WorkerControlTests(unittest.TestCase):
 
         worker.pause()
         self.assertTrue(worker.is_paused)
+        self.assertEqual(worker.state, TestState.PAUSING)
+
+        checkpoint_reached = threading.Event()
+
+        def reach_checkpoint():
+            checkpoint_reached.set()
+            worker.checkpoint()
+
+        checkpoint_thread = threading.Thread(target=reach_checkpoint)
+        checkpoint_thread.start()
+        self.assertTrue(checkpoint_reached.wait(timeout=1.0))
+        for _ in range(100):
+            if worker.state == TestState.PAUSED:
+                break
+            threading.Event().wait(0.01)
         self.assertEqual(worker.state, TestState.PAUSED)
 
         worker.resume()
         self.assertFalse(worker.is_paused)
         self.assertEqual(worker.state, TestState.RUNNING)
+        checkpoint_thread.join(timeout=1.0)
+        self.assertFalse(checkpoint_thread.is_alive())
 
         worker.request_stop()
         self.assertEqual(worker.state, TestState.STOPPING)
@@ -445,10 +482,12 @@ class WorkerControlTests(unittest.TestCase):
             operation_finished.set()
 
         worker.pause()
+        self.assertEqual(worker.state, TestState.PAUSING)
         operation_thread = threading.Thread(target=run_operation)
         operation_thread.start()
 
         self.assertFalse(operation_started.wait(timeout=0.05))
+        self.assertEqual(worker.state, TestState.PAUSED)
         worker.resume()
         self.assertTrue(operation_finished.wait(timeout=1.0))
         operation_thread.join(timeout=1.0)

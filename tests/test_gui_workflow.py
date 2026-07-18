@@ -76,6 +76,9 @@ class DummyWorker:
 
 
 class DummyPlotWindow:
+    def __init__(self, *_args):
+        pass
+
     def show(self):
         return None
 
@@ -246,6 +249,11 @@ class GuiWorkflowTests(unittest.TestCase):
         self.assertFalse(self.dialog.QPushButton_Widget1.isEnabled())
         self.assertFalse(self.dialog.pause_button.isHidden())
         self.assertEqual(self.dialog.pause_button.text(), "Pause")
+
+        self.dialog.set_test_state(GUI.TestState.PAUSING)
+        self.assertEqual(self.dialog.pause_button.text(), "Pausing...")
+        self.assertFalse(self.dialog.pause_button.isEnabled())
+        self.assertTrue(self.dialog.abort_button.isEnabled())
 
         self.dialog.set_test_state(GUI.TestState.PAUSED)
         self.assertEqual(self.dialog.pause_button.text(), "Resume")

@@ -114,6 +114,7 @@ class TestQueueWidget(QGroupBox):
         status_colors = {
             "Pending": QColor("#805500"),
             "Running": QColor("#0057b8"),
+            "Pausing": QColor("#805500"),
             "Paused": QColor("#805500"),
             "Stopping": QColor("#8a3b12"),
             "Completed": QColor("#167c2f"),

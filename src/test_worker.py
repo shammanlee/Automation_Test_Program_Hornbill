@@ -24,6 +24,7 @@ from execution_journal import ExecutionJournal
 class TestState(Enum):
     IDLE = "IDLE"
     RUNNING = "RUNNING"
+    PAUSING = "PAUSING"
     PAUSED = "PAUSED"
     STOPPING = "STOPPING"
     COMPLETED = "COMPLETED"
@@ -94,7 +95,7 @@ class TestWorker(QThread):
         with self._control:
             if not self._stop_requested and self.state == TestState.RUNNING:
                 self._paused = True
-                self._set_state(TestState.PAUSED)
+                self._set_state(TestState.PAUSING)
 
     def resume(self):
         with self._control:
@@ -119,6 +120,8 @@ class TestWorker(QThread):
 
     def checkpoint(self):
         with self._control:
+            if self._paused and self.state == TestState.PAUSING:
+                self._set_state(TestState.PAUSED)
             while self._paused and not self._stop_requested:
                 self._control.wait(timeout=0.25)
             if self._stop_requested:

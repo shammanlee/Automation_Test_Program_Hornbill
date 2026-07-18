@@ -1148,7 +1148,13 @@ class AllTestMeasurement(QDialog):
             request.parameters,
             request.run_id,
         )
-        self.plot_window = VoltageAccuracyPlotWindow()
+        measurement_name = (
+            "Current"
+            if self.checkbox_states.get("CurrentAccuracy")
+            else "Voltage"
+        )
+        self.plot_widget.setTitle(f"{measurement_name} Accuracy")
+        self.plot_window = VoltageAccuracyPlotWindow(measurement_name)
         self.plot_window.show()
 
         self.progress_bar.setVisible(True)
@@ -1177,6 +1183,7 @@ class AllTestMeasurement(QDialog):
 
         active = state in {
             TestState.RUNNING,
+            TestState.PAUSING,
             TestState.PAUSED,
             TestState.STOPPING,
         }
@@ -1185,8 +1192,14 @@ class AllTestMeasurement(QDialog):
         self.pause_button.setVisible(active)
         self.abort_button.setVisible(active)
         self.pause_button.setEnabled(state in {TestState.RUNNING, TestState.PAUSED})
-        self.abort_button.setEnabled(state in {TestState.RUNNING, TestState.PAUSED})
-        self.pause_button.setText("Resume" if state == TestState.PAUSED else "Pause")
+        self.abort_button.setEnabled(
+            state in {TestState.RUNNING, TestState.PAUSING, TestState.PAUSED}
+        )
+        pause_button_text = {
+            TestState.PAUSING: "Pausing...",
+            TestState.PAUSED: "Resume",
+        }.get(state, "Pause")
+        self.pause_button.setText(pause_button_text)
         self.abort_button.setText("Stopping..." if state == TestState.STOPPING else "Abort")
         self.progress_bar.setVisible(active)
         self.progress_label.setVisible(active)
@@ -2090,7 +2103,11 @@ class AllTestMeasurement(QDialog):
 
     # MODIFIED - Simplified abort function
     def abort_test(self):
-        if self.test_state not in {TestState.RUNNING, TestState.PAUSED}:
+        if self.test_state not in {
+            TestState.RUNNING,
+            TestState.PAUSING,
+            TestState.PAUSED,
+        }:
             return
 
         reply = QMessageBox.question(
@@ -2294,9 +2311,10 @@ class AllTestMeasurement(QDialog):
             self.worker.decision_signal.emit(False)'''
 
 class VoltageAccuracyPlotWindow(QWidget): #Shamman changes
-    def __init__(self):
+    def __init__(self, measurement_name="Voltage"):
         super().__init__()
-        self.setWindowTitle("Voltage Accuracy Monitor")
+        self.measurement_name = measurement_name
+        self.setWindowTitle(f"{measurement_name} Accuracy Monitor")
         self.resize(900, 600)
 
         self.x = []
@@ -2317,28 +2335,36 @@ class VoltageAccuracyPlotWindow(QWidget): #Shamman changes
         layout = QGridLayout(self)
 
         # Programming plot
-        self.prog_plot = pg.PlotWidget(title="Programming Voltage Absolute Error")
+        self.prog_plot = pg.PlotWidget(
+            title=f"Programming {self.measurement_name} Absolute Error"
+        )
         self.programming_curve = self.prog_plot.plot(pen=pg.mkPen('r', width=3))
         self.prog_upper_boundary = self.prog_plot.plot(pen=pg.mkPen("y",width = 3))
         self.prog_lower_boundary = self.prog_plot.plot(pen=pg.mkPen("y",width = 3))
         layout.addWidget(self.prog_plot, 0 ,0)
 
         # Readback plot
-        self.rb_plot = pg.PlotWidget(title="Readback Voltage Absolute Error")
+        self.rb_plot = pg.PlotWidget(
+            title=f"Readback {self.measurement_name} Absolute Error"
+        )
         self.readback_curve = self.rb_plot.plot(pen=pg.mkPen('b', width=3))
         self.rb_upper_boundary = self.rb_plot.plot(pen=pg.mkPen("y",width = 3))
         self.rb_lower_boundary = self.rb_plot.plot(pen=pg.mkPen("y",width = 3))
         layout.addWidget(self.rb_plot, 0, 1)
 
         # Programming Percentage Error plot
-        self.prog_perc_plot = pg.PlotWidget(title="Programming Voltage Percentage Error (%)")
+        self.prog_perc_plot = pg.PlotWidget(
+            title=f"Programming {self.measurement_name} Percentage Error (%)"
+        )
         self.programming_percentage_curve = self.prog_perc_plot.plot(pen=pg.mkPen('r', width=3))
         self.prog_perc_upper_boundary = self.prog_perc_plot.plot(pen=pg.mkPen("y",width = 3))
         self.prog_perc_lower_boundary = self.prog_perc_plot.plot(pen=pg.mkPen("y",width = 3))
         layout.addWidget(self.prog_perc_plot, 1, 0)
         
         # Readback Percentage Error plot
-        self.rb_perc_plot = pg.PlotWidget(title="Readback Voltage Percentage Error (%)")
+        self.rb_perc_plot = pg.PlotWidget(
+            title=f"Readback {self.measurement_name} Percentage Error (%)"
+        )
         self.readback_percentage_curve = self.rb_perc_plot.plot(pen=pg.mkPen('b', width=3))
         self.rb_perc_upper_boundary = self.rb_perc_plot.plot(pen=pg.mkPen("y",width = 3))
         self.rb_perc_lower_boundary = self.rb_perc_plot.plot(pen=pg.mkPen("y",width = 3))

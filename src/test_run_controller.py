@@ -322,6 +322,7 @@ class TestRunController(QObject):
             return
         status = {
             "RUNNING": "Running",
+            "PAUSING": "Pausing",
             "PAUSED": "Paused",
             "STOPPING": "Stopping",
         }.get(state)

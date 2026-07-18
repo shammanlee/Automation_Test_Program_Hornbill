@@ -850,7 +850,45 @@ class NewCurrentMeasurement:
                         break
 
                 if worker is not None:
-                    worker.new_data.emit(V_fixed, I, temp_values, currentmeasured, temp_values2, currentmeasured - I, temp_values - currentmeasured)
+                    programming_error = currentmeasured - I
+                    readback_error = temp_values2 - currentmeasured
+                    programming_percent = programming_error / I * 100
+                    readback_percent = readback_error / currentmeasured * 100
+                    programming_upper_bound = (I * self.param1) + self.param2
+                    programming_lower_bound = -programming_upper_bound
+                    readback_upper_bound = (I * self.param3) + self.param4
+                    readback_lower_bound = -readback_upper_bound
+                    percentage_upper_bound = 100
+                    percentage_lower_bound = -100
+                    worker.new_data.emit(
+                        V_fixed,
+                        I,
+                        temp_values,
+                        currentmeasured,
+                        temp_values2,
+                        programming_error,
+                        readback_error,
+                        programming_percent,
+                        readback_percent,
+                        programming_upper_bound,
+                        programming_lower_bound,
+                        readback_upper_bound,
+                        readback_lower_bound,
+                        percentage_upper_bound,
+                        percentage_lower_bound,
+                    )
+                    worker.popup_data.emit(
+                        programming_error,
+                        readback_error,
+                        programming_upper_bound,
+                        programming_lower_bound,
+                        readback_upper_bound,
+                        readback_lower_bound,
+                        programming_percent,
+                        readback_percent,
+                        percentage_upper_bound,
+                        percentage_lower_bound,
+                    )
                 
                 WAI(dict["DMM2"])
 

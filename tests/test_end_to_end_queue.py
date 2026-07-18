@@ -74,6 +74,7 @@ class EndToEndQueueTests(unittest.TestCase):
             "maxVoltage": 5,
             "voltage_step_size": 1,
             "DownTime": 0,
+            "rshunt": 0.01,
             "Voltage_Rating": 5,
             "Current_Rating": 2,
             "I_Rating": 2,
@@ -203,6 +204,54 @@ class EndToEndQueueTests(unittest.TestCase):
             self.assertEqual(restored.run_controller.pending_count, 0)
             restored.close()
             restored.deleteLater()
+            dialog.close()
+            dialog.deleteLater()
+            self.application.processEvents()
+
+    def test_current_accuracy_streams_realtime_data(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False
+        ), patch.object(
+            dut_measurements, "sleep", lambda *_: None
+        ), patch.object(
+            GUI, "show_error_dialog"
+        ) as error_dialog:
+            dialog = GUI.AllTestMeasurement(
+                queue_file=Path(directory) / "current_queue.json"
+            )
+            dialog._handle_realtime_measurement_failure = lambda _measurement: None
+            selections, configuration, parameters = self._request_data(
+                directory,
+                "Dolphin",
+                "CURRENT",
+            )
+            selections.update(
+                Voltage_Test=False,
+                VoltageAccuracy=False,
+                Current_Test=True,
+                CurrentAccuracy=True,
+                CurrentAccuracy_20A_Range=True,
+            )
+            dialog.run_controller.enqueue(
+                selections,
+                configuration,
+                parameters,
+                label="Dolphin current accuracy",
+                prepare=dialog._prepare_queued_run,
+                auto_start=False,
+            )
+
+            self._run_event_loop(dialog.run_controller)
+
+            error_dialog.assert_not_called()
+            self.assertEqual(dialog.realtime_plot_series.counter, 1)
+            run_directory = next(
+                path for path in Path(directory).iterdir() if path.is_dir()
+            )
+            realtime_file = next(
+                (run_directory / "raw").glob("realtime_voltage_data_*.csv")
+            )
+            self.assertEqual(len(realtime_file.read_text().splitlines()), 2)
             dialog.close()
             dialog.deleteLater()
             self.application.processEvents()

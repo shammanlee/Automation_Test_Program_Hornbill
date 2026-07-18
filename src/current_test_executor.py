@@ -20,11 +20,20 @@ from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
 )
 
 
+def execute_dolphin_current_accuracy(worker, configuration, channel):
+    measurement = NewCurrentMeasurement()
+    return measurement.executeCurrentMeasurementA(
+        configuration,
+        channel,
+        worker,
+    )
+
+
 HORNBILL_CURRENT_ACCURACY_RUNNERS = {
-    "CurrentAccuracy_20A_Range": NewCurrentMeasurement.executeCurrentMeasurementA,
-    "CurrentAccuracy_2A_Range": NewCurrentMeasurement.executeCurrentMeasurementA,
-    "CurrentAccuracy_200mA_Range": NewCurrentMeasurement.executeCurrentMeasurementA,
-    "CurrentAccuracy_20mA_Range": NewCurrentMeasurement.executeCurrentMeasurementA,
+    "CurrentAccuracy_20A_Range": execute_dolphin_current_accuracy,
+    "CurrentAccuracy_2A_Range": execute_dolphin_current_accuracy,
+    "CurrentAccuracy_200mA_Range": execute_dolphin_current_accuracy,
+    "CurrentAccuracy_20mA_Range": execute_dolphin_current_accuracy,
     "CurrentAccuracy_2mA_Range": (
         HornbillCurrentMeasurementwithELoad_IMON_2mA.Execute_Current_Accuracy_Current_Static
     ),
@@ -158,7 +167,7 @@ class CurrentTestExecutor:
 
         return self.run_accuracy(
             loop_index,
-            NewCurrentMeasurement.executeCurrentMeasurementA,
+            execute_dolphin_current_accuracy,
         )
 
     def run_hornbill_accuracy(self, loop_index):
