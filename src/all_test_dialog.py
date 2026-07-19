@@ -9,6 +9,8 @@ import pyqtgraph as pg
 from PyQt5.QtCore import Qt, pyqtSlot
 from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtWidgets import (
+    QApplication,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -24,6 +26,7 @@ from PyQt5.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QTabWidget,
     QTextBrowser,
     QTextEdit,
     QVBoxLayout,
@@ -31,12 +34,12 @@ from PyQt5.QtWidgets import (
 )
 
 from diagnostics import append_diagnostic
+from configuration_service import configuration_path
 from error_dialogs import show_error_dialog
 from instrument_discovery import (
     DiscoveryResult,
-    get_visa_hostname_resources as GetVisaHostnameResources,
+    get_configured_visa_resources as GetConfiguredVisaResources,
     get_visa_scpi_resources as GetVisaSCPIResources,
-    get_visa_tcpip_resources as GetVisaTCPIPResources,
 )
 from instrument_discovery_ui import present_discovery_result
 from output_logging import append_timestamped_line, print_console_safe
@@ -59,14 +62,26 @@ from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
 desp_font = QFont("Times New Roman", 14, QFont.Bold)
 
 
-def ScanSelectedVisaResources(dialog):
-    result = DiscoveryResult()
-    if dialog.QCheckBox_USB_Widget.isChecked():
-        result.extend(GetVisaSCPIResources())
-    if dialog.QCheckBox_IP_Widget.isChecked():
-        result.extend(GetVisaTCPIPResources())
-    if dialog.QCheckBox_Hostname_Widget.isChecked():
-        result.extend(GetVisaHostnameResources())
+def ScanSelectedVisaResources(dialog, on_progress=None):
+    enabled_transports = set()
+    transport_widgets = (
+        ("usb", dialog.QCheckBox_USB_Widget),
+        ("gpib", dialog.QCheckBox_GPIB_Widget),
+        ("tcpip_ip", dialog.QCheckBox_IP_Widget),
+        ("tcpip_hostname", dialog.QCheckBox_Hostname_Widget),
+    )
+    for transport, checkbox in transport_widgets:
+        if checkbox.isChecked():
+            enabled_transports.add(transport)
+
+    selected_dut = dialog.QComboBox_DUT.currentText()
+    config_path = configuration_path(config_folder, selected_dut)
+    result = GetConfiguredVisaResources(
+        config_path,
+        enabled_transports=enabled_transports,
+    )
+    if on_progress is not None:
+        on_progress(result)
     return result
 
 
@@ -170,6 +185,11 @@ from test_queue_widget import TestQueueWidget
 from queue_coordinator import QueueCoordinator
 from all_test_signal_bindings import connect_all_test_signals
 from realtime_plot import RealtimeMeasurement, RealtimePlotSeries
+from progress_timing import (
+    MeasurementProgressTracker,
+    expected_measurement_points,
+    format_duration,
+)
 from run_context import RunContext
 
 class AllTestMeasurement(QDialog):
@@ -226,7 +246,10 @@ class AllTestMeasurement(QDialog):
         ("QLineEdit_VerticalScale", "VerticalScale"),
     )
     PARAMETER_COMBO_BINDINGS = (
+        ("QLineEdit_DAQ_VisaAddress", "DAQ"),
         ("QComboBox_DMM_Instrument", "DMM_Instrument"),
+        ("QComboBox_Hornbill_Measurement_Command", "Hornbill_Measurement_Command"),
+        ("QComboBox_Relay_Control", "Relay_Control"),
         ("QComboBox_Voltage_Res", "VoltageRes"),
         ("QComboBox_set_PSU_Channel", "PSU_Channel"),
         ("QComboBox_set_ELoad_Channel", "ELoad_Channel"),
@@ -260,19 +283,12 @@ class AllTestMeasurement(QDialog):
         self._cleanup_done = False
         self.run_storage = None
         self._output_root = None
-        #Shamman changes    #Can be used for current 
-        self.plot_widget = pg.PlotWidget(title="Voltage Accuracy")
-        self.plot_widget.enableAutoRange(axis = 'x', enable = True)
-        self.plot_widget.enableAutoRange(axis = 'y', enable = True)
-        self.plot_widget.setAutoVisible(y=True)
-        #Two Curves : Programing V(red), Readback V(blue)
-        self.programming_curve = self.plot_widget.plot(pen=pg.mkPen(color='r', width=5), name="Programming Voltage")
-        self.readback_curve = self.plot_widget.plot(pen=pg.mkPen(color='b', width=5), name="Readback Voltage")
-        self.prog_up_bound = self.plot_widget.plot(pen=pg.mkPen(color='y', width=5), name="Upper Boundary Limit")
-        self.prog_low_bound = self.plot_widget.plot(pen=pg.mkPen(color='y', width=5), name="Lower Boundary Limit")
+        self.plot_window = VoltageAccuracyPlotWindow()
         self.last_Iset = None               #Shamman changes
         self.fail_prompt_active = False
+        self.continue_on_boundary_failure = False
         self.realtime_plot_series = RealtimePlotSeries()
+        self.progress_tracker = None
 
         self._build_ui()
         self.queue_coordinator = QueueCoordinator(
@@ -336,6 +352,9 @@ class AllTestMeasurement(QDialog):
         self.QCheckBox_Image_Widget = QCheckBox()
         self.QCheckBox_Image_Widget.setText("Show Graph")
         self.QCheckBox_Image_Widget.setCheckState(Qt.Checked)
+        self.QCheckBox_Temperature_Widget = QCheckBox()
+        self.QCheckBox_Temperature_Widget.setText("Measure Temperature (DAQ973A)")
+        self.QCheckBox_Temperature_Widget.setCheckState(Qt.Unchecked)
         self.QCheckBox_SpecialCase_Widget = QCheckBox()
         self.QCheckBox_SpecialCase_Widget.setText("Special Case (0% <-> 100%)")
         self.QCheckBox_SpecialCase_Widget.setCheckState(Qt.Checked)
@@ -346,10 +365,16 @@ class AllTestMeasurement(QDialog):
         self.QCheckBox_Lock_Widget.setText("🔒Lock Widget")
         self.QCheckBox_USB_Widget = QCheckBox()
         self.QCheckBox_USB_Widget.setText("USB")
+        self.QCheckBox_USB_Widget.setChecked(True)
+        self.QCheckBox_GPIB_Widget = QCheckBox()
+        self.QCheckBox_GPIB_Widget.setText("GPIB")
+        self.QCheckBox_GPIB_Widget.setChecked(True)
         self.QCheckBox_IP_Widget = QCheckBox()
         self.QCheckBox_IP_Widget.setText("IP address")
+        self.QCheckBox_IP_Widget.setChecked(True)
         self.QCheckBox_Hostname_Widget = QCheckBox()
         self.QCheckBox_Hostname_Widget.setText("Host name")
+        self.QCheckBox_Hostname_Widget.setChecked(True)
 
 
         #Test Selection checkbox
@@ -369,6 +394,15 @@ class AllTestMeasurement(QDialog):
         self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget = QCheckBox()
         self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.setText("Oscilloscope Capture (Voltage Change)")
         self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.setCheckState(Qt.Unchecked)
+
+        self.voltage_accuracy_mode_group = QButtonGroup(self)
+        self.voltage_accuracy_mode_group.setExclusive(True)
+        for checkbox in (
+            self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget,
+            self.QCheckBox_Voltage_Accuracy_Current_Mode_Widget,
+            self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget,
+        ):
+            self.voltage_accuracy_mode_group.addButton(checkbox)
 
         self.QCheckBox_VoltageLoadRegulation_Widget = QCheckBox()
         self.QCheckBox_VoltageLoadRegulation_Widget.setText("Voltage Load Regulation")
@@ -445,7 +479,7 @@ class AllTestMeasurement(QDialog):
         self.pause_button.clicked.connect(self.toggle_pause_test)
         self.pause_button.setVisible(False)
         self.pause_button.setEnabled(False)
-        self.show_plot_button = QPushButton("Show Plot")        #Shamman changes 
+        self.show_plot_button = QPushButton("Graph Plotting")
         self.show_plot_button.clicked.connect(self.show_popup_plot)
         self.show_plot_button.setVisible(False)
         self.show_plot_button.setEnabled(False)
@@ -454,10 +488,12 @@ class AllTestMeasurement(QDialog):
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("%p%")
         self.progress_bar.setVisible(False)
         
         # Progress label
         self.progress_label = QLabel("")
+        self.progress_label.setMinimumWidth(260)
         self.progress_label.setVisible(False)
 
         #Output Display
@@ -535,6 +571,7 @@ class AllTestMeasurement(QDialog):
         QLabel_DMM_VisaAddressforVoltage = QLabel()
         self.QLabel_DMM_VisaAddressforCurrent = QLabel()
         self.QLabel_OSC_VisaAddress = QLabel()
+        self.QLabel_DAQ_VisaAddress = QLabel()
         QLabel_ELoad_VisaAddress = QLabel()
         QLabel_DMM_Instrument = QLabel()
         QLabel_DUT = QLabel()
@@ -545,6 +582,7 @@ class AllTestMeasurement(QDialog):
         QLabel_DMM_VisaAddressforVoltage.setText("Visa Address (DMM):")
         self.QLabel_DMM_VisaAddressforCurrent.setText("Visa Address (DMM-Current Shunt):")
         self.QLabel_OSC_VisaAddress.setText("Visa Address (OSC):")
+        self.QLabel_DAQ_VisaAddress.setText("Visa Address (DAQ973A):")
         QLabel_ELoad_VisaAddress.setText("Visa Address (ELoad):")
         QLabel_DMM_Instrument.setText("Instrument Type (DMM):")
         QLabel_DUT.setText("DUT:")
@@ -554,6 +592,17 @@ class AllTestMeasurement(QDialog):
         self.QLineEdit_DMM_VisaAddressforVoltage = QComboBox()
         self.QLineEdit_DMM_VisaAddressforCurrent = QComboBox()
         self.QLineEdit_OSC_VisaAddress = QComboBox()
+        self.QLineEdit_DAQ_VisaAddress = QComboBox()
+        self.QLineEdit_DAQ_VisaAddress.setEditable(True)
+        self.QComboBox_Relay_Control = QComboBox()
+        self.QComboBox_Relay_Control.addItems(
+            [
+                "None",
+                "Voltage Relay (Channel 3)",
+                "Current Relay (Channel 2)",
+                "Both Relays",
+            ]
+        )
         self.QLineEdit_ELoad_VisaAddress = QComboBox()
         self.QComboBox_DMM_Instrument = QComboBox()
         self.QComboBox_DUT = QComboBox()
@@ -564,6 +613,7 @@ class AllTestMeasurement(QDialog):
         QLabel_set_ELoad_Channel = QLabel()
         QLabel_set_Function = QLabel()
         QLabel_Voltage_Sense = QLabel()
+        self.QLabel_Hornbill_Measurement_Command = QLabel()
         QLabel_OVP_Level = QLabel()
         QLabel_OCP_Level = QLabel()
         QLabel_OCP_Activation_Time = QLabel()
@@ -592,6 +642,9 @@ class AllTestMeasurement(QDialog):
         QLabel_set_ELoad_Channel.setText("Set Eload Channel:")
         QLabel_set_Function.setText("Mode(Eload):")
         QLabel_Voltage_Sense.setText("Voltage Sense:")
+        self.QLabel_Hornbill_Measurement_Command.setText(
+            "Hornbill Readback Command:"
+        )
         QLabel_OVP_Level.setText("OVP Level:")
         QLabel_OCP_Level.setText("OCP Level")
         QLabel_OCP_Activation_Time.setText("OCP Activation Time Error")
@@ -620,6 +673,7 @@ class AllTestMeasurement(QDialog):
         self.QComboBox_set_ELoad_Channel = QComboBox()
         self.QComboBox_set_Function = QComboBox()
         self.QComboBox_Voltage_Sense = QComboBox()
+        self.QComboBox_Hornbill_Measurement_Command = QComboBox()
 
         self.QLineEdit_OVP_Level = QLineEdit()
         self.QLineEdit_OCP_Level = QLineEdit()
@@ -662,10 +716,15 @@ class AllTestMeasurement(QDialog):
         self.QComboBox_set_ELoad_Channel.setEnabled(True)
         self.QComboBox_Voltage_Sense.addItems(["2 Wire", "4 Wire"])
         self.QComboBox_Voltage_Sense.setEnabled(True)
+        self.QComboBox_Hornbill_Measurement_Command.addItems(["DIAG", "SCPI"])
+        self.QLabel_Hornbill_Measurement_Command.setVisible(False)
+        self.QComboBox_Hornbill_Measurement_Command.setVisible(False)
         self.QComboBox_SPOperationMode.setEnabled(True)
         self.QComboBox_SPOperationMode.addItems(["Independent","Series","Parallel"])
         self.QComboBox_Line_Reg_Range.addItems(["100-115-230","100"])
         self.QComboBox_Line_Reg_Range.setEnabled(False)
+        self.QLabel_DAQ_VisaAddress.setVisible(False)
+        self.QLineEdit_DAQ_VisaAddress.setVisible(False)
         return SimpleNamespace(
             Desp0=Desp0,
             Desp1=Desp1,
@@ -888,6 +947,7 @@ class AllTestMeasurement(QDialog):
         Checkbox_row = QHBoxLayout(self.Connection_group)
         Connection_layout.addRow(self.QPushButton_Widget4)
         Checkbox_row.addWidget(self.QCheckBox_USB_Widget)
+        Checkbox_row.addWidget(self.QCheckBox_GPIB_Widget)
         Checkbox_row.addWidget(self.QCheckBox_IP_Widget)
         Checkbox_row.addWidget(self.QCheckBox_Hostname_Widget)
         Connection_layout.addRow(ui.QLabel_Connection_Selection, Checkbox_row)
@@ -900,6 +960,15 @@ class AllTestMeasurement(QDialog):
         Connection_layout.addRow(self.QLabel_OSC_VisaAddress, self.QLineEdit_OSC_VisaAddress)
         Connection_layout.addRow(ui.QLabel_DMM_Instrument, self.QComboBox_DMM_Instrument)
 
+        self.Auxiliary_group = QGroupBox("Auxiliary Equipment")
+        auxiliary_layout = QFormLayout(self.Auxiliary_group)
+        auxiliary_layout.addRow("Relay Control:", self.QComboBox_Relay_Control)
+        auxiliary_layout.addRow(self.QCheckBox_Temperature_Widget)
+        auxiliary_layout.addRow(
+            self.QLabel_DAQ_VisaAddress,
+            self.QLineEdit_DAQ_VisaAddress,
+        )
+
         #General Setting Layout
         self.General_group = QGroupBox()
         General_Setting_layout = QFormLayout(self.General_group)
@@ -908,6 +977,10 @@ class AllTestMeasurement(QDialog):
         General_Setting_layout.addRow(ui.QLabel_set_Function, self.QComboBox_set_Function)
         General_Setting_layout.addRow(self.QLabel_rshunt, self.QLineEdit_rshunt)
         General_Setting_layout.addRow(ui.QLabel_Voltage_Sense, self.QComboBox_Voltage_Sense)
+        General_Setting_layout.addRow(
+            self.QLabel_Hornbill_Measurement_Command,
+            self.QComboBox_Hornbill_Measurement_Command,
+        )
         General_Setting_layout.addRow(ui.QLabel_OVP_Level, self.QLineEdit_OVP_Level)
         General_Setting_layout.addRow(ui.QLabel_OCP_Level, self.QLineEdit_OCP_Level)
         General_Setting_layout.addRow(ui.QLabel_OCP_Activation_Time, self.QLineEdit_OCP_ActivationTime_Error)
@@ -1035,7 +1108,6 @@ class AllTestMeasurement(QDialog):
         Right_container.addLayout(ui.save_path_layout)         #Need changes
         Right_container.addLayout(exec_layout_box)
         Right_container.addWidget(self.queue_widget)
-        Right_container.addWidget(self.plot_widget)
         return Right_container
 
     def _create_settings_panel(self, ui, test_selection_layout):
@@ -1056,6 +1128,7 @@ class AllTestMeasurement(QDialog):
         setting_layout = QFormLayout(setting_widget)
         setting_layout.addRow(ui.Desp1)
         setting_layout.addRow(self.Connection_group)
+        setting_layout.addRow(self.Auxiliary_group)
         setting_layout.addRow(ui.Desp2)
         setting_layout.addRow(self.General_group)
         setting_layout.addRow(ui.Desp3)
@@ -1086,13 +1159,19 @@ class AllTestMeasurement(QDialog):
         return Left_container
 
     def _install_main_layout(self, left_container, right_container):
-        #Main Layout
-        Main_Layout = QHBoxLayout()
-        Main_Layout.addWidget(self.progress_label)
-        Main_Layout.addWidget(self.progress_bar)
-        Main_Layout.addLayout(left_container,stretch= 2)
-        Main_Layout.addLayout(right_container,stretch = 1)
-        self.setLayout(Main_Layout)
+        setup_tab = QWidget()
+        setup_layout = QHBoxLayout(setup_tab)
+        setup_layout.addWidget(self.progress_label)
+        setup_layout.addWidget(self.progress_bar)
+        setup_layout.addLayout(left_container, stretch=2)
+        setup_layout.addLayout(right_container, stretch=1)
+
+        self.dialog_tabs = QTabWidget()
+        self.dialog_tabs.addTab(setup_tab, "Test Setup")
+        self.dialog_tabs.addTab(self.plot_window, "Graph Plotting")
+
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(self.dialog_tabs)
 
 
     def _connect_signals(self):
@@ -1107,6 +1186,9 @@ class AllTestMeasurement(QDialog):
         self.VoltageAccuracy_Branch_Widget.setVisible(
         self.QCheckBox_VoltageAccuracy_Widget.isChecked()
         )
+
+    def voltage_accuracy_mode_changed(self):
+        self.InteractiveAction()
 
     def _connect_worker(self, worker):
         self.worker = worker
@@ -1140,7 +1222,21 @@ class AllTestMeasurement(QDialog):
         self.was_aborted = False
         self.last_Iset = None
         self.fail_prompt_active = False
+        self.continue_on_boundary_failure = False
         self.realtime_plot_series = RealtimePlotSeries()
+        total_points = expected_measurement_points(
+            request.configuration,
+            request.checkbox_states,
+        )
+        initial_seconds_per_point = 1.0 + max(
+            0.0,
+            float(request.configuration.get("updatedelay") or 0),
+        )
+        self.progress_tracker = MeasurementProgressTracker(
+            total_points,
+            initial_seconds_per_point,
+        )
+        self._refresh_progress_display()
         self.checkbox_states = dict(request.checkbox_states)
         self.active_params = request.parameters
         self.active_run_context = self.prepare_run_storage(
@@ -1153,9 +1249,7 @@ class AllTestMeasurement(QDialog):
             if self.checkbox_states.get("CurrentAccuracy")
             else "Voltage"
         )
-        self.plot_widget.setTitle(f"{measurement_name} Accuracy")
-        self.plot_window = VoltageAccuracyPlotWindow(measurement_name)
-        self.plot_window.show()
+        self.plot_window.reset(measurement_name)
 
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
@@ -1201,6 +1295,12 @@ class AllTestMeasurement(QDialog):
         }.get(state, "Pause")
         self.pause_button.setText(pause_button_text)
         self.abort_button.setText("Stopping..." if state == TestState.STOPPING else "Abort")
+        if self.progress_tracker:
+            if state == TestState.PAUSED:
+                self.progress_tracker.pause()
+            elif state == TestState.RUNNING:
+                self.progress_tracker.resume()
+            self._refresh_progress_display()
         self.progress_bar.setVisible(active)
         self.progress_label.setVisible(active)
         if not active:
@@ -1331,17 +1431,12 @@ class AllTestMeasurement(QDialog):
             percentage_lower_bound=percentage_lower_bound,
         )
         self.realtime_plot_series.append(measurement)
-        self._render_realtime_plot()
+        if self.progress_tracker:
+            self.progress_tracker.record_measurement()
+            self._refresh_progress_display()
         self._write_realtime_measurement(measurement)
         self._append_realtime_measurement_status(measurement)
         self._handle_realtime_measurement_failure(measurement)
-
-    def _render_realtime_plot(self):
-        series = self.realtime_plot_series
-        self.programming_curve.setData(series.x_data, series.programming_data)
-        self.readback_curve.setData(series.x_data, series.readback_data)
-        self.prog_up_bound.setData(series.x_data, series.upper_bound_data)
-        self.prog_low_bound.setData(series.x_data, series.lower_bound_data)
 
     def _write_realtime_measurement(self, measurement):
         if self.active_run_context:
@@ -1371,7 +1466,11 @@ class AllTestMeasurement(QDialog):
         self.OutputBox.append(f'<span style="color:{color};">{log_line}</span>')
 
     def _handle_realtime_measurement_failure(self, measurement):
-        if measurement.passed or self.fail_prompt_active:
+        if (
+            measurement.passed
+            or self.continue_on_boundary_failure
+            or self.fail_prompt_active
+        ):
             return
 
         self.fail_prompt_active = True
@@ -1387,6 +1486,9 @@ class AllTestMeasurement(QDialog):
         msg.setText("A test point failure has been detected.")
 
         ignore_btn = msg.addButton("Ignore and Continue", QMessageBox.AcceptRole)
+        continue_all_btn = msg.addButton(
+            "Continue All Failures", QMessageBox.AcceptRole
+        )
         terminate_btn = msg.addButton("Terminate Test", QMessageBox.RejectRole)
 
         msg.exec_()
@@ -1396,6 +1498,17 @@ class AllTestMeasurement(QDialog):
             self.worker.resume()
             self.OutputBox.append(
                 "<span style='color:orange;'>⚠ Failure ignored by operator — test resumed</span>"
+            )
+        elif msg.clickedButton() == continue_all_btn:
+            self.continue_on_boundary_failure = True
+            self.fail_prompt_active = False
+            self.worker.resume()
+            self.OutputBox.append(
+                "<span style='color:orange;'>⚠ Continuing automatically after boundary failures for this run</span>"
+            )
+            self.write_diagnostic(
+                "boundary_failure_policy_changed",
+                policy="continue_all",
             )
         elif msg.clickedButton() == terminate_btn:
             self.was_aborted = True
@@ -1447,6 +1560,10 @@ class AllTestMeasurement(QDialog):
             sense_text = "4 Wire" if voltage_sense == "EXT" else "2 Wire"
             self.QComboBox_Voltage_Sense.setCurrentText(sense_text)
 
+        hornbill_selected = selected_text == "Hornbill"
+        self.QLabel_Hornbill_Measurement_Command.setVisible(hornbill_selected)
+        self.QComboBox_Hornbill_Measurement_Command.setVisible(hornbill_selected)
+
     def _apply_parameter_widget_bindings(self, bindings, setter_name):
         for widget_name, parameter_name in bindings:
             value = getattr(self.params, parameter_name, None)
@@ -1488,30 +1605,57 @@ class AllTestMeasurement(QDialog):
     
     def doFind(self):       #Shamman changes
         try:
-            # Clear GUI fields
-            # 🔑 Call the dispatcher
-            discovery = ScanSelectedVisaResources(self)
+            address_widgets = (
+                self.QLineEdit_PSU_VisaAddress,
+                self.QLineEdit_DMM_VisaAddressforVoltage,
+                self.QLineEdit_DMM_VisaAddressforCurrent,
+                self.QLineEdit_OSC_VisaAddress,
+                self.QLineEdit_ELoad_VisaAddress,
+                self.QLineEdit_DAQ_VisaAddress,
+            )
+            role_widgets = {
+                "PSU": self.QLineEdit_PSU_VisaAddress,
+                "ELOAD": self.QLineEdit_ELoad_VisaAddress,
+                "DMM": self.QLineEdit_DMM_VisaAddressforVoltage,
+                "DMM2": self.QLineEdit_DMM_VisaAddressforCurrent,
+                "SCOPE": self.QLineEdit_OSC_VisaAddress,
+                "DAQ": self.QLineEdit_DAQ_VisaAddress,
+            }
+
+            def show_progress(current_result):
+                present_discovery_result(
+                    current_result,
+                    address_widgets=address_widgets,
+                    role_widgets=role_widgets,
+                    output_widget=self.OutputBox,
+                )
+                self.OutputBox.append(
+                    f"Scanning... {len(current_result.addresses)} "
+                    "responsive instrument(s) found."
+                )
+                QApplication.processEvents()
+
+            discovery = ScanSelectedVisaResources(
+                self,
+                on_progress=show_progress,
+            )
             self.visaIdList = list(discovery.addresses)
             self.nameList = list(discovery.identities)
 
             present_discovery_result(
                 discovery,
-                address_widgets=(
-                    self.QLineEdit_PSU_VisaAddress,
-                    self.QLineEdit_DMM_VisaAddressforVoltage,
-                    self.QLineEdit_DMM_VisaAddressforCurrent,
-                    self.QLineEdit_OSC_VisaAddress,
-                    self.QLineEdit_ELoad_VisaAddress,
-                ),
-                role_widgets={
-                    "PSU": self.QLineEdit_PSU_VisaAddress,
-                    "ELOAD": self.QLineEdit_ELoad_VisaAddress,
-                    "DMM": self.QLineEdit_DMM_VisaAddressforVoltage,
-                    "DMM2": self.QLineEdit_DMM_VisaAddressforCurrent,
-                    "SCOPE": self.QLineEdit_OSC_VisaAddress,
-                },
+                address_widgets=address_widgets,
+                role_widgets=role_widgets,
                 output_widget=self.OutputBox,
             )
+            self.OutputBox.append(
+                f"Found {len(discovery.addresses)} available configured "
+                "instrument(s); responsive addresses were added to the lists."
+            )
+            if not discovery.addresses:
+                self.OutputBox.append(
+                    "No configured instruments responded on the selected transports."
+                )
 
         except Exception as e:
             self.OutputBox.append("No Devices Found!!! " + str(e))
@@ -1542,12 +1686,14 @@ class AllTestMeasurement(QDialog):
     def OSC_VisaAddress_changed(self, s):
         self.params.OSC = s
 
+    def DAQ_VisaAddress_changed(self, s):
+        self.params.DAQ = s
+
     def OSC_Channel_changed(self, s):
         self.params.OSC_Channel = s
 
     def DUT_changed(self, s):
         self.params.DUT = s
-        self.doFind()
 
     def ELoad_Channel_changed(self, s):
         self.params.ELoad_Channel = s
@@ -1634,6 +1780,12 @@ class AllTestMeasurement(QDialog):
         elif s == "4 Wire":
             self.params.VoltageSense = "EXT"
 
+    def Hornbill_Measurement_Command_changed(self, command):
+        self.params.Hornbill_Measurement_Command = command
+
+    def Relay_Control_changed(self, selection):
+        self.params.Relay_Control = selection
+
     def OVP_Level_changed(self, s):
         self.params.OVP_Level = s
         self.OutputBox.setPlainText("OVP Level Set to: " + str(self.params.OVP_Level))
@@ -1677,6 +1829,11 @@ class AllTestMeasurement(QDialog):
 
     def checkbox_state_Image(self, s):
         self.checkbox_data_Image = s
+
+    def checkbox_state_Temperature(self, state):
+        enabled = state == Qt.Checked
+        self.QLabel_DAQ_VisaAddress.setVisible(enabled)
+        self.QLineEdit_DAQ_VisaAddress.setVisible(enabled)
 
     def checkbox_state_lock(self, state):
         lockable_widgets = (QPushButton, QLineEdit, QTextEdit, QComboBox)
@@ -1903,7 +2060,13 @@ class AllTestMeasurement(QDialog):
             self.QCheckBox_ProgrammingSpeed_Widget.isChecked()
         )
         oscilloscope_required = (
-            ocp_selected or transient_selected or programming_response_selected
+            ocp_selected
+            or transient_selected
+            or programming_response_selected
+            or (
+                self.QCheckBox_VoltageAccuracy_Widget.isChecked()
+                and self.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget.isChecked()
+            )
         )
         self.oscilloscope_settings_widget.setVisible(oscilloscope_required)
         self.Programming_Response_widget.setVisible(programming_response_selected)
@@ -2099,7 +2262,33 @@ class AllTestMeasurement(QDialog):
 
     def update_progress_bar(self, value):
         """Update the progress bar value"""
+        if self.progress_tracker and value >= 100:
+            self.progress_tracker.mark_complete()
+            self._refresh_progress_display()
+            return
         self.progress_bar.setValue(value)
+
+    def _refresh_progress_display(self):
+        if not self.progress_tracker:
+            return
+        snapshot = self.progress_tracker.snapshot()
+        self.progress_bar.setValue(snapshot.percent)
+        elapsed = format_duration(snapshot.elapsed_seconds)
+        if (
+            not self.progress_tracker.completed
+            and snapshot.total > 0
+            and snapshot.completed >= snapshot.total
+        ):
+            detail = f"Elapsed {elapsed} • Running remaining tests and reports"
+        elif snapshot.remaining_seconds is None:
+            detail = f"Elapsed {elapsed} • ETA learning from instrument responses"
+        else:
+            remaining = format_duration(snapshot.remaining_seconds)
+            detail = (
+                f"Elapsed {elapsed} • Remaining {remaining} • "
+                f"{snapshot.completed}/{snapshot.total} points"
+            )
+        self.progress_label.setText(detail)
 
     # MODIFIED - Simplified abort function
     def abort_test(self):
@@ -2226,7 +2415,7 @@ class AllTestMeasurement(QDialog):
         self.pause_button.setText("Pause")
         self.pause_button.setEnabled(False)
         self.show_plot_button.setVisible(False)
-        self.show_plot_button.setText("Show Plot")
+        self.show_plot_button.setText("Graph Plotting")
         self.show_plot_button.setEnabled(False)
         self.QPushButton_Widget1.setEnabled(True)
                  
@@ -2276,7 +2465,7 @@ class AllTestMeasurement(QDialog):
         self.pause_button.setText("Pause")
         self.pause_button.setEnabled(False)
         self.show_plot_button.setVisible(False)
-        self.show_plot_button.setText("Show Plot")
+        self.show_plot_button.setText("Graph Plotting")
         self.show_plot_button.setEnabled(False)
         self.QPushButton_Widget1.setEnabled(True)
         
@@ -2287,10 +2476,8 @@ class AllTestMeasurement(QDialog):
         
         print_console_safe("Test operation aborted")
 
-    def show_popup_plot(self):      #Shamman changes to call back the plot_window
-        self.plot_window.show()
-        self.plot_window.raise_()
-        self.plot_window.activateWindow()
+    def show_popup_plot(self):
+        self.dialog_tabs.setCurrentWidget(self.plot_window)
 
     '''def on_voltage_fail(self, error_value):     #Shamman changes
         msg = QMessageBox(self)
@@ -2330,6 +2517,46 @@ class VoltageAccuracyPlotWindow(QWidget): #Shamman changes
         self.perc_low_data = []
 
         self._setup_ui()
+
+    def reset(self, measurement_name="Voltage"):
+        self.measurement_name = measurement_name
+        self.x.clear()
+        self.prog_data.clear()
+        self.rb_data.clear()
+        self.prog_up_data.clear()
+        self.prog_low_data.clear()
+        self.rb_up_data.clear()
+        self.rb_low_data.clear()
+        self.prog_perc_data.clear()
+        self.rb_perc_data.clear()
+        self.perc_up_data.clear()
+        self.perc_low_data.clear()
+
+        self.prog_plot.setTitle(
+            f"Programming {measurement_name} Absolute Error"
+        )
+        self.rb_plot.setTitle(f"Readback {measurement_name} Absolute Error")
+        self.prog_perc_plot.setTitle(
+            f"Programming {measurement_name} Percentage Error (%)"
+        )
+        self.rb_perc_plot.setTitle(
+            f"Readback {measurement_name} Percentage Error (%)"
+        )
+        for curve in (
+            self.programming_curve,
+            self.prog_upper_boundary,
+            self.prog_lower_boundary,
+            self.readback_curve,
+            self.rb_upper_boundary,
+            self.rb_lower_boundary,
+            self.programming_percentage_curve,
+            self.prog_perc_upper_boundary,
+            self.prog_perc_lower_boundary,
+            self.readback_percentage_curve,
+            self.rb_perc_upper_boundary,
+            self.rb_perc_lower_boundary,
+        ):
+            curve.setData([], [])
 
     def _setup_ui(self):
         layout = QGridLayout(self)
@@ -2400,12 +2627,6 @@ class VoltageAccuracyPlotWindow(QWidget): #Shamman changes
         self.readback_percentage_curve.setData(self.x, self.rb_perc_data)
         self.rb_perc_upper_boundary.setData(self.x, self.perc_up_data)
         self.rb_perc_lower_boundary.setData(self.x, self.perc_low_data)
-
-    def closeEvent(self, event):
-        event.ignore()   # stop Qt from destroying the window
-        self.hide()      # just hide it
-
-
 
 class AdvancedSettings(QDialog):
     """This class is to configure the Advanced Settings when conducting voltage measurements,

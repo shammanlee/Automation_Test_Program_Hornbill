@@ -113,6 +113,67 @@ class SimulationWorkflowTests(unittest.TestCase):
         self.assertEqual(measured, [[5.0, 0]])
         self.assertEqual(readback, [[5.0, 0.9]])
 
+    def test_hornbill_voltage_accuracy_respects_zero_initial_current(self):
+        configuration = self._measurement_configuration()
+        configuration.update(minCurrent=0, maxCurrent=1)
+
+        with patch.dict(
+            os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False
+        ), patch.object(hornbill_measurements, "sleep", lambda *_: None):
+            begin_visa_session_scope()
+            info, _, _ = (
+                hornbill_measurements.HornbillVoltageMeasurementwithELoad().Execute_Voltage_Accuracy_Current_Static(
+                    configuration, 1
+                )
+            )
+
+        command_log = get_simulation_state().command_log
+        load_commands = [
+            command
+            for address, command in command_log
+            if address == configuration["ELoad"]
+        ]
+
+        self.assertEqual(info, [[5.0, 0.0, 0], [5.0, 1.0, 1]])
+        self.assertLess(load_commands.index("CURR MIN"), load_commands.index("OUTP ON"))
+
+    def test_hornbill_current_change_does_not_program_negative_load(self):
+        configuration = self._measurement_configuration()
+        configuration.update(minCurrent=0, maxCurrent=1)
+
+        with patch.dict(
+            os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False
+        ), patch.object(hornbill_measurements, "sleep", lambda *_: None):
+            begin_visa_session_scope()
+            hornbill_measurements.HornbillVoltageMeasurementwithELoad().Execute_Voltage_Accuracy_Current_Change(
+                configuration, 1
+            )
+
+        commands = [command for _, command in get_simulation_state().command_log]
+        self.assertFalse(any(command.startswith("CURR -") for command in commands))
+
+    def test_real_hornbill_voltage_accuracy_can_use_scpi_readback(self):
+        configuration = self._measurement_configuration()
+        configuration["Hornbill_Measurement_Command"] = "SCPI"
+
+        with patch.dict(
+            os.environ, {"AUTOMATION_SIMULATION": "1"}, clear=False
+        ), patch.object(hornbill_measurements, "sleep", lambda *_: None):
+            begin_visa_session_scope()
+            info, measured, readback = (
+                hornbill_measurements.HornbillVoltageMeasurementwithELoad().Execute_Voltage_Accuracy_Current_Static(
+                    configuration, 1
+                )
+            )
+
+        commands = [command for _, command in get_simulation_state().command_log]
+        self.assertEqual(info, [[5.0, 1.0, 0]])
+        self.assertEqual(measured, [[5.0, 0]])
+        self.assertEqual(readback, [[5.0, 0.9]])
+        self.assertIn("MEAS:VOLT:DC? (@1)", commands)
+        self.assertIn("MEASure:CURRent:DC? (@1)", commands)
+        self.assertFalse(any(command.startswith("DIAG:PEEK?") for command in commands))
+
     def test_real_hornbill_current_accuracy_measurement(self):
         configuration = self._measurement_configuration()
         configuration.update(minCurrent=2, maxCurrent=2)

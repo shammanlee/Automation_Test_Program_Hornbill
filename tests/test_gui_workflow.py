@@ -141,8 +141,72 @@ class GuiWorkflowTests(unittest.TestCase):
         )
 
     def test_ui_builders_assemble_expected_sections(self):
-        self.assertEqual(self.dialog.layout().count(), 4)
+        self.assertEqual(self.dialog.layout().count(), 1)
         self.assertIsNotNone(self.dialog.Connection_group.layout())
+        self.assertEqual(
+            self.dialog.Auxiliary_group.title(),
+            "Auxiliary Equipment",
+        )
+        self.assertIsNotNone(self.dialog.Auxiliary_group.layout())
+        self.assertEqual(
+            [
+                self.dialog.QComboBox_Relay_Control.itemText(index)
+                for index in range(self.dialog.QComboBox_Relay_Control.count())
+            ],
+            [
+                "None",
+                "Voltage Relay (Channel 3)",
+                "Current Relay (Channel 2)",
+                "Both Relays",
+            ],
+        )
+        self.assertEqual(self.dialog.dialog_tabs.count(), 2)
+        self.assertEqual(self.dialog.dialog_tabs.tabText(0), "Test Setup")
+        self.assertEqual(self.dialog.dialog_tabs.tabText(1), "Graph Plotting")
+
+    def test_graph_button_opens_graph_plotting_subtab(self):
+        self.dialog.dialog_tabs.setCurrentIndex(0)
+
+        self.dialog.show_popup_plot()
+
+        self.assertIs(
+            self.dialog.dialog_tabs.currentWidget(),
+            self.dialog.plot_window,
+        )
+
+    def test_worker_plot_data_updates_graph_subtab_without_popup(self):
+        self.dialog.plot_window.popup_plot(
+            0.1,
+            0.2,
+            0.5,
+            -0.5,
+            0.5,
+            -0.5,
+            1.0,
+            2.0,
+            100.0,
+            -100.0,
+        )
+
+        self.assertEqual(self.dialog.plot_window.x, [0])
+        self.assertEqual(self.dialog.plot_window.prog_data, [0.1])
+        self.assertFalse(self.dialog.plot_window.isWindow())
+
+    def test_temperature_checkbox_reveals_optional_daq_address(self):
+        self.assertTrue(self.dialog.QLineEdit_DAQ_VisaAddress.isHidden())
+
+        self.dialog.QCheckBox_Temperature_Widget.setChecked(True)
+
+        self.assertFalse(self.dialog.QLineEdit_DAQ_VisaAddress.isHidden())
+        self.assertFalse(self.dialog.QLabel_DAQ_VisaAddress.isHidden())
+
+    def test_hornbill_configuration_loads_default_daq_address(self):
+        self.dialog.QComboBox_DUT.setCurrentText("Hornbill")
+
+        self.assertEqual(
+            self.dialog.QLineEdit_DAQ_VisaAddress.currentText(),
+            "USB0::0x2A8D::0x8601::MY59010677::0::INSTR",
+        )
 
     def test_ocp_level_updates_parameters_and_output(self):
         self.dialog.OCP_Level_changed("2.5")
@@ -197,14 +261,35 @@ class GuiWorkflowTests(unittest.TestCase):
             self.dialog.QLineEdit_Programming_Response_Up_NoLoad.text(), "80"
         )
         self.assertEqual(self.dialog.QLineEdit_OVP_Error_Gain.text(), "0.002")
-        self.assertEqual(self.dialog.QLineEdit_maxVoltage.text(), "3000")
+        self.assertEqual(self.dialog.QLineEdit_maxVoltage.text(), "60")
         self.assertEqual(self.dialog.QComboBox_Probe_Setting.currentText(), "X10")
         self.assertEqual(self.dialog.QComboBox_Voltage_Res.currentText(), "SLOW")
         self.assertEqual(
             self.dialog.QComboBox_set_Function.currentText(), "Voltage Priority"
         )
         self.assertEqual(self.dialog.QComboBox_Voltage_Sense.currentText(), "4 Wire")
+        self.assertEqual(
+            self.dialog.QComboBox_Hornbill_Measurement_Command.currentText(),
+            "DIAG",
+        )
+        self.assertFalse(
+            self.dialog.QComboBox_Hornbill_Measurement_Command.isHidden()
+        )
         self.assertEqual(self.dialog.QLineEdit_OVP_Level.text(), "")
+
+    def test_hornbill_readback_command_can_be_switched_to_scpi(self):
+        self.dialog.QComboBox_DUT.setCurrentText("Hornbill")
+        self.dialog.QComboBox_Hornbill_Measurement_Command.setCurrentText("SCPI")
+
+        self.assertEqual(
+            self.dialog.params.Hornbill_Measurement_Command,
+            "SCPI",
+        )
+
+        self.dialog.QComboBox_DUT.setCurrentText("Dolphin")
+        self.assertTrue(
+            self.dialog.QComboBox_Hornbill_Measurement_Command.isHidden()
+        )
 
     def test_measurement_mode_updates_related_controls(self):
         self.dialog.QPushButton_Current_Widget.click()
@@ -242,6 +327,25 @@ class GuiWorkflowTests(unittest.TestCase):
             self.assertFalse(self.dialog.oscilloscope_settings_widget.isHidden())
             checkbox.setChecked(False)
 
+        self.assertTrue(self.dialog.oscilloscope_settings_widget.isHidden())
+
+    def test_voltage_accuracy_modes_are_exclusive_and_scope_mode_shows_settings(self):
+        static_mode = self.dialog.QCheckBox_Voltage_Accuracy_Voltage_Mode_Widget
+        current_mode = self.dialog.QCheckBox_Voltage_Accuracy_Current_Mode_Widget
+        scope_mode = (
+            self.dialog.QCheckBox_Voltage_Accuracy_Voltage_Mode_Oscilloscope_Widget
+        )
+
+        scope_mode.setChecked(True)
+
+        self.assertFalse(static_mode.isChecked())
+        self.assertFalse(current_mode.isChecked())
+        self.assertFalse(self.dialog.oscilloscope_settings_widget.isHidden())
+
+        current_mode.setChecked(True)
+
+        self.assertFalse(static_mode.isChecked())
+        self.assertFalse(scope_mode.isChecked())
         self.assertTrue(self.dialog.oscilloscope_settings_widget.isHidden())
 
     def test_state_controls_follow_worker_state(self):
@@ -303,6 +407,7 @@ class GuiWorkflowTests(unittest.TestCase):
             self.dialog.QLineEdit_DMM_VisaAddressforCurrent,
             self.dialog.QLineEdit_OSC_VisaAddress,
             self.dialog.QLineEdit_ELoad_VisaAddress,
+            self.dialog.QLineEdit_DAQ_VisaAddress,
         )
         for widget in widgets:
             self.assertEqual(widget.count(), 2)
@@ -313,6 +418,103 @@ class GuiWorkflowTests(unittest.TestCase):
         self.assertEqual(
             self.dialog.QLineEdit_DMM_VisaAddressforVoltage.currentText(),
             "USB0::DMM::INSTR",
+        )
+
+    def test_connection_selector_has_explicit_gpib_option(self):
+        self.assertEqual(self.dialog.QCheckBox_USB_Widget.text(), "USB")
+        self.assertEqual(self.dialog.QCheckBox_GPIB_Widget.text(), "GPIB")
+        self.assertTrue(self.dialog.QCheckBox_USB_Widget.isChecked())
+        self.assertTrue(self.dialog.QCheckBox_GPIB_Widget.isChecked())
+        self.assertTrue(self.dialog.QCheckBox_IP_Widget.isChecked())
+        self.assertTrue(self.dialog.QCheckBox_Hostname_Widget.isChecked())
+
+    def test_selected_resource_scan_uses_active_dut_configuration(self):
+        snapshots = []
+        self.dialog.QComboBox_DUT.setCurrentText("Hornbill")
+        configured = GUI.DiscoveryResult(
+            addresses=[
+                "GPIB0::22::INSTR",
+                "TCPIP0::host::inst0::INSTR",
+            ],
+            identities=["HP3458A", "VENDOR,HOST"],
+        )
+        expected_path = Path("configured-hornbill.txt")
+
+        with patch.object(
+            all_test_dialog,
+            "configuration_path",
+            return_value=expected_path,
+        ) as path_builder, patch.object(
+            all_test_dialog,
+            "GetConfiguredVisaResources",
+            return_value=configured,
+        ) as configured_scan:
+            result = all_test_dialog.ScanSelectedVisaResources(
+                self.dialog,
+                on_progress=lambda current: snapshots.append(
+                    list(current.addresses)
+                ),
+            )
+
+        self.assertEqual(
+            result.addresses,
+            ["GPIB0::22::INSTR", "TCPIP0::host::inst0::INSTR"],
+        )
+        self.assertEqual(snapshots, [result.addresses])
+        path_builder.assert_called_once_with(
+            all_test_dialog.config_folder,
+            "Hornbill",
+        )
+        configured_scan.assert_called_once_with(
+            expected_path,
+            enabled_transports={
+                "usb",
+                "gpib",
+                "tcpip_ip",
+                "tcpip_hostname",
+            },
+        )
+
+    def test_discovery_lists_mixed_gpib_and_hostname_resources(self):
+        result = GUI.DiscoveryResult(
+            addresses=[
+                "GPIB0::22::INSTR",
+                "TCPIP0::p700-95640339::inst0::INSTR",
+            ],
+            identities=[
+                "HP3458A",
+                "KEYSIGHT TECHNOLOGIES,LINUXGEN,TST0000001,00.04",
+            ],
+            roles={
+                "DMM": "GPIB0::22::INSTR",
+                "PSU": "TCPIP0::p700-95640339::inst0::INSTR",
+            },
+        )
+
+        with patch.object(
+            all_test_dialog, "ScanSelectedVisaResources", return_value=result
+        ):
+            self.dialog.QPushButton_Widget4.click()
+
+        psu_widget = self.dialog.QLineEdit_PSU_VisaAddress
+        dmm_widget = self.dialog.QLineEdit_DMM_VisaAddressforVoltage
+        expected_items = result.addresses
+        self.assertEqual(
+            [psu_widget.itemText(index) for index in range(psu_widget.count())],
+            expected_items,
+        )
+        self.assertEqual(
+            [dmm_widget.itemText(index) for index in range(dmm_widget.count())],
+            expected_items,
+        )
+        self.assertEqual(
+            psu_widget.currentText(),
+            "TCPIP0::p700-95640339::inst0::INSTR",
+        )
+        self.assertEqual(dmm_widget.currentText(), "GPIB0::22::INSTR")
+        self.assertIn(
+            "Found 2 available configured instrument(s)",
+            self.dialog.OutputBox.toPlainText(),
         )
 
     def test_failure_termination_uses_safe_stop_state(self):
@@ -356,6 +558,62 @@ class GuiWorkflowTests(unittest.TestCase):
         self.assertTrue(self.dialog.was_aborted)
         self.assertEqual(self.dialog.test_state, GUI.TestState.STOPPING)
         self.assertEqual(worker.stop_calls, 1)
+
+    def test_failure_can_continue_all_remaining_boundary_failures(self):
+        class ContinueAllMessageBox:
+            Warning = QMessageBox.Warning
+            AcceptRole = QMessageBox.AcceptRole
+            RejectRole = QMessageBox.RejectRole
+
+            def __init__(self, _parent):
+                self.continue_all_button = None
+
+            def setIcon(self, _icon):
+                return None
+
+            def setWindowTitle(self, _title):
+                return None
+
+            def setText(self, _text):
+                return None
+
+            def addButton(self, text, _role):
+                button = object()
+                if text == "Continue All Failures":
+                    self.continue_all_button = button
+                return button
+
+            def exec_(self):
+                return None
+
+            def clickedButton(self):
+                return self.continue_all_button
+
+        worker = DummyWorker()
+        self.dialog.worker = worker
+        self.dialog.fail_prompt_active = True
+
+        with patch.object(all_test_dialog, "QMessageBox", ContinueAllMessageBox):
+            self.dialog.handle_test_failure()
+
+        self.assertTrue(self.dialog.continue_on_boundary_failure)
+        self.assertFalse(self.dialog.fail_prompt_active)
+        self.assertEqual(worker.resume_calls, 1)
+        self.assertEqual(worker.stop_calls, 0)
+
+    def test_continue_all_policy_does_not_pause_on_later_failures(self):
+        class FailedMeasurement:
+            passed = False
+
+        worker = DummyWorker()
+        self.dialog.worker = worker
+        self.dialog.continue_on_boundary_failure = True
+
+        with patch.object(self.dialog, "handle_test_failure") as failure_dialog:
+            self.dialog._handle_realtime_measurement_failure(FailedMeasurement())
+
+        self.assertEqual(worker.pause_calls, 0)
+        failure_dialog.assert_not_called()
 
     def test_duplicate_start_is_rejected_before_preflight(self):
         worker = DummyWorker()

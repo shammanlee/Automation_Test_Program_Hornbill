@@ -8,6 +8,42 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pyvisa
+from SCPI_Library.simulation import (
+    create_resource_manager,
+    initialize_main_thread_visa,
+    is_simulation_mode,
+)
+
+if __name__ == "__main__":
+    main_thread_resource_manager = initialize_main_thread_visa()
+    if "--visa-diagnostics" in sys.argv:
+        print(f"VISA library: {main_thread_resource_manager.visalib}")
+        print("VISA resources:")
+        visa_resources = main_thread_resource_manager.list_resources()
+        for visa_resource in visa_resources:
+            print(f"  {visa_resource}")
+        for visa_resource in visa_resources:
+            if not visa_resource.upper().startswith("GPIB"):
+                continue
+            gpib_instrument = None
+            try:
+                gpib_instrument = main_thread_resource_manager.open_resource(
+                    visa_resource
+                )
+                gpib_instrument.timeout = 10000
+                gpib_instrument.write_termination = "\n"
+                gpib_instrument.read_termination = "\n"
+                gpib_instrument.clear()
+                gpib_instrument.write("ID?")
+                print(f"GPIB identity ({visa_resource}): {gpib_instrument.read()}")
+            except Exception as exception:
+                print(f"GPIB probe failed ({visa_resource}): {exception}")
+                raise SystemExit(1) from exception
+            finally:
+                if gpib_instrument is not None:
+                    gpib_instrument.close()
+        raise SystemExit(0)
+
 import pandas as pd
 
 import time #Shamman changes
@@ -44,6 +80,8 @@ from path import (
     setup_img_folder,
 )
 from error_dialogs import show_error_dialog
+from documentation_tab import ProgramDocumentationTab, TestPatternsTab
+from keysight_command_tab import KeysightCommandTab
 from output_logging import print_console_safe
 from instrument_discovery import (
     get_all_visa_resources as NewGetVisaSCPIResources,
@@ -51,7 +89,9 @@ from instrument_discovery import (
 )
 
 from DUT_Test_Scripts.DUT_Test import NewCurrentMeasurement, NewVoltageMeasurement
-from SCPI_Library.simulation import create_resource_manager, is_simulation_mode
+from TestVolt_HB_3458 import (
+    VoltageCalibrationDialog as VoltageCalibration3458Dialog,
+)
 
 from DUT_Test_Scripts.DUT_screenshot import ScreenShotDialog
 
@@ -173,7 +213,7 @@ def scroll_area(self,layout):
     return scroll_area
 
 ###########################################################################
-#------------------------- Main GUI window with three tab (Bundled Test, Screenshot and List of Standalone Test)--------------
+#------------------------- Main GUI window and application tabs--------------
 class MainWindow(QMainWindow):
     """Main window with controls for displaying DUT tests."""
     
@@ -256,11 +296,17 @@ class MainWindow(QMainWindow):
         self.tab_NewBundle = QWidget()
         self.tab_ScreenShot = QWidget()
         self.tab_TestList = QWidget()
+        self.tab_Documentation = ProgramDocumentationTab()
+        self.tab_TestPatterns = TestPatternsTab()
+        self.tab_KeysightCommands = KeysightCommandTab()
 
         # Add tabs to the tab widget
         self.tab_widget.addTab(self.tab_NewBundle, "Bundle Test")
         self.tab_widget.addTab(self.tab_ScreenShot, "Screenshot")
         self.tab_widget.addTab(self.tab_TestList, "Test Selection")
+        self.tab_widget.addTab(self.tab_Documentation, "Documentation")
+        self.tab_widget.addTab(self.tab_TestPatterns, "Test Patterns")
+        self.tab_widget.addTab(self.tab_KeysightCommands, "Keysight Commands")
 
         # Set larger font for tab labels
         tab_font = QFont("Arial", 16)
@@ -271,7 +317,7 @@ class MainWindow(QMainWindow):
         self.ScreenShotUI()
         self.TestListUI()
   
-    #################UI Settings for three tabs#########################
+    #################UI Settings for application tabs#########################
     def setupTabUI(self, tab, image_path, description, tab_index, tab_text, label_size=(800, 600)):
         """Setup UI for image-based tabs"""
         # Create a placeholder for image
@@ -307,7 +353,7 @@ class MainWindow(QMainWindow):
         """Setup Bundle Test tab"""
         self.setupTabUI(
             self.tab_NewBundle,
-            "setup_images/2.png", 
+            str(setup_img_folder / "2.png"),
             "Test GUI for Bundle Measurement\n\nThis tab provides voltage and current testing capabilities for DUT bundles.",
             0,
             "Bundle Test (Voltage/Current)"
@@ -317,7 +363,7 @@ class MainWindow(QMainWindow):
         """Setup Screenshot tab"""
         self.setupTabUI(
             self.tab_ScreenShot,
-            "setup_images/7.png",
+            str(setup_img_folder / "7.png"),
             "Instrument Display Capture\n\nCapture screenshots of the DUT instrument display for documentation and analysis.",
             1,
             "Instrument ScreenShot"
@@ -420,10 +466,13 @@ class MainWindow(QMainWindow):
     def currentTabChanged(self, index):
         """Slot to update the current tab index."""
         self.CurrentTab = index
+        self.QButton_Widget.setVisible(index < 3)
         print_console_safe(f"Current tab changed to: {index}")
 
     def PushBtnClicked(self):
         """Open the appropriate dialog based on the selected tab."""
+        if self.CurrentTab >= 3:
+            return
         if self.CurrentTab < 2:  # For first two tabs, use existing logic
             self.open_test_by_index(self.CurrentTab)
         else:  # For third tab, get selection from list
@@ -461,7 +510,7 @@ class MainWindow(QMainWindow):
             DialogRegistration("Bundle Measurement - Voltage", "Specialized bundle voltage measurement - Support only - Dolphin, Excavator", "bundle_voltage_dialog", BundleMeasurementVoltageDialog),
             DialogRegistration("Bundle Measurement - Current/Power", "Bundle current and power measurement - Support only - Dolphin, Excavator", "bundle_current_dialog", BundleMeasurementCurrentandPowerDialog),
             DialogRegistration("AC Source Settings", "Simple Configuration of AC Source - Support only - Dolphin, Excavator", "ac_source_dialog", lambda: ACSourceSetting(self.params)),
-            DialogRegistration("Voltage Calibration", "Voltage Calibration Dialog - Support only - Hornbill", "voltage_calibration_dialog", VoltageCalibrationDialog),
+            DialogRegistration("Voltage Calibration - 3458A", "Hornbill voltage calibration using a 3458A DMM", "voltage_calibration_dialog", VoltageCalibration3458Dialog),
             DialogRegistration("Peak Power Test - Passive Mode", "Peak Current Pulse - Support only - Hornbill", "peak_power_test_dialog", PeakPowerTestDialog),
             DialogRegistration("MultiThreading - Voltage Measurement", "Precise voltage measurement dialog", "multithread_voltage_dialog", multithread_voltage_dialog),
         )

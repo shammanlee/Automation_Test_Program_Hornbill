@@ -60,6 +60,7 @@ BASE_FIELDS = {
     "PSU": "PSU",
     "DMM": "DMM",
     "ELoad": "ELoad",
+    "DAQ": "DAQ",
     "ELoad_Channel": "ELoad_Channel",
     "PSU_Channel": "PSU_Channel",
     "VoltageSense": "VoltageSense",
@@ -68,6 +69,8 @@ BASE_FIELDS = {
     "OperationMode": "SPOperationMode",
     "DMM_Model": "DMM_Model",
     "ELoad_Model": "ELoad_Model",
+    "Hornbill_Measurement_Command": "Hornbill_Measurement_Command",
+    "Relay_Control": "Relay_Control",
     "Range": "Range",
     "Aperture": "Aperture",
     "AutoZero": "AutoZero",
@@ -106,6 +109,12 @@ def _add_fields(result, parameters, fields):
 def build_test_parameters(parameters, selections):
     result = {}
     _add_fields(result, parameters, BASE_FIELDS)
+
+    if (
+        selections.get("VoltageAccuracy")
+        and selections.get("CurrentStatic(VoltageChange)withOscilloscope")
+    ):
+        _add_fields(result, parameters, OSCILLOSCOPE_FIELDS)
 
     if selections.get("Current_Test"):
         _add_fields(result, parameters, {

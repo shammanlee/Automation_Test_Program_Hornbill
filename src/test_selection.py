@@ -21,6 +21,7 @@ SELECTION_WIDGETS = {
     "NormalCase": "QCheckBox_NormalCase_Widget",
     "DataReport": "QCheckBox_Report_Widget",
     "DataImage": "QCheckBox_Image_Widget",
+    "Temperature": "QCheckBox_Temperature_Widget",
     "TransientRecovery": "QCheckBox_TransientRecovery_Widget",
     "VoltageLoadRegulation": "QCheckBox_VoltageLoadRegulation_Widget",
     "CurrentLoadRegulation": "QCheckBox_CurrentLoadRegulation_Widget",

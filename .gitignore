@@ -3,6 +3,7 @@
 *.pkg
 /build/
 /Executable/
+/Executable_Builds/
 
 # Python runtime and test artifacts
 __pycache__/
@@ -16,6 +17,12 @@ env/
 .coverage
 htmlcov/
 /dist/
+
+# Generated runtime and validation artifacts
+/SCREENSHOT.PNG
+/crash_log.txt
+/VOLTAGE_*.xlsx
+/hardware_validation_runs/
 
 # Local GUI state
 /Instrument_Config_Files/test_queue.json

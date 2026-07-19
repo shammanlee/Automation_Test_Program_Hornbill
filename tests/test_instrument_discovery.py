@@ -2,6 +2,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
@@ -12,6 +13,8 @@ for import_path in (SRC, ROOT):
 from instrument_discovery import (
     DiscoveryResult,
     get_all_visa_resources,
+    get_configured_visa_resources,
+    get_visa_gpib_resources,
     get_visa_hostname_resources,
     get_visa_tcpip_resources,
     load_model_role_map,
@@ -24,8 +27,18 @@ class DiscoveryResource:
     def __init__(self, identity):
         self.identity = identity
         self.closed = False
+        self.last_command = None
 
     def query(self, _command):
+        return self.identity
+
+    def clear(self):
+        return None
+
+    def write(self, command):
+        self.last_command = command
+
+    def read(self):
         return self.identity
 
     def close(self):
@@ -64,8 +77,9 @@ class LegacyGpibResource:
     def write(self, command):
         self.commands.append(command)
 
-    def read_raw(self):
-        return b"HP3458A\r\n"
+    def read(self):
+        self.commands.append("read")
+        return "HP3458A\r\n"
 
 
 class InstrumentDiscoveryTests(unittest.TestCase):
@@ -159,14 +173,165 @@ class InstrumentDiscoveryTests(unittest.TestCase):
     def test_gpib_identity_uses_legacy_fallback_after_guarded_timeout(self):
         resource = LegacyGpibResource()
 
-        identity = _query_identity(
-            resource,
-            "GPIB0::22::INSTR",
-            gpib_fallback=True,
-        )
+        with patch("instrument_discovery.time.sleep") as sleep:
+            identity = _query_identity(
+                resource,
+                "GPIB0::22::INSTR",
+                gpib_fallback=True,
+            )
 
         self.assertEqual(identity, "HP3458A")
-        self.assertEqual(resource.commands, ["*IDN?", "clear", "ID?"])
+        self.assertEqual(
+            resource.commands,
+            ["*IDN?", "clear", "ID?", "read"],
+        )
+        self.assertEqual(resource.write_termination, "\n")
+        self.assertEqual(resource.read_termination, "\n")
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_gpib_scan_discovers_legacy_3458a(self):
+        class LegacyGpibManager:
+            def __init__(self):
+                self.resource = LegacyGpibResource()
+
+            def list_resources(self):
+                return ("GPIB0::22::INSTR",)
+
+            def open_resource(self, _address, **_options):
+                return self.resource
+
+            def close(self):
+                return None
+
+        with tempfile.TemporaryDirectory() as directory:
+            role_map = Path(directory) / "roles.txt"
+            role_map.write_text("HP3458A: DMM\n", encoding="utf-8")
+            result = get_visa_gpib_resources(LegacyGpibManager, role_map)
+
+        self.assertEqual(result.addresses, ["GPIB0::22::INSTR"])
+        self.assertEqual(result.identities, ["HP3458A"])
+        self.assertEqual(result.roles, {"DMM": "GPIB0::22::INSTR"})
+
+    def test_configured_gpib_uses_3458a_id_query_handshake(self):
+        class ConfiguredGpibManager:
+            def __init__(self):
+                self.resource = LegacyGpibResource()
+
+            def open_resource(self, _address, **_options):
+                return self.resource
+
+            def close(self):
+                return None
+
+        manager = ConfiguredGpibManager()
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.txt"
+            config.write_text("DMM = GPIB0::22::INSTR\n", encoding="utf-8")
+            with patch("instrument_discovery.time.sleep") as sleep:
+                result = get_configured_visa_resources(
+                    config,
+                    lambda: manager,
+                    enabled_transports={"gpib"},
+                )
+
+        self.assertEqual(result.identities, ["HP3458A"])
+        self.assertEqual(manager.resource.commands, ["clear", "ID?", "read"])
+        self.assertEqual(manager.resource.timeout, 10000)
+        self.assertEqual(manager.resource.write_termination, "\n")
+        self.assertEqual(manager.resource.read_termination, "\n")
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_configured_gpib_never_sends_modern_idn_query(self):
+        class FailingLegacyResource(LegacyGpibResource):
+            def read(self):
+                self.commands.append("read")
+                raise InstrumentTimeoutError()
+
+        class ConfiguredGpibManager:
+            def __init__(self):
+                self.resource = FailingLegacyResource()
+
+            def open_resource(self, _address, **_options):
+                return self.resource
+
+            def close(self):
+                return None
+
+        manager = ConfiguredGpibManager()
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.txt"
+            config.write_text("DMM = GPIB0::22::INSTR\n", encoding="utf-8")
+            with patch("instrument_discovery.time.sleep"):
+                result = get_configured_visa_resources(
+                    config,
+                    lambda: manager,
+                    enabled_transports={"gpib"},
+                )
+
+        self.assertEqual(result.addresses, [])
+        self.assertEqual(manager.resource.commands, ["clear", "ID?", "read"])
+        self.assertNotIn("*IDN?", manager.resource.commands)
+
+    def test_configured_discovery_probes_available_addresses_and_assigns_roles(self):
+        identities = {
+            "TCPIP0::hornbill::inst0::INSTR": "KEYSIGHT,LINUXGEN,SERIAL,1.0",
+            "GPIB0::22::INSTR": "HP3458A",
+        }
+
+        class ConfiguredManager(DiscoveryManager):
+            def open_resource(self, address, **options):
+                if address not in self.identities:
+                    raise RuntimeError("not connected")
+                return super().open_resource(address, **options)
+
+        manager = ConfiguredManager(identities)
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.txt"
+            config.write_text(
+                "PSU = TCPIP0::hornbill::inst0::INSTR\n"
+                "DMM = GPIB0::22::INSTR\n"
+                "ELoad = USB0::missing::INSTR\n",
+                encoding="utf-8",
+            )
+            result = get_configured_visa_resources(
+                config,
+                lambda: manager,
+                enabled_transports={"tcpip_hostname", "gpib", "usb"},
+            )
+
+        self.assertEqual(
+            result.addresses,
+            ["TCPIP0::hornbill::inst0::INSTR", "GPIB0::22::INSTR"],
+        )
+        self.assertEqual(
+            result.roles,
+            {
+                "PSU": "TCPIP0::hornbill::inst0::INSTR",
+                "DMM": "GPIB0::22::INSTR",
+            },
+        )
+        self.assertTrue(manager.closed)
+        self.assertTrue(all(resource.closed for resource in manager.resources.values()))
+
+    def test_configured_discovery_respects_transport_filters(self):
+        manager = DiscoveryManager(
+            {"USB0::DMM::INSTR": "KEYSIGHT,34470A,SERIAL,1.0"}
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.txt"
+            config.write_text(
+                "PSU = TCPIP0::hornbill::inst0::INSTR\n"
+                "DMM = USB0::DMM::INSTR\n",
+                encoding="utf-8",
+            )
+            result = get_configured_visa_resources(
+                config,
+                lambda: manager,
+                enabled_transports={"usb"},
+            )
+
+        self.assertEqual(result.addresses, ["USB0::DMM::INSTR"])
+        self.assertEqual(result.roles, {"DMM": "USB0::DMM::INSTR"})
 
 
 if __name__ == "__main__":

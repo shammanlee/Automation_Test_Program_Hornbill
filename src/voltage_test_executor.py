@@ -18,6 +18,7 @@ from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
 )
 from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
     HornbillVoltageMeasurementwithELoad,
+    HornbillVoltageMeasurementwithELoadwithOscilloscope,
 )
 
 
@@ -37,8 +38,8 @@ HORNBILL_VOLTAGE_ACCURACY_RUNNERS = {
     "CurrentChange(LoadChange)": (
         HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change
     ),
-    "CurrentStatic(VoltageChange) with Oscilloscope": (
-        HornbillVoltageMeasurementwithELoad.Execute_Voltage_Accuracy_Current_Change
+    "CurrentStatic(VoltageChange)withOscilloscope": (
+        HornbillVoltageMeasurementwithELoadwithOscilloscope.Execute_Voltage_Accuracy_Current_Static
     ),
 }
 

@@ -118,6 +118,7 @@ class Parameters:
         self.DMM =  None
         self.DMM2 = None
         self.ELoad =  None
+        self.DAQ = None
         self.ELoad_Channel = None
         self.PSU_Channel =  None
         self.OSC_Channel = None
@@ -130,6 +131,8 @@ class Parameters:
 
         self.DMM_Model = "3458A"
         self.ELoad_Model = "E367XXA"
+        self.Hornbill_Measurement_Command = "DIAG"
+        self.Relay_Control = "None"
 
         self.setFunction =  None
         self.VoltageRes =  None

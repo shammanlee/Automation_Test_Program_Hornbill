@@ -60,6 +60,43 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("Select at least one test", errors)
         self.assertEqual(requirements, set())
 
+    def test_hornbill_scope_capture_requires_oscilloscope(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parameters = valid_voltage_parameters(directory)
+            errors, requirements = validate_preflight(
+                parameters,
+                {
+                    "VoltageAccuracy": True,
+                    "CurrentStatic(VoltageChange)withOscilloscope": True,
+                },
+            )
+
+        self.assertIn("OSC", requirements)
+        self.assertTrue(any("OSC" in error for error in errors))
+
+    def test_temperature_option_requires_daq_address(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parameters = valid_voltage_parameters(directory)
+            errors, requirements = validate_preflight(
+                parameters,
+                {"VoltageAccuracy": True, "Temperature": True},
+            )
+
+        self.assertIn("DAQ", requirements)
+        self.assertTrue(any("DAQ VISA address is required" in error for error in errors))
+
+    def test_temperature_option_accepts_distinct_daq_address(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parameters = valid_voltage_parameters(directory)
+            parameters["DAQ"] = "USB0::DAQ::INSTR"
+            errors, requirements = validate_preflight(
+                parameters,
+                {"VoltageAccuracy": True, "Temperature": True},
+            )
+
+        self.assertEqual(errors, [])
+        self.assertIn("DAQ", requirements)
+
 
 class RunStorageTests(unittest.TestCase):
     def test_creates_isolated_sanitized_run_tree(self):

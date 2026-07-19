@@ -7,6 +7,9 @@ import current_test_executor
 import measurement_report_exporter
 import test_worker
 import voltage_test_executor
+from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
+    HornbillVoltageMeasurementwithELoadwithOscilloscope,
+)
 from DUT_Test_Scripts.instrument_shutdown import ShutdownResult
 from SCPI_Library.instrument_errors import TestExecutionError as ExecutionFailure
 from test_worker import TestCancelled, TestState, TestWorker
@@ -70,6 +73,35 @@ class WorkerControlTests(unittest.TestCase):
 
         dolphin.assert_not_called()
         hornbill.assert_not_called()
+
+    def test_temperature_monitor_is_optional(self):
+        worker = create_worker()
+
+        with patch("test_worker.TemperatureMeasurement") as monitor:
+            worker._start_temperature_monitor()
+
+        monitor.assert_not_called()
+
+    def test_temperature_monitor_records_selected_run(self):
+        worker = create_worker()
+        worker.checkbox_states = {"Temperature": True}
+        worker.dict = {"DAQ": "USB0::DAQ::INSTR"}
+        sample = type("Sample", (), {"status_text": lambda self: "Temperature: 20 C"})()
+
+        with patch("test_worker.TemperatureMeasurement") as monitor_class:
+            monitor = monitor_class.return_value
+            monitor.measure.return_value = sample
+            worker._start_temperature_monitor()
+            worker._record_temperature(2)
+            worker._close_temperature_monitor()
+
+        monitor_class.assert_called_once_with(
+            "USB0::DAQ::INSTR",
+            output_file=None,
+        )
+        monitor.configure.assert_called_once_with()
+        monitor.measure.assert_called_once_with(2)
+        monitor.close.assert_called_once_with()
 
     def test_dolphin_mode_dispatch_selects_voltage_handler(self):
         worker = create_worker()
@@ -284,6 +316,16 @@ class WorkerControlTests(unittest.TestCase):
                         getattr(worker, method_name)(0)
 
                     self.assertEqual(channels, [1, 2])
+
+    def test_hornbill_scope_mode_uses_scope_capture_class(self):
+        runner = voltage_test_executor.HORNBILL_VOLTAGE_ACCURACY_RUNNERS[
+            "CurrentStatic(VoltageChange)withOscilloscope"
+        ]
+
+        self.assertIs(
+            runner,
+            HornbillVoltageMeasurementwithELoadwithOscilloscope.Execute_Voltage_Accuracy_Current_Static,
+        )
 
     def test_voltage_accuracy_exports_only_on_final_loop(self):
         def runner(_worker, _configuration, _channel, worker=None):

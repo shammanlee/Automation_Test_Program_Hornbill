@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import threading
 from dataclasses import dataclass, field
 
 import pyvisa
@@ -60,6 +61,7 @@ SIMULATED_INSTRUMENTS = {
 
 
 _simulation_state = SimulationState()
+_main_thread_resource_manager = None
 
 
 def get_simulation_state():
@@ -309,3 +311,15 @@ def create_resource_manager():
     import pyvisa
 
     return pyvisa.ResourceManager()
+
+
+def initialize_main_thread_visa():
+    global _main_thread_resource_manager
+    if is_simulation_mode():
+        return None
+    if threading.current_thread() is not threading.main_thread():
+        raise RuntimeError("VISA must be initialized from the main thread")
+    if _main_thread_resource_manager is None:
+        _main_thread_resource_manager = pyvisa.ResourceManager()
+        _main_thread_resource_manager.list_resources()
+    return _main_thread_resource_manager

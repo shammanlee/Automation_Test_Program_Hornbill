@@ -56,10 +56,19 @@ def required_instruments(checkbox_states, parameters):
         requirements.update(TEST_INSTRUMENT_REQUIREMENTS[test_name])
 
     if (
+        checkbox_states.get("VoltageAccuracy")
+        and checkbox_states.get("CurrentStatic(VoltageChange)withOscilloscope")
+    ):
+        requirements.add("OSC")
+
+    if (
         checkbox_states.get("VoltageLineRegulation")
         or checkbox_states.get("CurrentLineRegulation")
     ) and parameters.get("AC_Supply_Type") == "AC Source":
         requirements.add("ACSource")
+
+    if checkbox_states.get("Temperature"):
+        requirements.add("DAQ")
 
     return requirements
 

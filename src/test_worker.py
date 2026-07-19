@@ -20,6 +20,7 @@ from SCPI_Library.session_manager import begin_visa_session_scope, close_visa_se
 from measurement_report_exporter import MeasurementReportExporter
 from voltage_test_executor import VoltageTestExecutor
 from execution_journal import ExecutionJournal
+from External_Auxiliary_Equipment.Temperature_Measurement import TemperatureMeasurement
 
 class TestState(Enum):
     IDLE = "IDLE"
@@ -79,6 +80,7 @@ class TestWorker(QThread):
         self.voltage_executor = VoltageTestExecutor(self, self.report_exporter)
         self.current_executor = CurrentTestExecutor(self, self.report_exporter)
         self.execution_journal = None
+        self.temperature_monitor = None
 
     def _set_state(self, state):
         if state == self.state:
@@ -190,6 +192,41 @@ class TestWorker(QThread):
         elif self.params["DUT"] == "Hornbill":
             self._run_hornbill_tests(loop_index)
 
+    def _start_temperature_monitor(self):
+        if not self.checkbox_states.get("Temperature"):
+            return
+        output_file = None
+        if self.run_context:
+            output_file = self.run_context.storage.raw / "temperature.csv"
+        self.temperature_monitor = TemperatureMeasurement(
+            self.dict["DAQ"],
+            output_file=output_file,
+        )
+        self._execute_checkpointed(self.temperature_monitor.configure)
+        self.progress.emit("DAQ973A temperature monitoring enabled")
+
+    def _record_temperature(self, loop_index):
+        if not self.temperature_monitor:
+            return
+        sample = self._execute_checkpointed(
+            self.temperature_monitor.measure,
+            loop_index,
+        )
+        self.progress.emit(sample.status_text())
+
+    def _close_temperature_monitor(self):
+        if not self.temperature_monitor:
+            return
+        try:
+            try:
+                self.temperature_monitor.close()
+            except Exception as exception:
+                self.progress.emit(
+                    f"DAQ973A close warning: {exception}"
+                )
+        finally:
+            self.temperature_monitor = None
+
     def _run_dolphin_tests(self, loop_index):
         if self.checkbox_states["Voltage_Test"]:
             self._run_dolphin_voltage_tests(loop_index)
@@ -198,10 +235,6 @@ class TestWorker(QThread):
 
         if self.force_exit:
             return
-
-        if not self.force_exit:
-            self.progress_value.emit(100)
-            self.progress.emit("All measurements completed!")
 
     def _run_dolphin_voltage_tests(self, loop_index):
         return self.voltage_executor.run_dolphin(loop_index)
@@ -238,12 +271,6 @@ class TestWorker(QThread):
 
         if self.force_exit:
             return
-
-        if not self.force_exit:
-            self.progress_value.emit(100)
-            self.progress.emit("All measurements completed!")
-        else:
-            self.progress.emit("No DUT selected. Please select a DUT to perform the test.")
 
     def _run_hornbill_voltage_tests(self, loop_index):
         return self.voltage_executor.run_hornbill(loop_index)
@@ -309,7 +336,7 @@ class TestWorker(QThread):
             name for name, selected in self.checkbox_states.items() if selected
         ]
         instrument_roles = {}
-        for role in ("PSU", "DMM", "DMM2", "ELoad", "ACSource", "OSC"):
+        for role in ("PSU", "DMM", "DMM2", "ELoad", "ACSource", "OSC", "DAQ"):
             address = self.dict.get(role)
             if address:
                 instrument_roles[str(address)] = role
@@ -329,6 +356,7 @@ class TestWorker(QThread):
                     self.params.get("resume_run_directory"),
                 )
             begin_visa_session_scope()
+            self._start_temperature_monitor()
             start_loop = (
                 self.execution_journal.next_loop_index
                 if self.execution_journal
@@ -343,10 +371,15 @@ class TestWorker(QThread):
                 #Execute Voltage Measurement for each test checked---------------
                 #Voltage Accuracy Test
                 self._dispatch_dut_tests(x)
+                self._record_temperature(x)
                 if self.force_exit:
                     return
                 if self.execution_journal:
                     self.execution_journal.complete_loop(x)
+
+            if not self.force_exit:
+                self.progress_value.emit(100)
+                self.progress.emit("All measurements completed!")
 
                 
                                     
@@ -364,6 +397,7 @@ class TestWorker(QThread):
             )
             self.error.emit(normalized_error, tb)
         finally:
+            self._close_temperature_monitor()
             self.close_visa_sessions()
             self.safe_shutdown()
             clear_execution_worker()

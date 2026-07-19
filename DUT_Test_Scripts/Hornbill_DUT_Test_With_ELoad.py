@@ -31,6 +31,26 @@ from DUT_Test_Scripts.scpi_runtime import (
     execution_checkpoint as _execution_checkpoint,
 )
 
+
+def _measure_hornbill_readback(psu, configuration, channel, current_input="FULL"):
+    command_mode = configuration.get("Hornbill_Measurement_Command", "DIAG")
+    voltage = psu.measureReadbackVoltage(channel, mode=command_mode)
+    current = psu.measureReadbackCurrent(
+        channel,
+        mode=command_mode,
+        diagnostic_input=current_input,
+    )
+    return voltage, current
+
+
+def _start_keysight_eload(eload, configuration):
+    initial_current = max(0.0, float(configuration["minCurrent"]))
+    eload.setOutputCurrent(initial_current)
+    WAI(configuration["ELoad"])
+    eload.setOutputState("ON")
+    WAI(configuration["ELoad"])
+
+
 ######################################################################
 class HornbillVoltageMeasurementwithELoad:
 
@@ -126,13 +146,11 @@ class HornbillVoltageMeasurementwithELoad:
         
         if dict["ELoad_Model"] == "E367XXA":
             eload = ELOAD_E367XXA(dict["ELoad"])
-            eload.setOutputState("ON")
-            WAI(dict["ELoad"])
+            _start_keysight_eload(eload, dict)
             
             
         elif dict["ELoad_Model"] == "Chroma":
             eload = ELOAD_E63200A(dict["ELoad"])
-
 
         #Use ch for each individual channel
         print(f"Channel {ch} Test Running\n")
@@ -151,7 +169,6 @@ class HornbillVoltageMeasurementwithELoad:
         i = 0   #Current Iteration
         j = 0   #Voltage Iteration
         k = 0   #Step of Iteration
-        I_fixedOS = 0                               #Offset Current (Manually Added)
         I_fixed = float(dict["minCurrent"])         #Min Current
         V = float(dict["minVoltage"])
         I = float(dict["maxVoltage"]) + 1
@@ -176,11 +193,6 @@ class HornbillVoltageMeasurementwithELoad:
 
             if I_fixed > float(dict["maxCurrent"]):
                 I_fixed= float(dict["maxCurrent"])
-
-            #If minimum current is 0, set to 1A
-            if I_fixed == 0:           
-                I_fixedOS = 1
-                I_fixed = I_fixed + I_fixedOS
 
             #If PSU MAX I = ELOAD MAX I (Reduce Eload I by 0.1 - Prevent Overload)
             if I_fixed == float(dict["maxCurrent"]) and Iset == float(dict["maxCurrent"]):
@@ -213,10 +225,10 @@ class HornbillVoltageMeasurementwithELoad:
                 sleep(float(self.updatedelay))
 
                 #Readback Voltage and Current
-                cleandiagVmon = float(psu.diag_PEEK_VoltageReadback_VMON_100k())
+                cleandiagVmon, cleandiagImon = _measure_hornbill_readback(
+                    psu, dict, ch
+                )
                 print("Voltage Monitor Reading =", cleandiagVmon)
-
-                cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
                 print("Current Monitor Reading =", cleandiagImon)
 
                 self.dataList2.insert(k, [float(cleandiagVmon), float(cleandiagImon)])
@@ -400,8 +412,7 @@ class HornbillVoltageMeasurementwithELoad:
         
         if dict["ELoad_Model"] == "E367XXA":
             eload = ELOAD_E367XXA(dict["ELoad"])
-            eload.setOutputState("ON")
-            WAI(dict["ELoad"])
+            _start_keysight_eload(eload, dict)
             
             
         elif dict["ELoad_Model"] == "Chroma":
@@ -424,7 +435,6 @@ class HornbillVoltageMeasurementwithELoad:
         i = 0   #Current Iteration
         j = 0   #Voltage Iteration
         k = 0   #Step of Iteration
-        I_fixedOS = 0                               #Offset Current (Manually Added)
         I_fixed = float(dict["minCurrent"])         #Min Current
         V = float(dict["minVoltage"])
         I = float(dict["maxVoltage"]) + 1
@@ -457,10 +467,10 @@ class HornbillVoltageMeasurementwithELoad:
             sleep(float(self.updatedelay))
 
             #Readback Voltage and Current
-            cleandiagVmon = float(psu.diag_PEEK_VoltageReadback_VMON_100k())
+            cleandiagVmon, cleandiagImon = _measure_hornbill_readback(
+                psu, dict, ch
+            )
             print("Voltage Monitor Reading =", cleandiagVmon)
-
-            cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
             print("Current Monitor Reading =", cleandiagImon)
 
             sleep(1)
@@ -476,11 +486,6 @@ class HornbillVoltageMeasurementwithELoad:
                 if I_fixed > float(dict["maxCurrent"]):
                     I_fixed= float(dict["maxCurrent"])
 
-                #If minimum current is 0, set to 1A
-                if I_fixed == 0:           
-                    I_fixedOS = 1
-                    I_fixed = I_fixed + I_fixedOS
-                
                 if dict["ELoad_Model"] == "E367XXA":
                     #If PSU MAX I = ELOAD MAX I (Reduce Eload I by 0.1 - Prevent Overload)
                     if I_fixed == float(dict["maxCurrent"]) and Iset == float(dict["maxCurrent"]):
@@ -488,7 +493,7 @@ class HornbillVoltageMeasurementwithELoad:
                         WAI(dict["ELoad"])
 
                     else:
-                        eload.setOutputCurrent(I_fixed-0.001)
+                        eload.setOutputCurrent(max(0.0, I_fixed - 0.001))
                         WAI(dict["ELoad"])
 
                 elif dict["ELoad_Model"] == "Chroma":
@@ -498,7 +503,9 @@ class HornbillVoltageMeasurementwithELoad:
                         WAI(dict["ELoad"])
 
                     else:
-                        Current(dict["ELoad"]).setOutputCurrent(I_fixed-0.001)
+                        Current(dict["ELoad"]).setOutputCurrent(
+                            max(0.0, I_fixed - 0.001)
+                        )
                         WAI(dict["ELoad"])
 
                 sleep(1)
@@ -687,13 +694,13 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
         
         if dict["ELoad_Model"] == "E367XXA":
             eload = ELOAD_E367XXA(dict["ELoad"])
-            eload.setOutputState("ON")
-            WAI(dict["ELoad"])
+            _start_keysight_eload(eload, dict)
             
             
         elif dict["ELoad_Model"] == "Chroma":
             eload = ELOAD_E63200A(dict["ELoad"])
 
+        oscilloscope = Oscilloscope(dict["OSC"])
 
         #Use ch for each individual channel
         print(f"Channel {ch} Test Running\n")
@@ -712,7 +719,6 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
         i = 0   #Current Iteration
         j = 0   #Voltage Iteration
         k = 0   #Step of Iteration
-        I_fixedOS = 0                               #Offset Current (Manually Added)
         I_fixed = float(dict["minCurrent"])         #Min Current
         V = float(dict["minVoltage"])
         I = float(dict["maxVoltage"]) + 1
@@ -728,6 +734,7 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
 
         #Run Test (Voltage Loop in Current Loop)
         while i < current_iter:
+            _execution_checkpoint(worker)
             j = 0
             V = float(dict["minVoltage"])
             psu.sourVoltageLevelImmediateAmplitude(float(dict["minVoltage"]), ch)
@@ -736,11 +743,6 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
 
             if I_fixed > float(dict["maxCurrent"]):
                 I_fixed= float(dict["maxCurrent"])
-
-            #If minimum current is 0, set to 1A
-            if I_fixed == 0:           
-                I_fixedOS = 1
-                I_fixed = I_fixed + I_fixedOS
 
             #If PSU MAX I = ELOAD MAX I (Reduce Eload I by 0.1 - Prevent Overload)
             if I_fixed == float(dict["maxCurrent"]) and Iset == float(dict["maxCurrent"]):
@@ -761,6 +763,7 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
 
             #Voltage Iteration
             while j < voltage_iter:
+                _execution_checkpoint(worker)
                 #Set Voltage and Current
                 if V > float(dict["maxVoltage"]):
                     V = float(dict["maxVoltage"])
@@ -772,10 +775,10 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
                 sleep(float(self.updatedelay))
 
                 #Readback Voltage and Current
-                cleandiagVmon = float(psu.diag_PEEK_VoltageReadback_VMON_100k())
+                cleandiagVmon, cleandiagImon = _measure_hornbill_readback(
+                    psu, dict, ch
+                )
                 print("Voltage Monitor Reading =", cleandiagVmon)
-
-                cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
                 print("Current Monitor Reading =", cleandiagImon)
 
                 self.dataList2.insert(k, [float(cleandiagVmon), float(cleandiagImon)])
@@ -823,12 +826,12 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
                     )
                 
                 #Oscilloscope Measurement
-                Oscilloscope(dict["OSC"]).run()
+                _execution_checkpoint(worker)
+                oscilloscope.run()
                 sleep(1)
-                Oscilloscope(dict["OSC"]).stop()
+                oscilloscope.stop()
                 try:
-                    Oscilloscope(dict["OSC"]).displaydata()
-                    displayData=Oscilloscope(dict["OSC"]).read_binary_data()
+                    displayData = oscilloscope.read_binary_data()
                     print("Data retrieved successfully:", displayData)
                 except VisaIOError as e:
                     print(f"Timeout or communication error: {e}")
@@ -893,7 +896,7 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
 
 
         # Wrapper classes hold the real PyVISA session in .instr
-        for instrument in (psu, dmm, eload):
+        for instrument in (psu, dmm, eload, oscilloscope):
             try:
                 if instrument is not None and hasattr(instrument, "instr") and instrument.instr is not None:
                     instrument.instr.close()
@@ -987,8 +990,7 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
         
         if dict["ELoad_Model"] == "E367XXA":
             eload = ELOAD_E367XXA(dict["ELoad"])
-            eload.setOutputState("ON")
-            WAI(dict["ELoad"])
+            _start_keysight_eload(eload, dict)
             
             
         elif dict["ELoad_Model"] == "Chroma":
@@ -1011,7 +1013,6 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
         i = 0   #Current Iteration
         j = 0   #Voltage Iteration
         k = 0   #Step of Iteration
-        I_fixedOS = 0                               #Offset Current (Manually Added)
         I_fixed = float(dict["minCurrent"])         #Min Current
         V = float(dict["minVoltage"])
         I = float(dict["maxVoltage"]) + 1
@@ -1043,10 +1044,10 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
             sleep(float(self.updatedelay))
 
             #Readback Voltage and Current
-            cleandiagVmon = float(psu.diag_PEEK_VoltageReadback_VMON_100k())
+            cleandiagVmon, cleandiagImon = _measure_hornbill_readback(
+                psu, dict, ch
+            )
             print("Voltage Monitor Reading =", cleandiagVmon)
-
-            cleandiagImon = float(psu.diag_PEEK_CurrentReadback_IMON_FULL_100k())
             print("Current Monitor Reading =", cleandiagImon)
 
             sleep(1)
@@ -1061,11 +1062,6 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
                 if I_fixed > float(dict["maxCurrent"]):
                     I_fixed= float(dict["maxCurrent"])
 
-                #If minimum current is 0, set to 1A
-                if I_fixed == 0:           
-                    I_fixedOS = 1
-                    I_fixed = I_fixed + I_fixedOS
-                
                 if dict["ELoad_Model"] == "E367XXA":
                     #If PSU MAX I = ELOAD MAX I (Reduce Eload I by 0.1 - Prevent Overload)
                     if I_fixed == float(dict["maxCurrent"]) and Iset == float(dict["maxCurrent"]):
@@ -1073,7 +1069,7 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
                         WAI(dict["ELoad"])
 
                     else:
-                        eload.setOutputCurrent(I_fixed-0.001)
+                        eload.setOutputCurrent(max(0.0, I_fixed - 0.001))
                         WAI(dict["ELoad"])
 
                 elif dict["ELoad_Model"] == "Chroma":
@@ -1083,7 +1079,9 @@ class HornbillVoltageMeasurementwithELoadwithOscilloscope:
                         WAI(dict["ELoad"])
 
                     else:
-                        Current(dict["ELoad"]).setOutputCurrent(I_fixed-0.001)
+                        Current(dict["ELoad"]).setOutputCurrent(
+                            max(0.0, I_fixed - 0.001)
+                        )
                         WAI(dict["ELoad"])
 
                 sleep(1)
@@ -1512,30 +1510,11 @@ class HornbillCurrentMeasurementwithELoad_IMON_FULL :
                 self.dataList2.insert(k, [float(temp_values), float(temp_values2)])"""
                 
                 #Readback Voltage and Current
-                #temp_values = psu.measureVoltageDC(ch)
-                diagVmon_raw = psu.diagVoltageReadback_VMON_100k()
-                sleep(1)
-                # Decode from bytes to string
-                diagVmon_str = diagVmon_raw.decode().strip()
-                print("Raw Response:", diagVmon_str)
-
-                # Split into components
-                values = diagVmon_str.split(',')
-                cleandiagVmon = float(values[0])
-
+                cleandiagVmon, cleandiagImon = _measure_hornbill_readback(
+                    psu, dict, ch, current_input="FULL"
+                )
                 print("Voltage Monitor Reading =", cleandiagVmon)
                 WAI(dict["PSU"])
-
-                #temp_values2 = psu.measureCurrentDC(ch)
-                diagImon_raw = psu.diagCurrentReadback_IMON_FULL_100k()
-                sleep(1)
-                # Decode from bytes to string
-                diagImon_str = diagImon_raw.decode().strip()
-                print("Raw Response:", diagImon_str)
-
-                # Split into components
-                diagImon_values = diagImon_str.split(',')
-                cleandiagImon = float(diagImon_values[0])
                 print("Current Monitor Reading =", cleandiagImon)
                 WAI(dict["PSU"])
 
@@ -1847,30 +1826,11 @@ class HornbillCurrentMeasurementwithELoad_IMON_200uA :
                 self.dataList2.insert(k, [float(temp_values), float(temp_values2)])"""
                 
                 #Readback Voltage and Current
-                #temp_values = psu.measureVoltageDC(ch)
-                diagVmon_raw = psu.diagVoltageReadback_VMON_100k()
-                sleep(1)
-                # Decode from bytes to string
-                diagVmon_str = diagVmon_raw.decode().strip()
-                print("Raw Response:", diagVmon_str)
-
-                # Split into components
-                values = diagVmon_str.split(',')
-                cleandiagVmon = float(values[0])
-
+                cleandiagVmon, cleandiagImon = _measure_hornbill_readback(
+                    psu, dict, ch, current_input="200uA"
+                )
                 print("Voltage Monitor Reading =", cleandiagVmon)
                 WAI(dict["PSU"])
-
-                #temp_values2 = psu.measureCurrentDC(ch)
-                diagImon_raw = psu.diagCurrentReadback_IMON_200uA_100k()
-                sleep(1)
-                # Decode from bytes to string
-                diagImon_str = diagImon_raw.decode().strip()
-                print("Raw Response:", diagImon_str)
-
-                # Split into components
-                diagImon_values = diagImon_str.split(',')
-                cleandiagImon = float(diagImon_values[0])
                 print("Current Monitor Reading =", cleandiagImon)
                 WAI(dict["PSU"])
 
@@ -2182,30 +2142,11 @@ class HornbillCurrentMeasurementwithELoad_IMON_2mA :
                 self.dataList2.insert(k, [float(temp_values), float(temp_values2)])"""
                 
                 #Readback Voltage and Current
-                #temp_values = psu.measureVoltageDC(ch)
-                diagVmon_raw = psu.diagVoltageReadback_VMON_100k()
-                sleep(1)
-                # Decode from bytes to string
-                diagVmon_str = diagVmon_raw.decode().strip()
-                print("Raw Response:", diagVmon_str)
-
-                # Split into components
-                values = diagVmon_str.split(',')
-                cleandiagVmon = float(values[0])
-
+                cleandiagVmon, cleandiagImon = _measure_hornbill_readback(
+                    psu, dict, ch, current_input="2mA"
+                )
                 print("Voltage Monitor Reading =", cleandiagVmon)
                 WAI(dict["PSU"])
-
-                #temp_values2 = psu.measureCurrentDC(ch)
-                diagImon_raw = psu.diagCurrentReadback_IMON_2mA_100k()
-                sleep(1)
-                # Decode from bytes to string
-                diagImon_str = diagImon_raw.decode().strip()
-                print("Raw Response:", diagImon_str)
-
-                # Split into components
-                diagImon_values = diagImon_str.split(',')
-                cleandiagImon = float(diagImon_values[0])
                 print("Current Monitor Reading =", cleandiagImon)
                 WAI(dict["PSU"])
 
