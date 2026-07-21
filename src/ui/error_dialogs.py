@@ -4,8 +4,8 @@ import traceback
 
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
-from diagnostics import exception_details
-from output_logging import print_console_safe
+from common.diagnostics import exception_details
+from common.output_logging import print_console_safe
 
 
 def show_error_dialog(parent, exception, traceback_text=None):

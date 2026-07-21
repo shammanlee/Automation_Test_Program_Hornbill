@@ -4,8 +4,8 @@ import os
 
 import pandas as pd
 
-from path import csv_folder
-from data import (
+from common.path import csv_folder
+from reporting.data import (
     datatoCSV_Accuracy,
     datatoCSV_Accuracy2,
     datatoCSV_PowerAccuracy,
@@ -15,8 +15,8 @@ from data import (
     instrumentData,
     powerinstrumentData,
 )
-from xlreport import xlreport
-from xlreportpower import xlreportpower
+from reporting.xlreport import xlreport
+from reporting.xlreportpower import xlreportpower
 from SCPI_Library.simulation import is_simulation_mode, raise_for_simulation_fault
 
 

@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pyvisa
 
-from configuration_service import load_configuration
-from output_logging import print_console_safe
-from path import config_folder
+from configuration.configuration_service import load_configuration
+from common.output_logging import print_console_safe
+from common.path import config_folder
 from SCPI_Library.instrument_errors import InstrumentTimeoutError
 from SCPI_Library.simulation import create_resource_manager
 from SCPI_Library.visa_config import configure_visa_resource

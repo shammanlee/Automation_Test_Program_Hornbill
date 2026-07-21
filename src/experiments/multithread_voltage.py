@@ -63,7 +63,7 @@ class MultiThreadVoltageMeasurementDialog(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
 
     """

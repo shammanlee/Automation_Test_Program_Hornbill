@@ -8,8 +8,8 @@ for import_path in (SRC, ROOT):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))
 
-from instrument_discovery import DiscoveryResult
-from instrument_discovery_ui import present_discovery_result
+from instruments.instrument_discovery import DiscoveryResult
+from ui.instrument_discovery_ui import present_discovery_result
 
 
 class FakeAddressWidget:

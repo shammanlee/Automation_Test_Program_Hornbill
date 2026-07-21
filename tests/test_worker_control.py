@@ -3,16 +3,16 @@ import unittest
 from unittest.mock import patch
 
 import GUI
-import current_test_executor
-import measurement_report_exporter
-import test_worker
-import voltage_test_executor
-from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
+from execution import current_test_executor
+from execution import measurement_report_exporter
+from execution import test_worker
+from execution import voltage_test_executor
+from DUT_Test_Scripts.Hornbill.Hornbill_DUT_Test_With_ELoad import (
     HornbillVoltageMeasurementwithELoadwithOscilloscope,
 )
 from DUT_Test_Scripts.instrument_shutdown import ShutdownResult
 from SCPI_Library.instrument_errors import TestExecutionError as ExecutionFailure
-from test_worker import TestCancelled, TestState, TestWorker
+from execution.test_worker import TestCancelled, TestState, TestWorker
 
 
 class Parameters(dict):
@@ -77,7 +77,7 @@ class WorkerControlTests(unittest.TestCase):
     def test_temperature_monitor_is_optional(self):
         worker = create_worker()
 
-        with patch("test_worker.TemperatureMeasurement") as monitor:
+        with patch("execution.test_worker.TemperatureMeasurement") as monitor:
             worker._start_temperature_monitor()
 
         monitor.assert_not_called()
@@ -88,7 +88,7 @@ class WorkerControlTests(unittest.TestCase):
         worker.dict = {"DAQ": "USB0::DAQ::INSTR"}
         sample = type("Sample", (), {"status_text": lambda self: "Temperature: 20 C"})()
 
-        with patch("test_worker.TemperatureMeasurement") as monitor_class:
+        with patch("execution.test_worker.TemperatureMeasurement") as monitor_class:
             monitor = monitor_class.return_value
             monitor.measure.return_value = sample
             worker._start_temperature_monitor()

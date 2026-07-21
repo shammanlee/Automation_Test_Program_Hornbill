@@ -16,13 +16,13 @@ for import_path in (SRC, ROOT):
 from PyQt5.QtWidgets import QApplication
 
 import GUI
-from documentation_tab import (
+from ui.documentation_tab import (
     ProgramDocumentationTab,
     TestPatternsTab,
     build_hornbill_voltage_accuracy_patterns,
     build_remaining_test_patterns,
 )
-from keysight_command_tab import KeysightCommandTab
+from ui.keysight_command_tab import KeysightCommandTab
 
 
 class GuiDocumentationTests(unittest.TestCase):

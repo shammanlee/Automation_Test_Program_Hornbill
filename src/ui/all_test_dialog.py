@@ -33,27 +33,27 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from diagnostics import append_diagnostic
-from configuration_service import configuration_path
-from error_dialogs import show_error_dialog
-from instrument_discovery import (
+from common.diagnostics import append_diagnostic
+from configuration.configuration_service import configuration_path
+from ui.error_dialogs import show_error_dialog
+from instruments.instrument_discovery import (
     DiscoveryResult,
     get_configured_visa_resources as GetConfiguredVisaResources,
     get_visa_scpi_resources as GetVisaSCPIResources,
 )
-from instrument_discovery_ui import present_discovery_result
-from output_logging import append_timestamped_line, print_console_safe
-from output_capture import my_result
-from path import (
+from ui.instrument_discovery_ui import present_discovery_result
+from common.output_logging import append_timestamped_line, print_console_safe
+from common.output_capture import my_result
+from common.path import (
     IMAGE_PATH,
     IMAGE_PATH_2,
     POWER_IMAGE_PATH,
     config_folder,
 )
-from preflight import validate_preflight
+from execution.preflight import validate_preflight
 from SCPI_Library.instrument_errors import CleanupError, normalize_execution_error
 from SCPI_Library.simulation import is_simulation_mode
-from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
+from DUT_Test_Scripts.Dolphin.Dolphin_DUT_Test_No_ELoad_No_DMM import (
     ActivateAC,
     VisaResourceManager,
     dictGenerator,
@@ -165,32 +165,32 @@ class image_Window2(QDialog):
 #########----------------------- New Bundle Test (with Parameters)--------------------######################
 
 # Class Parameters: Read Instrument Configuration Txt File (Gain etc..)
-from test_parameters import (
+from configuration.test_parameters import (
     ComboBoxWheelFilter as ComboBoxWheelFilter,
     Parameters as Parameters,
 )
 
-from test_worker import TestCancelled as TestCancelled, TestState, TestWorker
-from test_run_controller import TestRunController
-from test_configuration import (
+from execution.test_worker import TestCancelled as TestCancelled, TestState, TestWorker
+from execution.test_run_controller import TestRunController
+from configuration.test_configuration import (
     ParameterSnapshot as ParameterSnapshot,
     prepare_run_submission,
 )
-from test_selection import (
+from configuration.test_selection import (
     collect_test_selections,
     create_current_selection_widget,
     create_voltage_selection_widget,
 )
-from test_queue_widget import TestQueueWidget
-from queue_coordinator import QueueCoordinator
-from all_test_signal_bindings import connect_all_test_signals
-from realtime_plot import RealtimeMeasurement, RealtimePlotSeries
-from progress_timing import (
+from ui.test_queue_widget import TestQueueWidget
+from queueing.queue_coordinator import QueueCoordinator
+from ui.all_test_signal_bindings import connect_all_test_signals
+from ui.realtime_plot import RealtimeMeasurement, RealtimePlotSeries
+from execution.progress_timing import (
     MeasurementProgressTracker,
     expected_measurement_points,
     format_duration,
 )
-from run_context import RunContext
+from execution.run_context import RunContext
 
 class AllTestMeasurement(QDialog):
     """Class for configuring the voltage measurement DUT Tests Dialog.
@@ -201,7 +201,7 @@ class AllTestMeasurement(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
 
     """

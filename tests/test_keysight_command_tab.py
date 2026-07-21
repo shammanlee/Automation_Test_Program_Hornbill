@@ -15,7 +15,7 @@ for import_path in (SRC, ROOT):
 
 from PyQt5.QtWidgets import QApplication
 
-from keysight_command_tab import (
+from ui.keysight_command_tab import (
     KeysightCommandTab,
     error_query_for,
     format_checked_result,
@@ -115,7 +115,7 @@ class KeysightCommandTabTests(unittest.TestCase):
         self._select_method("Hornbill", "outputState", state="ON", ChannelNumber=1)
         self.tab.mode_combo.setCurrentText(self.tab.EXECUTE_MODE)
 
-        with patch("keysight_command_tab.QMessageBox.warning") as warning:
+        with patch("ui.keysight_command_tab.QMessageBox.warning") as warning:
             self.tab.run_selected_method()
 
         warning.assert_called_once()

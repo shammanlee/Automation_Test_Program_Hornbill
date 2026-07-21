@@ -5,13 +5,13 @@ import os
 from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QApplication, QComboBox, QMessageBox
 
-from configuration_service import (
+from configuration.configuration_service import (
     apply_configuration,
     configuration_path,
     load_configuration,
 )
-from output_logging import print_console_safe
-from path import (
+from common.output_logging import print_console_safe
+from common.path import (
     DATA_CSV_PATH,
     ERROR_CSV_PATH,
     IMAGE_PATH,

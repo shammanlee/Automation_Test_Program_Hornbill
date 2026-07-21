@@ -15,10 +15,10 @@ for import_path in (SRC, ROOT):
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
 import GUI
-import all_test_dialog
-from queue_persistence import QueuePersistence
-from run_storage import create_run_storage
-from test_run_controller import TestRunRequest
+from ui import all_test_dialog
+from queueing.queue_persistence import QueuePersistence
+from execution.run_storage import create_run_storage
+from execution.test_run_controller import TestRunRequest
 
 
 class DummySignal:

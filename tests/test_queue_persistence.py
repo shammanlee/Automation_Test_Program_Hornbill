@@ -11,9 +11,9 @@ for import_path in (SRC, ROOT):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))
 
-from queue_persistence import QueuePersistence, QueuePersistenceError
-from test_configuration import ParameterSnapshot
-from test_run_controller import TestRunRequest
+from queueing.queue_persistence import QueuePersistence, QueuePersistenceError
+from configuration.test_configuration import ParameterSnapshot
+from execution.test_run_controller import TestRunRequest
 
 
 class QueuePersistenceTests(unittest.TestCase):

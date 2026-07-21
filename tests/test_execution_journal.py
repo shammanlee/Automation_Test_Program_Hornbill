@@ -13,7 +13,7 @@ for import_path in (SRC, ROOT):
         sys.path.insert(0, str(import_path))
 
 import GUI
-from execution_journal import ExecutionJournal, JOURNAL_FILE_NAME
+from execution.execution_journal import ExecutionJournal, JOURNAL_FILE_NAME
 from SCPI_Library.simulation import reset_simulation
 
 
@@ -71,7 +71,7 @@ class ExecutionJournalTests(unittest.TestCase):
 
             with patch.object(worker, "safe_shutdown"), patch.object(
                 worker, "close_visa_sessions"
-            ), patch("test_worker.begin_visa_session_scope"):
+            ), patch("execution.test_worker.begin_visa_session_scope"):
                 worker.run()
 
         self.assertEqual(dispatched, [2, 3])

@@ -12,7 +12,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.utils.units import pixels_to_EMU
 from openpyxl import load_workbook
 from openpyxl.chart.legend import Legend
-from path import csv_folder, IMAGE_DIR, IMAGE_PATH, IMAGE_PATH_2
+from common.path import csv_folder, IMAGE_DIR, IMAGE_PATH, IMAGE_PATH_2
 
 
 def configure_run_storage(raw_directory, chart_directory):

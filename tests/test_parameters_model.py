@@ -11,7 +11,7 @@ for import_path in (SRC, ROOT):
 from PyQt5.QtWidgets import QApplication
 
 import GUI
-from test_parameters import Parameters
+from configuration.test_parameters import Parameters
 
 
 class ParametersModelTests(unittest.TestCase):

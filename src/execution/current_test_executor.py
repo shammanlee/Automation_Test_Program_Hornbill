@@ -2,19 +2,19 @@
 
 import os
 
-from data import (
+from reporting.data import (
     datatoCSV_Line_Regulation,
     datatoCSV_LoadRegulation,
     datatoCSV_OCP_Test,
 )
-from DUT_Test_Scripts.DUT_Test import NewCurrentMeasurement
-from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
+from DUT_Test_Scripts.Dolphin.DUT_Test import NewCurrentMeasurement
+from DUT_Test_Scripts.Dolphin.Dolphin_DUT_Test_No_ELoad_No_DMM import (
     LineRegulation,
     NewLoadRegulation,
     OCP_Activation_Time,
     PowerMeasurement,
 )
-from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
+from DUT_Test_Scripts.Hornbill.Hornbill_DUT_Test_With_ELoad import (
     HornbillCurrentMeasurementwithELoad_IMON_200uA,
     HornbillCurrentMeasurementwithELoad_IMON_2mA,
 )

@@ -9,8 +9,8 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from TestVolt_HB_3458 import CalWorker, normalize_visa_address
-from TestVolt_HB_3458 import VoltageCalibrationDialog
+from instruments.TestVolt_HB_3458 import CalWorker, normalize_visa_address
+from instruments.TestVolt_HB_3458 import VoltageCalibrationDialog
 
 
 class FakeInstrument:

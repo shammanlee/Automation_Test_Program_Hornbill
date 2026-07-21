@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (
 
 import SCPI_Library.Keysight as keysight_library
 from SCPI_Library.simulation import create_resource_manager
-from path import config_folder
+from common.path import config_folder
 
 
 class RecordingInstrument:

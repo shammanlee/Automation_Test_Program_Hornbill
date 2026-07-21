@@ -176,6 +176,10 @@ class CalWorker(QThread):
                 self.log.emit(f"Using connected 3458A: {self.dmm_addr}")
             dmm.timeout = 10000
 
+            self.log.emit("Enabling Four Wire.")
+            self._write(psu, f"SOURce:VOLTage:SENSe:SOURce EXT, (@{self.channel})")
+            self._write(psu, f"DIAG:POKE 50{self.channel-1}, 2865")
+
             self.log.emit("Enabling PSU calibration mode...")
             self._write(psu, f'CAL:STAT ON,"{self.password}"')
             calibration_enabled = True

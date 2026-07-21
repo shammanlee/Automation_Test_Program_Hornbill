@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 
-from test_worker import TestWorker
+from execution.test_worker import TestWorker
 
 
 @dataclass

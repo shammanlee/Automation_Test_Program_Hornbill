@@ -15,9 +15,9 @@ from PyQt5.QtCore import QEventLoop, QTimer
 from PyQt5.QtWidgets import QApplication
 
 import GUI
-import all_test_dialog
-from DUT_Test_Scripts import DUT_Test as dut_measurements
-from DUT_Test_Scripts import Hornbill_DUT_Test_With_ELoad as hornbill_measurements
+from ui import all_test_dialog
+from DUT_Test_Scripts.Dolphin import DUT_Test as dut_measurements
+from DUT_Test_Scripts.Hornbill import Hornbill_DUT_Test_With_ELoad as hornbill_measurements
 from SCPI_Library.session_manager import close_visa_session_scope, get_visa_resource
 from SCPI_Library.simulation import (
     clear_simulation_faults,
@@ -25,7 +25,7 @@ from SCPI_Library.simulation import (
     inject_simulation_fault,
     reset_simulation,
 )
-from test_configuration import ParameterSnapshot
+from configuration.test_configuration import ParameterSnapshot
 
 
 class EndToEndQueueTests(unittest.TestCase):

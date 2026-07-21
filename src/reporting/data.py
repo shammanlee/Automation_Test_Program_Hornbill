@@ -15,10 +15,10 @@ from openpyxl.styles import PatternFill
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as ExcelImage
 
-from path import *
+from common.path import *
 from SCPI_Library.IEEEStandard import IDN
 from SCPI_Library.Keysight import System
-from path import IMAGE_DIR, IMAGE_PATH, IMAGE_PATH_2
+from common.path import IMAGE_DIR, IMAGE_PATH, IMAGE_PATH_2
 
 
 def configure_run_storage(raw_directory, chart_directory):

@@ -7,7 +7,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from realtime_plot import RealtimeMeasurement, RealtimePlotSeries
+from ui.realtime_plot import RealtimeMeasurement, RealtimePlotSeries
 
 
 def measurement(programming_error=0.1, readback_error=0.2):

@@ -96,31 +96,32 @@ During a test run, SCPI wrappers reuse one VISA session per instrument address.
 Sessions are isolated to the worker thread, closed before final hardware shutdown,
 and remain independent from GUI discovery and preflight connections.
 Production test execution and cooperative pause, resume, and abort behavior live in
-`src/test_worker.py`; `src/GUI.py` owns presentation and signal wiring.
+`src/execution/test_worker.py`; `src/GUI.py` owns presentation and signal wiring.
 `src/GUI.py` remains the application entry point and legacy-dialog host, while the
 production `AllTestMeasurement` dialog and its direct UI helpers live in
-`src/all_test_dialog.py`.
+`src/ui/all_test_dialog.py`.
 Mutable GUI parameter state and setup-file loading live in
-`src/test_parameters.py`, keeping dialog construction separate from configuration data.
-Each execution receives a `RunContext` from `src/run_context.py`. It owns the run
+`src/configuration/test_parameters.py`, keeping dialog construction separate from configuration data.
+Each execution receives a `RunContext` from `src/execution/run_context.py`. It owns the run
 tree, parameter snapshot, realtime CSV, chart paths, and diagnostics destinations;
 queued runs therefore do not share output files. Report generators infer their own
 `raw/` and `charts/` directories from the requested `reports/` directory.
-`src/test_run_controller.py` owns worker lifecycle and provides a FIFO queue for
-sequential runs. `src/queue_coordinator.py` connects that controller to queue UI,
+`src/execution/test_run_controller.py` owns worker lifecycle and provides a FIFO queue for
+sequential runs. `src/queueing/queue_coordinator.py` connects that controller to queue UI,
 persistence, interrupted-run recovery, and reusable templates. Test-selection
 widgets/state and worker parameter construction are
-isolated in `src/test_selection.py` and `src/test_configuration.py`. DUT setup files
-are loaded through `src/configuration_service.py`.
+isolated in `src/configuration/test_selection.py` and
+`src/configuration/test_configuration.py`. DUT setup files are loaded through
+`src/configuration/configuration_service.py`.
 Queue-template serialization and reconstruction are isolated in
-`src/queue_template_service.py`; encoding-safe console and run-log writes live in
-`src/output_logging.py`.
+`src/queueing/queue_template_service.py`; encoding-safe console and run-log writes
+live in `src/common/output_logging.py`.
 VISA enumeration, identity queries, IP/hostname classification, model-role mapping,
-and discovery-resource cleanup live in `src/instrument_discovery.py`.
+and discovery-resource cleanup live in `src/instruments/instrument_discovery.py`.
 Production widget population and automatic role selection live in
-`src/instrument_discovery_ui.py`.
-Production dialog signal declarations live in `src/all_test_signal_bindings.py`,
-and the legacy launcher uses `src/dialog_registry.py` instead of an index-based
+`src/ui/instrument_discovery_ui.py`.
+Production dialog signal declarations live in `src/ui/all_test_signal_bindings.py`,
+and the legacy launcher uses `src/ui/dialog_registry.py` instead of an index-based
 dialog chain. Shared DUT SCPI class loading and VISA preflight plumbing live in
 `DUT_Test_Scripts/scpi_runtime.py`.
 

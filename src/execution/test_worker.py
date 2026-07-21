@@ -7,7 +7,7 @@ from time import monotonic as monotonic_time
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
-from current_test_executor import CurrentTestExecutor
+from execution.current_test_executor import CurrentTestExecutor
 from DUT_Test_Scripts.execution_control import clear_execution_worker, set_execution_worker
 from DUT_Test_Scripts.instrument_shutdown import shutdown_instruments
 from SCPI_Library.instrument_errors import (
@@ -17,9 +17,9 @@ from SCPI_Library.instrument_errors import (
     set_diagnostic_context,
 )
 from SCPI_Library.session_manager import begin_visa_session_scope, close_visa_session_scope
-from measurement_report_exporter import MeasurementReportExporter
-from voltage_test_executor import VoltageTestExecutor
-from execution_journal import ExecutionJournal
+from execution.measurement_report_exporter import MeasurementReportExporter
+from execution.voltage_test_executor import VoltageTestExecutor
+from execution.execution_journal import ExecutionJournal
 from External_Auxiliary_Equipment.Temperature_Measurement import TemperatureMeasurement
 
 class TestState(Enum):

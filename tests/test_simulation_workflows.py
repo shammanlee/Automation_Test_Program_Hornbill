@@ -4,8 +4,8 @@ import unittest
 from unittest.mock import patch
 
 import GUI
-from DUT_Test_Scripts import DUT_Test as dut_measurements
-from DUT_Test_Scripts import Hornbill_DUT_Test_With_ELoad as hornbill_measurements
+from DUT_Test_Scripts.Dolphin import DUT_Test as dut_measurements
+from DUT_Test_Scripts.Hornbill import Hornbill_DUT_Test_With_ELoad as hornbill_measurements
 from SCPI_Library.session_manager import (
     begin_visa_session_scope,
     close_visa_session_scope,

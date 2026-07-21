@@ -7,7 +7,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from all_test_signal_bindings import (
+from ui.all_test_signal_bindings import (
     CLICKED_BINDINGS,
     CURRENT_TEXT_BINDINGS,
     STATE_CHANGED_BINDINGS,

@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pandas as pd
 
-import measurement_report_exporter
-from test_worker import TestWorker
+from execution import measurement_report_exporter
+from execution.test_worker import TestWorker
 
 
 class Parameters(dict):

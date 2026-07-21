@@ -19,8 +19,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from configuration_service import load_configuration
-from path import config_folder
+from configuration.configuration_service import load_configuration
+from common.path import config_folder
 
 
 PROGRAM_DOCUMENTATION_HTML = """
@@ -150,13 +150,13 @@ must never be used as hardware-validation evidence.
 <table>
   <tr><th>Module</th><th>Responsibility</th></tr>
   <tr><td><code>src/GUI.py</code></td><td>Application entry point, VISA-before-Qt bootstrap, main tabs, and legacy dialog launcher.</td></tr>
-  <tr><td><code>src/all_test_dialog.py</code></td><td>Production bundle-test UI and direct signal wiring.</td></tr>
-  <tr><td><code>src/test_run_controller.py</code></td><td>Worker lifecycle and sequential FIFO queue.</td></tr>
-  <tr><td><code>src/test_worker.py</code></td><td>Background execution, dispatch, state machine, checkpoints, abort, and cleanup.</td></tr>
-  <tr><td><code>src/voltage_test_executor.py</code></td><td>Voltage-test selection and execution orchestration.</td></tr>
-  <tr><td><code>src/current_test_executor.py</code></td><td>Current and power-test selection and execution orchestration.</td></tr>
-  <tr><td><code>src/measurement_report_exporter.py</code></td><td>Measurement report and chart export coordination.</td></tr>
-  <tr><td><code>src/instrument_discovery.py</code></td><td>Configured VISA probing, identity handling, and role assignment.</td></tr>
+  <tr><td><code>src/ui/all_test_dialog.py</code></td><td>Production bundle-test UI and direct signal wiring.</td></tr>
+  <tr><td><code>src/execution/test_run_controller.py</code></td><td>Worker lifecycle and sequential FIFO queue.</td></tr>
+  <tr><td><code>src/execution/test_worker.py</code></td><td>Background execution, dispatch, state machine, checkpoints, abort, and cleanup.</td></tr>
+  <tr><td><code>src/execution/voltage_test_executor.py</code></td><td>Voltage-test selection and execution orchestration.</td></tr>
+  <tr><td><code>src/execution/current_test_executor.py</code></td><td>Current and power-test selection and execution orchestration.</td></tr>
+  <tr><td><code>src/execution/measurement_report_exporter.py</code></td><td>Measurement report and chart export coordination.</td></tr>
+  <tr><td><code>src/instruments/instrument_discovery.py</code></td><td>Configured VISA probing, identity handling, and role assignment.</td></tr>
   <tr><td><code>DUT_Test_Scripts/</code></td><td>DUT-specific instrument operations and measurement sequences.</td></tr>
   <tr><td><code>SCPI_Library/</code></td><td>Instrument classes, VISA session management, errors, configuration, and simulation support.</td></tr>
   <tr><td><code>tests/</code></td><td>Unit, integration, simulation, queue, and report regression coverage.</td></tr>
@@ -308,7 +308,8 @@ class VoltageAccuracyPatternGraphs(QGroupBox):
 
         settings = self.patterns["settings"]
         explanation = QLabel(
-            "Generated from Hornbill_DUT_Test_With_ELoad.py and the current Hornbill "
+            "Generated from DUT_Test_Scripts/Hornbill/Hornbill_DUT_Test_With_ELoad.py "
+            "and the current Hornbill "
             f"configuration: voltage {settings['minimum_voltage']:g} to "
             f"{settings['maximum_voltage']:g} V in {settings['voltage_step']:g} V "
             f"steps, load current {settings['minimum_current']:g} to "

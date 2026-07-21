@@ -13,7 +13,7 @@ def get_base_folder():
         return Path(sys.executable).resolve().parent   # Folder containing the EXE
 
     # Running from source:
-    return Path(__file__).resolve().parent.parent      # Project root folder
+    return Path(__file__).resolve().parents[2]         # Project root folder
 
 
 BASE_DIR = get_base_folder()

@@ -61,12 +61,12 @@ import tkinter as tk
 from tkinter import ttk
 from time import sleep
 
-from output_capture import my_result
+from common.output_capture import my_result
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore  import *
-from path import (
+from common.path import (
     config_folder,
     csv_folder,
     DATA_CSV_PATH,
@@ -79,24 +79,24 @@ from path import (
     POWER_IMAGE_PATH,
     setup_img_folder,
 )
-from error_dialogs import show_error_dialog
-from documentation_tab import ProgramDocumentationTab, TestPatternsTab
-from keysight_command_tab import KeysightCommandTab
-from output_logging import print_console_safe
-from instrument_discovery import (
+from ui.error_dialogs import show_error_dialog
+from ui.documentation_tab import ProgramDocumentationTab, TestPatternsTab
+from ui.keysight_command_tab import KeysightCommandTab
+from common.output_logging import print_console_safe
+from instruments.instrument_discovery import (
     get_all_visa_resources as NewGetVisaSCPIResources,
     get_visa_scpi_resources as GetVisaSCPIResources,
 )
 
-from DUT_Test_Scripts.DUT_Test import NewCurrentMeasurement, NewVoltageMeasurement
-from TestVolt_HB_3458 import (
+from DUT_Test_Scripts.Dolphin.DUT_Test import NewCurrentMeasurement, NewVoltageMeasurement
+from instruments.TestVolt_HB_3458 import (
     VoltageCalibrationDialog as VoltageCalibration3458Dialog,
 )
 
 from DUT_Test_Scripts.DUT_screenshot import ScreenShotDialog
 
 
-from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
+from DUT_Test_Scripts.Hornbill.Hornbill_DUT_Test_With_ELoad import (
     HornbillCurrentMeasurementwithELoad_IMON_200uA,
     HornbillCurrentMeasurementwithELoad_IMON_2mA,
     HornbillCurrentMeasurementwithELoad_IMON_FULL,
@@ -104,13 +104,13 @@ from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
     HornbillVoltageMeasurementwithELoad,
 )
 
-from DUT_Test_Scripts.Hornbill_DUT_Test_No_ELoad import (
+from DUT_Test_Scripts.Hornbill.Hornbill_DUT_Test_No_ELoad import (
     HornbillVoltageMeasurementNoELoad,)
 
 from DUT_Test_Scripts.EDU36311A_DUT_Test_No_Load import (
     EDU36311AVoltageMeasurementNoELoad,)
 #########################################################################################
-from DUT_Test_Scripts.Dolphin_DUT_Test_With_ELoad_With_DMM import (
+from DUT_Test_Scripts.Dolphin.Dolphin_DUT_Test_With_ELoad_With_DMM import (
     DolphinLoadRegulationwithELoad,
     DolphinNewCurrentMeasurementwithELoad,
     DolphinNewVoltageMeasurementwithELoad,
@@ -118,17 +118,17 @@ from DUT_Test_Scripts.Dolphin_DUT_Test_With_ELoad_With_DMM import (
     DolphinRiseFallTimewithELoad,
 )
 
-from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_With_DMM import (
+from DUT_Test_Scripts.Dolphin.Dolphin_DUT_Test_No_ELoad_With_DMM import (
     DolphinNewCurrentMeasurementNoELoadWithDMM,
     DolphinNewVoltageMeasurementNoELoadWithDMM,
 )
 
-from DUT_Test_Scripts.Dolphin_DUT_Test_With_ELoad_No_DMM import (
+from DUT_Test_Scripts.Dolphin.Dolphin_DUT_Test_With_ELoad_No_DMM import (
     DolphinNewCurrentMeasurementwithELoadNoDMM,
     DolphinNewVoltageMeasurementwithELoadNoDMM,
 )
 
-from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
+from DUT_Test_Scripts.Dolphin.Dolphin_DUT_Test_No_ELoad_No_DMM import (
     ActivateAC,
     DolphinNewCurrentMeasurementNoELoadNoDMM,
     DolphinNewVoltageMeasurementNoELoadNoDMM,
@@ -140,7 +140,7 @@ from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
 )
 ##########################################################################################
 
-from data import (
+from reporting.data import (
     datatoCSV_Accuracy,
     datatoCSV_Accuracy2,
     datatoCSV_PowerAccuracy,
@@ -150,8 +150,8 @@ from data import (
     instrumentData,
     powerinstrumentData,
 )
-from xlreport import Graph_Plotting, xlreport
-from xlreportpower import xlreportpower
+from reporting.xlreport import Graph_Plotting, xlreport
+from reporting.xlreportpower import xlreportpower
 
 from External_Auxiliary_Equipment.Relay_Control import (
     RelayController_Current,
@@ -489,7 +489,7 @@ class MainWindow(QMainWindow):
         return self.dialog_registry.open(self, index)
 
     def _create_dialog_registry(self):
-        from dialog_registry import DialogRegistration, DialogRegistry
+        from ui.dialog_registry import DialogRegistration, DialogRegistry
 
         def multithread_voltage_dialog():
             from experiments.multithread_voltage import MultiThreadVoltageMeasurementDialog
@@ -526,7 +526,7 @@ class VoltageMeasurementDialog(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
 
     """
@@ -1622,7 +1622,7 @@ class CurrentMeasurementDialog(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
     """
 
     def __init__(self):
@@ -2590,7 +2590,7 @@ class CV_LoadRegulationDialog(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
 
     """
@@ -3169,7 +3169,7 @@ class CC_LoadRegulationDialog(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
     """
 
@@ -3725,7 +3725,7 @@ class TransientRecoveryTime(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
     """
 
@@ -4239,7 +4239,7 @@ class TransientRecoveryTimeWithCurrentSensor(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
     """
 
@@ -5212,7 +5212,7 @@ class ProgrammingSpeed(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
     """
 
@@ -5974,7 +5974,7 @@ class PowerMeasurementDialog(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
 
     """
@@ -6721,7 +6721,7 @@ class BundleMeasurementVoltageDialog(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
 
     """
@@ -7745,7 +7745,7 @@ class BundleMeasurementCurrentandPowerDialog(QDialog):
     DUT Test, the program will compile all the parameters into a dictionary which will be passed as an argument
     into the test methods and execute the DUT Tests accordingly.
 
-    For more details regarding the arguements, please refer to DUT_Test.py
+    For more details regarding the arguments, see DUT_Test_Scripts/Dolphin/DUT_Test.py.
 
 
     """
@@ -9236,7 +9236,7 @@ class AdvancedSetting_Current(QDialog):
     def close_window(self):
         self.close()"""
 
-from all_test_dialog import (
+from ui.all_test_dialog import (
     ACSourceSetting,
     AllTestMeasurement,
     ComboBoxWheelFilter,

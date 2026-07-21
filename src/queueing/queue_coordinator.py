@@ -4,9 +4,9 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import QFileDialog
 
-from queue_persistence import QueuePersistence, QueuePersistenceError
-from queue_template_service import append_queue_template, save_queue_template
-from test_configuration import ParameterSnapshot
+from queueing.queue_persistence import QueuePersistence, QueuePersistenceError
+from queueing.queue_template_service import append_queue_template, save_queue_template
+from configuration.test_configuration import ParameterSnapshot
 
 
 class QueueCoordinator:

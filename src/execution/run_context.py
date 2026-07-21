@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from run_storage import RunStorage, create_run_storage
+from execution.run_storage import RunStorage, create_run_storage
 
 
 REALTIME_COLUMNS = (
@@ -101,7 +101,7 @@ class RunContext:
         self.csv_file.flush()
 
     def activate_data_paths(self):
-        import data as data_module
+        from reporting import data as data_module
 
         data_module.configure_run_storage(self.storage.raw, self.storage.charts)
 

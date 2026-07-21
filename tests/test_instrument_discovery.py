@@ -10,7 +10,7 @@ for import_path in (SRC, ROOT):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))
 
-from instrument_discovery import (
+from instruments.instrument_discovery import (
     DiscoveryResult,
     get_all_visa_resources,
     get_configured_visa_resources,
@@ -173,7 +173,7 @@ class InstrumentDiscoveryTests(unittest.TestCase):
     def test_gpib_identity_uses_legacy_fallback_after_guarded_timeout(self):
         resource = LegacyGpibResource()
 
-        with patch("instrument_discovery.time.sleep") as sleep:
+        with patch("instruments.instrument_discovery.time.sleep") as sleep:
             identity = _query_identity(
                 resource,
                 "GPIB0::22::INSTR",
@@ -227,7 +227,7 @@ class InstrumentDiscoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.txt"
             config.write_text("DMM = GPIB0::22::INSTR\n", encoding="utf-8")
-            with patch("instrument_discovery.time.sleep") as sleep:
+            with patch("instruments.instrument_discovery.time.sleep") as sleep:
                 result = get_configured_visa_resources(
                     config,
                     lambda: manager,
@@ -261,7 +261,7 @@ class InstrumentDiscoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.txt"
             config.write_text("DMM = GPIB0::22::INSTR\n", encoding="utf-8")
-            with patch("instrument_discovery.time.sleep"):
+            with patch("instruments.instrument_discovery.time.sleep"):
                 result = get_configured_visa_resources(
                     config,
                     lambda: manager,

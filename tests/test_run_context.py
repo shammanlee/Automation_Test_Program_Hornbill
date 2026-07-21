@@ -10,10 +10,10 @@ for import_path in (SRC, ROOT):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))
 
-import xlreport as xlreport_module
-import xlreportpower as xlreportpower_module
-from run_context import REALTIME_COLUMNS, RunContext
-from test_configuration import ParameterSnapshot
+from reporting import xlreport as xlreport_module
+from reporting import xlreportpower as xlreportpower_module
+from execution.run_context import REALTIME_COLUMNS, RunContext
+from configuration.test_configuration import ParameterSnapshot
 
 
 class RunContextTests(unittest.TestCase):

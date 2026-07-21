@@ -8,7 +8,7 @@ for import_path in (SRC, ROOT):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))
 
-from test_configuration import (
+from configuration.test_configuration import (
     build_test_parameters,
     prepare_run_submission,
     snapshot_parameters,

@@ -2,21 +2,21 @@
 
 import os
 
-from data import (
+from reporting.data import (
     datatoCSV_Line_Regulation,
     datatoCSV_LoadRegulation,
     datatoCSV_OVP_Accuracy,
     datatoCSV_Programming_Response,
 )
-from DUT_Test_Scripts.DUT_Test import NewVoltageMeasurement
-from DUT_Test_Scripts.Dolphin_DUT_Test_No_ELoad_No_DMM import (
+from DUT_Test_Scripts.Dolphin.DUT_Test import NewVoltageMeasurement
+from DUT_Test_Scripts.Dolphin.Dolphin_DUT_Test_No_ELoad_No_DMM import (
     LineRegulation,
     NewLoadRegulation,
     OVP_Test,
     ProgrammingResponse,
     RiseFallTime,
 )
-from DUT_Test_Scripts.Hornbill_DUT_Test_With_ELoad import (
+from DUT_Test_Scripts.Hornbill.Hornbill_DUT_Test_With_ELoad import (
     HornbillVoltageMeasurementwithELoad,
     HornbillVoltageMeasurementwithELoadwithOscilloscope,
 )

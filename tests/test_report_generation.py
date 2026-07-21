@@ -6,10 +6,10 @@ from unittest.mock import patch
 import pandas as pd
 from openpyxl import load_workbook
 
-import data as data_module
-import xlreport as xlreport_module
+from reporting import data as data_module
+from reporting import xlreport as xlreport_module
 from SCPI_Library.simulation import reset_simulation
-from run_storage import create_run_storage
+from execution.run_storage import create_run_storage
 
 
 class ReportGenerationTests(unittest.TestCase):

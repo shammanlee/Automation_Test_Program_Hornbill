@@ -1,7 +1,7 @@
 """Save and append reusable queue templates without GUI dependencies."""
 
-from queue_persistence import QueuePersistence
-from test_configuration import ParameterSnapshot
+from queueing.queue_persistence import QueuePersistence
+from configuration.test_configuration import ParameterSnapshot
 
 
 def save_queue_template(path, requests):

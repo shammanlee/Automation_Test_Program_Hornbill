@@ -1,6 +1,6 @@
 import unittest
 
-from progress_timing import (
+from execution.progress_timing import (
     MeasurementProgressTracker,
     expected_measurement_points,
     format_duration,
